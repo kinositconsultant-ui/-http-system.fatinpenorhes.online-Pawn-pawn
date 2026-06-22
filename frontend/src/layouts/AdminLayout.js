@@ -24,6 +24,7 @@ const links = [
   { to: "/payments", key: "payments", icon: Wallet, testid: "nav-payments" },
   { to: "/auctions", key: "auctions", icon: Gavel, testid: "nav-auctions" },
   { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports" },
+  { to: "/finance", key: "finance", icon: Wallet, testid: "nav-finance", adminOnly: true },
   { to: "/users", key: "users", icon: UserCog, testid: "nav-users", adminOnly: true },
   { to: "/settings", key: "settings", icon: SettingsIcon, testid: "nav-settings", adminOnly: true },
   { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", adminOnly: true },
@@ -93,7 +94,7 @@ export default function AdminLayout() {
           <div className="text-[10px] text-stone-400 leading-relaxed pt-1">
             FATIN PENHORES UNIP., LDA<br />
             Caicoli, Dili, Timor-Leste<br />
-            Tel: 78372678<br />
+            WhatsApp: +670 78372678<br />
             © 2026 All Rights Reserved.
           </div>
         </div>

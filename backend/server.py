@@ -1209,6 +1209,37 @@ async def _report_financial(filters: dict) -> dict:
     }
 
 
+async def _report_treasury(filters: dict) -> dict:
+    sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
+    sources = _apply_date_filter(sources, "start_date", filters.get("month"), filters.get("year"))
+    expenses = await db.expenses.find({}, {"_id": 0}).to_list(5000)
+    expenses = _apply_date_filter(expenses, "date", filters.get("month"), filters.get("year"))
+    if filters.get("sub_category"):
+        expenses = [e for e in expenses if e.get("category") == filters["sub_category"]]
+    capital_received = sum(float(s.get("principal_amount", 0) or 0) for s in sources)
+    capital_repaid = 0.0
+    for s in sources:
+        repaid = await db.funding_repayments.find({"source_id": s["id"]}, {"_id": 0}).to_list(500)
+        rsum = sum(float(x.get("amount", 0) or 0) for x in repaid)
+        s["total_repaid"] = round(rsum, 2)
+        s["outstanding"] = round(max(0.0, float(s.get("principal_amount", 0) or 0) - rsum), 2)
+        capital_repaid += rsum
+    expenses_total = sum(float(e.get("amount", 0) or 0) for e in expenses)
+    by_cat: dict[str, float] = {}
+    for e in expenses:
+        by_cat[e.get("category", "Other")] = by_cat.get(e.get("category", "Other"), 0.0) + float(e.get("amount", 0) or 0)
+    return {
+        "kpis": {
+            "capital_received": round(capital_received, 2),
+            "capital_outstanding": round(max(0.0, capital_received - capital_repaid), 2),
+            "expenses_total": round(expenses_total, 2),
+            "expense_categories": len(by_cat),
+        },
+        "columns": ["date", "category", "amount", "paid_to", "description", "payment_method"],
+        "rows": expenses,
+    }
+
+
 REPORT_BUILDERS = {
     "active-contracts": _report_active_contracts,
     "payments": _report_payments,
@@ -1216,6 +1247,7 @@ REPORT_BUILDERS = {
     "auction": _report_auction,
     "inventory": _report_inventory,
     "financial": _report_financial,
+    "treasury": _report_treasury,
 }
 
 
@@ -1434,6 +1466,216 @@ async def public_contact(payload: ContactIn):
 @api.get("/contact-messages")
 async def contact_messages(_: dict = Depends(require_admin)):
     return await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+# =====================================================================
+# Finance — funding sources, operating expenses, treasury
+# =====================================================================
+EXPENSE_CATEGORIES = [
+    "Salary", "Maintenance", "Travel", "Meals", "Compensation",
+    "Utilities", "Rent", "Other",
+]
+
+
+class FundingSourceIn(BaseModel):
+    name: str
+    source_type: Literal["bank", "company", "personal", "partner", "other"] = "bank"
+    principal_amount: float
+    interest_rate: float = 0.0
+    interest_period: Literal["monthly", "yearly", "none"] = "monthly"
+    start_date: str
+    due_date: str = ""
+    notes: str = ""
+
+
+@api.get("/funding-sources")
+async def list_funding_sources(_: dict = Depends(get_current_user)):
+    rows = await db.funding_sources.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Compute outstanding from repayments
+    for r in rows:
+        repaid = await db.funding_repayments.find({"source_id": r["id"]}, {"_id": 0}).to_list(500)
+        total_repaid = sum(float(x.get("amount", 0) or 0) for x in repaid)
+        r["total_repaid"] = round(total_repaid, 2)
+        r["outstanding"] = round(max(0.0, float(r["principal_amount"]) - total_repaid), 2)
+    return rows
+
+
+@api.post("/funding-sources")
+async def create_funding_source(payload: FundingSourceIn, user: dict = Depends(require_admin)):
+    doc = payload.model_dump()
+    doc["id"] = new_id()
+    doc["created_at"] = utcnow_iso()
+    await db.funding_sources.insert_one(doc)
+    await write_audit(user, "create", "funding_source", doc["id"], {"name": payload.name, "amount": payload.principal_amount})
+    doc.pop("_id", None)
+    return {**doc, "total_repaid": 0.0, "outstanding": doc["principal_amount"]}
+
+
+@api.put("/funding-sources/{sid}")
+async def update_funding_source(sid: str, payload: FundingSourceIn, user: dict = Depends(require_admin)):
+    res = await db.funding_sources.update_one({"id": sid}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Funding source not found")
+    await write_audit(user, "update", "funding_source", sid)
+    return await db.funding_sources.find_one({"id": sid}, {"_id": 0})
+
+
+@api.delete("/funding-sources/{sid}")
+async def delete_funding_source(sid: str, _: dict = Depends(require_admin)):
+    res = await db.funding_sources.delete_one({"id": sid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Funding source not found")
+    await db.funding_repayments.delete_many({"source_id": sid})
+    return {"ok": True}
+
+
+class FundingRepaymentIn(BaseModel):
+    source_id: str
+    amount: float
+    date: str
+    notes: str = ""
+
+
+@api.post("/funding-sources/{sid}/repayments")
+async def add_repayment(sid: str, payload: FundingRepaymentIn, user: dict = Depends(require_admin)):
+    src = await db.funding_sources.find_one({"id": sid}, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Funding source not found")
+    doc = payload.model_dump()
+    doc["source_id"] = sid
+    doc["id"] = new_id()
+    doc["created_at"] = utcnow_iso()
+    await db.funding_repayments.insert_one(doc)
+    await write_audit(user, "create", "funding_repayment", doc["id"], {"source_id": sid, "amount": payload.amount})
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/funding-sources/{sid}/repayments")
+async def list_repayments(sid: str, _: dict = Depends(get_current_user)):
+    return await db.funding_repayments.find({"source_id": sid}, {"_id": 0}).sort("date", -1).to_list(500)
+
+
+class ExpenseIn(BaseModel):
+    category: str  # one of EXPENSE_CATEGORIES or custom
+    amount: float
+    date: str
+    paid_to: str = ""
+    description: str = ""
+    payment_method: Literal["cash", "bank", "mobile", "other"] = "cash"
+    receipt_url: str = ""
+
+
+@api.get("/expense-categories")
+async def expense_categories(_: dict = Depends(get_current_user)):
+    return EXPENSE_CATEGORIES
+
+
+@api.get("/expenses")
+async def list_expenses(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    category: Optional[str] = None,
+    _: dict = Depends(get_current_user),
+):
+    rows = await db.expenses.find({}, {"_id": 0}).sort("date", -1).to_list(5000)
+    rows = _apply_date_filter(rows, "date", month, year)
+    if category:
+        rows = [r for r in rows if r.get("category") == category]
+    return rows
+
+
+@api.post("/expenses")
+async def create_expense(payload: ExpenseIn, user: dict = Depends(require_not_cashier)):
+    doc = payload.model_dump()
+    doc["id"] = new_id()
+    doc["created_at"] = utcnow_iso()
+    doc["recorded_by"] = user["id"]
+    await db.expenses.insert_one(doc)
+    await write_audit(user, "create", "expense", doc["id"], {"category": payload.category, "amount": payload.amount})
+    doc.pop("_id", None)
+    return doc
+
+
+@api.put("/expenses/{eid}")
+async def update_expense(eid: str, payload: ExpenseIn, user: dict = Depends(require_admin)):
+    res = await db.expenses.update_one({"id": eid}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    await write_audit(user, "update", "expense", eid)
+    return await db.expenses.find_one({"id": eid}, {"_id": 0})
+
+
+@api.delete("/expenses/{eid}")
+async def delete_expense(eid: str, _: dict = Depends(require_admin)):
+    res = await db.expenses.delete_one({"id": eid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"ok": True}
+
+
+@api.get("/finance/summary")
+async def finance_summary(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    _: dict = Depends(get_current_user),
+):
+    # Capital sources
+    sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
+    repayments = await db.funding_repayments.find({}, {"_id": 0}).to_list(5000)
+    capital_received = sum(float(s.get("principal_amount", 0) or 0) for s in sources)
+    capital_repaid = sum(float(r.get("amount", 0) or 0) for r in repayments)
+    capital_outstanding = max(0.0, capital_received - capital_repaid)
+
+    # Pawn flows
+    contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
+    loans_disbursed = sum(float(c.get("loan_amount", 0) or 0) for c in contracts)
+    payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
+    client_payments = sum(float(p.get("amount", 0) or 0) for p in payments)
+    auctions = await db.auctions.find({"status": "sold"}, {"_id": 0}).to_list(5000)
+    auction_sales = sum(float(a.get("sold_price", 0) or 0) for a in auctions)
+
+    # Expenses
+    expenses = await db.expenses.find({}, {"_id": 0}).to_list(5000)
+    expenses_filtered = _apply_date_filter(expenses, "date", month, year)
+    expenses_total = sum(float(e.get("amount", 0) or 0) for e in expenses)
+    expenses_period = sum(float(e.get("amount", 0) or 0) for e in expenses_filtered)
+    # by category
+    by_category: dict[str, float] = {}
+    for e in expenses_filtered:
+        cat = e.get("category", "Other")
+        by_category[cat] = by_category.get(cat, 0.0) + float(e.get("amount", 0) or 0)
+    by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_category.items()]
+
+    # Profit & cash on hand (lifetime)
+    cash_on_hand = (
+        capital_received + client_payments + auction_sales
+        - loans_disbursed - expenses_total - capital_repaid
+    )
+    # Gross profit (interest + penalties earned) — approximate
+    for c in contracts:
+        await _recompute_contract_status(c)
+    interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts)
+    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in contracts)
+    gross_profit = interest_received + total_penalty
+    net_profit = gross_profit - expenses_total
+
+    return {
+        "cash_on_hand": round(cash_on_hand, 2),
+        "capital_received": round(capital_received, 2),
+        "capital_repaid": round(capital_repaid, 2),
+        "capital_outstanding": round(capital_outstanding, 2),
+        "loans_disbursed": round(loans_disbursed, 2),
+        "client_payments": round(client_payments, 2),
+        "auction_sales": round(auction_sales, 2),
+        "expenses_total": round(expenses_total, 2),
+        "expenses_period": round(expenses_period, 2),
+        "interest_received": round(interest_received, 2),
+        "total_penalty": round(total_penalty, 2),
+        "gross_profit": round(gross_profit, 2),
+        "net_profit": round(net_profit, 2),
+        "expenses_by_category": by_category_list,
+    }
 
 
 # =====================================================================

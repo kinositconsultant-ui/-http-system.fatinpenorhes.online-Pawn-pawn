@@ -44,7 +44,7 @@ export default function Contact() {
             <Mail className="w-4 h-4 text-[#1B2D5C]" /> fatinpenhores@gmail.com
           </div>
           <div className="flex items-center gap-3 text-stone-700">
-            <Phone className="w-4 h-4 text-[#1B2D5C]" /> +670 78372678
+            <Phone className="w-4 h-4 text-[#1B2D5C]" /> WhatsApp: +670 78372678
           </div>
         </div>
       </div>

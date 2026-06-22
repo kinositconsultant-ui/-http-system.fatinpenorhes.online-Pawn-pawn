@@ -7,7 +7,7 @@ export default function About() {
       <header>
         <div className="text-eyebrow">{t("about")}</div>
         <h1 className="font-display text-4xl sm:text-5xl mt-1">FATIN PENHORES UNIPESSOAL, LDA</h1>
-        <p className="text-sm text-stone-500 mt-2">Caicoli, Dili · Tel: 78372678 · fatinpenhores@gmail.com</p>
+        <p className="text-sm text-stone-500 mt-2">Caicoli, Dili · WhatsApp: +670 78372678 · fatinpenhores@gmail.com</p>
       </header>
       <div className="prose prose-stone max-w-none">
         <p className="text-stone-700 leading-relaxed text-lg">

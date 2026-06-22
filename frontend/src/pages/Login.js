@@ -56,7 +56,7 @@ export default function Login() {
             </h2>
             <div className="mt-10 text-xs opacity-70 leading-relaxed">
               FATIN PENHORES UNIPESSOAL, LDA<br />
-              Caicoli, Dili, Timor-Leste · Tel: 78372678<br />
+              Caicoli, Dili, Timor-Leste · WhatsApp: +670 78372678<br />
               fatinpenhores@gmail.com
             </div>
           </div>

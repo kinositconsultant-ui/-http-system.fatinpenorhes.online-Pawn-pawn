@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 7 (Finance/Treasury + WhatsApp branding) verified end-to-end. Backend: NEW test_iter7_finance.py 20/20 PASS covering funding-sources CRUD + repayments, expenses CRUD + role guard (cashier 403), /api/finance/summary numeric fields + math (capital_received=50000, repayment=5000 -> capital_outstanding=45000), /api/reports/v2/treasury JSON/xlsx/pdf, and 'WhatsApp: +670 78372678' text extracted from financial & treasury report PDFs via pypdf. Regression: prior 98 tests still PASS (backend_test 33 + iter2 22 + iter4 22 + iter5_reports 15 + iter6_branding 6). Frontend (Playwright on REACT_APP_BACKEND_URL, admin login): /finance loads with finance-root + all 4 KPI cards (kpi-cash-on-hand, kpi-capital-outstanding, kpi-expenses-total, kpi-net-profit), capital + expenses tabs toggle, capital source created via UI (capital-new-btn -> capital-name/principal/rate/start -> capital-save) appears in capital-table, expense created via UI (expense-new-btn -> expense-amount/date/paid-to -> expense-save) appears in expenses-table. Sidebar shows nav-finance (admin-only) and 'WhatsApp: +670 78372678' footer. /reports has 7 tabs total; report-tab-treasury loads KPIs capital_received/capital_outstanding/expenses_total/expense_categories. WhatsApp string verified on /login hero, public /, /contact, /about, sidebar footer, and report/treasury PDFs. Total backend 118/118 (98 regression + 20 new).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Finance + Dashboard charts", "issues": ["Recharts ResponsiveContainer logs 'width(-1)/height(-1)' warnings on first render for the new BarChart and PieChart on /finance (same cosmetic race as iter6 Dashboard charts). Wrap container with explicit min-height or aspect ratio to silence."]},
+      {"screen": "Finance + Reports dialogs", "issues": ["DialogContent emits 'Missing Description or aria-describedby' a11y warnings (Radix UI). Cosmetic; consider adding DialogDescription for accessibility."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_finance.py",
+    "/app/test_reports/pytest/iter7_finance.xml",
+    "/app/test_reports/pytest/iter7_regression.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/LOW: Suppress Recharts width(-1)/height(-1) warnings on /finance and Dashboard by giving ResponsiveContainer parents an explicit min-height/aspect ratio (carry-over from iter6).",
+    "OPTIONAL/LOW: Add DialogDescription (or aria-describedby) to capital/expense and other Radix dialogs to satisfy a11y warnings.",
+    "OPTIONAL: server.py is now ~1965 lines — split into routers (reports, contracts, items, payments, auctions, finance) before iter8 (carry-over from iter5/6).",
+    "OPTIONAL: pip install pypdf in backend requirements.txt — currently used only by tests; if test runners lack it, the PDF text assertions will SKIP rather than fail. Consider adding to dev-deps."
+  ],
+  "critical_code_review_comments": [
+    "/api/finance/summary calls _recompute_contract_status(c) inside a loop over ALL contracts on every request — same O(N) writes-during-GET pattern flagged on reports in iter5/6. Move to a scheduled job; this will not scale.",
+    "FundingSourceIn.due_date defaults to '' (empty string) rather than Optional[str]=None — works today but mixing empty-string sentinels with real dates is fragile (e.g., string comparisons, frontend date input). Prefer Optional[str].",
+    "ExpenseIn.category is typed as `str` (free text) but UI is fed by /api/expense-categories. Backend does not enforce membership of EXPENSE_CATEGORIES — fine if 'custom' allowed by design, but Treasury summary buckets unknown values under their raw label.",
+    "/api/funding-sources/{sid}/repayments GET does not 404 if source doesn't exist (returns []). Minor inconsistency vs POST/DELETE which 404.",
+    "DELETE /api/funding-sources/{sid} cascades repayments but does not block deletion if a source is referenced in audits/reports — by design here, but log/audit footprint should be preserved (which it is via write_audit on create — good).",
+    "Finance.js renders a single <Tabs> with `defaultValue` and no controlled value — switching tabs still triggers full re-render of both child sections; harmless but consider keeping the inactive tab unmounted via TabsContent forceMount only if needed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7_finance.py — NEW (20 tests across funding sources, repayments, expenses, role guard, finance summary math, treasury json+xlsx+pdf, WhatsApp PDF text)"
+  ],
+  "success_rate": {"backend": "100% (118/118: 98 regression + 20 iter7)", "frontend": "100% on iter7 selectors (finance-root, 4 KPIs, both tabs, capital+expense create flows, nav-finance, 7 report tabs, treasury KPIs, WhatsApp on 6 surfaces)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md). Cashier user is created per-run via /api/users with role='cashier' for the 403 guard test.",
+  "seed_data_creation": "Per-run TEST_Cap_<ts> funding source (principal 50000, then 5000 repayment), TEST Utility expense (1200 -> updated to 1300), transient TEST tmp expense for delete, transient TEST_cashier_<ts>@x.tl user. UI flow also creates UI_Cap_<ts> source + UI_ToPaid_<ts> expense. All admin-created seed is cleaned by the TestZCleanup class for funding source + expense (UI-created rows persist but are clearly TEST_/UI_ prefixed).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter7 adds: collections `funding_sources`, `funding_repayments`, `expenses`. Endpoints under /api/funding-sources*, /api/expenses*, /api/expense-categories, /api/finance/summary, /api/reports/v2/treasury(/export). Role rules: funding-sources require_admin; expenses POST is require_not_cashier (admin+staff), PUT/DELETE are admin only. /api/finance/summary returns 14 keys (13 numbers + expenses_by_category list). PDFs now include 'WhatsApp: +670 78372678' in header AND footer (pdf_utils.COMPANY_TEL). User creation payload requires 'name' (not just full_name) — see test_iter7_finance.cashier fixture. pypdf is required only for the two WhatsApp PDF-text assertions; absence is handled with pytest.skip. server.py is now ~1965 lines — splitting recommended.",
+  "rca of the issue": "N/A — no failures. Two self-corrections during authoring: (1) User-create requires 'name' field (cashier fixture initially skipped with 422 missing 'name'); (2) pypdf wasn't installed in the test environment, installed via pip for the WhatsApp text-in-PDF assertions."
+}

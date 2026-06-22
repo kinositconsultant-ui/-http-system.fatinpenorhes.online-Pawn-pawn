@@ -34,6 +34,8 @@ const TABS = [
     kpis: ["total_items", "total_amount", "active_items", "overdue_items"] },
   { key: "financial", labelKey: "financial",
     kpis: ["total_loan", "total_payment", "interest_received", "profit"] },
+  { key: "treasury", labelKey: "finance",
+    kpis: ["capital_received", "capital_outstanding", "expenses_total", "expense_categories"] },
 ];
 
 const MONEY_KEYS = new Set([

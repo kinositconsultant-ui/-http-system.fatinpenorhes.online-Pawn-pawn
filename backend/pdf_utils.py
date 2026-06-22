@@ -27,7 +27,7 @@ RULE = colors.HexColor("#E2E8F0")
 
 COMPANY_NAME = "FATIN PENHORES UNIPESSOAL, LDA"
 COMPANY_ADDR = "Caicoli, Dili, Timor-Leste"
-COMPANY_TEL = "Tel: 78372678"
+COMPANY_TEL = "WhatsApp: +670 78372678"
 COMPANY_EMAIL = "Email: fatinpenhores@gmail.com"
 COMPANY_FOOTER = "© 2026 Fatin Penhores. All Rights Reserved."
 

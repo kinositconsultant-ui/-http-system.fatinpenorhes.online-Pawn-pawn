@@ -26,6 +26,7 @@ import Reports from "@/pages/Reports";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
 import AuditLog from "@/pages/AuditLog";
+import Finance from "@/pages/Finance";
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
                 <Route path="/payments" element={<Payments />} />
                 <Route path="/auctions" element={<Auctions />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/finance" element={<Finance />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/audit-log" element={<AuditLog />} />

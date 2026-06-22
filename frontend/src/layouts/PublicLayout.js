@@ -83,7 +83,7 @@ export default function PublicLayout() {
           <div>
             <div className="text-eyebrow mb-3">{t("contact")}</div>
             <p className="text-sm text-stone-600">Caicoli, Dili, Timor-Leste</p>
-            <p className="text-sm text-stone-600">Tel: 78372678</p>
+            <p className="text-sm text-stone-600">WhatsApp: +670 78372678</p>
             <p className="text-sm text-stone-600">fatinpenhores@gmail.com</p>
           </div>
           <div>
