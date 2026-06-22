@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 2 testing — Settings, Audit Log, WhatsApp (mocked), Object Storage upload/download, Dashboard trends (Recharts), Cashier role RBAC, payment-date validation, richer Contract PDF, EN/TET language toggle. New pytest suite at /app/backend/tests/test_iter2.py: 19/22 PASS, 3 FAIL — all real backend bugs (not test issues). Regression suite /app/backend/tests/backend_test.py: 33/33 PASS. Frontend: settings page testids present (rate-car, save, tnc-en, tnc-tet, wa-token, wa-phone-id), save→reload persistence verified (12 persisted, then restored to 10). Audit log page renders with table & 15+ rows. Items > Car form shows FileUpload [data-testid=item-car-photo_url-btn]. Dashboard shows 5 Recharts surfaces (2 full-size area+bar charts as specced). EN↔TET toggle on /dashboard and / switches sidebar to Klientes / Sasán Penhór / Kontratu. WhatsApp button appears only for active/overdue contracts (correct), no active contract was visible in DB at test time so the click path was validated via backend pytest (status='mocked' returned, audit & log row written).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/clients", "issue": "Spec says cashier must be 403 but endpoint uses get_current_user instead of require_not_cashier — cashier successfully created a client (200). Fix: add Depends(require_not_cashier) to create_client (server.py line 235).", "priority": "HIGH"},
+      {"endpoint": "POST /api/items/{kind}", "issue": "Spec says cashier must be 403 but endpoint uses get_current_user — cashier successfully created a car item (200). Fix: switch dependency to require_not_cashier on create_item (server.py line 327).", "priority": "HIGH"},
+      {"endpoint": "POST /api/contracts", "issue": "ContractIn.interest_rate is declared as required Literal[10,15], so omitting it produces Pydantic 422. The 'default from settings by item_type' fallback inside create_contract (lines 528-536) is dead code. Fix: make interest_rate Optional[Literal[10,15]] = None (or accept 0/None and validate post-fallback).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Login page", "issue": "Lang toggle (data-testid lang-en / lang-tet) is NOT rendered on /login because Login route is outside both AdminLayout and PublicLayout. Spec explicitly wants TET clickable on /login. Fix: render <LangToggle /> directly inside /app/frontend/src/pages/Login.js (top-right corner).", "selector": "[data-testid='lang-tet']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts emits 'width(-1) and height(-1) ... please check the style of container' warnings on first paint — usually harmless (containers measure on next tick) but consider setting an explicit minHeight on the ResponsiveContainer to silence the warning."]},
+      {"screen": "Items > Car dialog", "issues": ["Radix Dialog warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. Add a <DialogDescription> for a11y."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter2_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Wrap POST /api/clients with Depends(require_not_cashier) so cashier gets 403.",
+    "Wrap POST /api/items/{kind} with Depends(require_not_cashier) so cashier gets 403 (currently any authenticated user including cashier can create items).",
+    "Make ContractIn.interest_rate optional (Optional[Literal[10,15]] = None) so the default-by-item-type-from-settings path becomes reachable, matching the iteration-2 spec.",
+    "Add <LangToggle /> to the standalone Login page (/app/frontend/src/pages/Login.js) so EN/TET selectors exist there as specified.",
+    "Optional: silence Recharts 'width/height -1' warnings by setting minHeight on ResponsiveContainer; add DialogDescription to item dialog."
+  ],
+  "critical_code_review_comments": [
+    "server.py now 1198 lines — past the 700-line threshold. Split into routers (auth, users, clients, items, contracts, payments, auctions, reports, dashboard, settings, files, whatsapp, audit).",
+    "_recompute_contract_status iterates and writes on every list call (lists + reminders/run) — N+M DB writes. Consider batched bulk_write or skipping write when no status change.",
+    "download_file mutates request._cookies (private attr) — fragile across Starlette versions. Either parse and inject via headers or decode the token directly without touching internal scope.",
+    "Hard-coded Pydantic Literal['en','tet'] vs internal wapp.send_template lang map — keep a single LANGUAGES enum/constant.",
+    "DEFAULT_SETTINGS contains both rates and large T&C strings — splitting into separate collections (config vs content) would simplify migrations."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter2.py (created — 22 new tests covering iteration-2 features)",
+    "/app/test_reports/pytest/iter2_results.xml (generated)",
+    "/app/test_reports/pytest/pytest_results.xml (regenerated, regression 33/33)"
+  ],
+  "success_rate": {"backend": "86% (52/55 = iter1 33/33 regression + iter2 19/22 new)", "frontend": "~90% (all new testids present and functional except missing lang-toggle on /login)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 verified. Cashier and staff users are dynamically created per-run via /api/users.",
+  "seed_data_creation": "Each test class creates and tears down its own TEST_ prefixed clients/items/contracts. Some redeemed contracts may linger from the WhatsApp/Cashier flow fixtures.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend has 3 known fail-points in test_iter2.py: cashier RBAC missing on POST /clients and POST /items/{kind}, and ContractIn.interest_rate is required so the omit-uses-default path returns 422. Frontend: /login lacks LangToggle. WhatsApp + reminders/run are confirmed mocked when WHATSAPP_TOKEN/PHONE_ID empty. Object-storage upload/download round-trips a 1x1 PNG correctly with cookie auth. After main agent applies the 4 action-item fixes, re-run only test_iter2.py to confirm 22/22; regression file is stable.",
+  "rca of the issue": "(1) Cashier RBAC misses: server.py defines require_not_cashier helper but only wired it on /contracts and /whatsapp/reminders/run; /clients and /items/{kind} were left on the generic get_current_user dependency. (2) Contract default rate: ContractIn declares interest_rate: Literal[10,15] with no default, so FastAPI/Pydantic rejects requests omitting it before ever reaching the 'if not doc.get(interest_rate)' fallback. (3) Login lang toggle: Login route is registered outside both AdminLayout and PublicLayout in App.js, so the <LangToggle /> nested in those layouts never renders on /login."
+}

@@ -10,6 +10,18 @@ import {
   TrendingUp,
   Banknote,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 
 const moneyFmt = (n) =>
   `USD ${Number(n || 0).toLocaleString("en-US", {
@@ -20,9 +32,11 @@ const moneyFmt = (n) =>
 export default function Dashboard() {
   const { t } = useLang();
   const [data, setData] = useState(null);
+  const [trends, setTrends] = useState(null);
 
   useEffect(() => {
     api.get("/dashboard/summary").then((r) => setData(r.data));
+    api.get("/dashboard/trends").then((r) => setTrends(r.data));
   }, []);
 
   const cards = [
@@ -103,6 +117,87 @@ export default function Dashboard() {
             </div>
           </Card>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white lg:col-span-2" data-testid="chart-trends">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-eyebrow">{t("monthly_trends")}</div>
+              <div className="font-display text-lg mt-1">Loans · Payments · Interest</div>
+            </div>
+          </div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trends?.months || []}>
+                <defs>
+                  <linearGradient id="gLoans" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2F4F4F" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#2F4F4F" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gPays" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#C17767" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#C17767" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
+                <XAxis dataKey="month" stroke="#57534E" tick={{ fontSize: 12 }} />
+                <YAxis stroke="#57534E" tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "#fff",
+                    border: "1px solid #E7E5E4",
+                    fontSize: 12,
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Area
+                  type="monotone"
+                  dataKey="loans"
+                  stroke="#2F4F4F"
+                  fill="url(#gLoans)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="payments"
+                  stroke="#C17767"
+                  fill="url(#gPays)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="interest"
+                  stroke="#8F9779"
+                  fill="transparent"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="chart-overdue">
+          <div className="text-eyebrow">{t("overdue_by_type")}</div>
+          <div className="font-display text-lg mt-1 mb-4">Contracts past due</div>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={trends?.overdue_by_type || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
+                <XAxis dataKey="type" stroke="#57534E" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} stroke="#57534E" tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "#fff",
+                    border: "1px solid #E7E5E4",
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="count" fill="#993333" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
       </div>
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white">

@@ -19,13 +19,13 @@ export default function LangToggle() {
       </button>
       <button
         type="button"
-        onClick={() => setLang("pt")}
-        data-testid="lang-pt"
+        onClick={() => setLang("tet")}
+        data-testid="lang-tet"
         className={`px-3 py-1 rounded-full transition ${
-          lang === "pt" ? "bg-[#2F4F4F] text-white" : "text-stone-600"
+          lang === "tet" ? "bg-[#2F4F4F] text-white" : "text-stone-600"
         }`}
       >
-        PT
+        TET
       </button>
     </div>
   );

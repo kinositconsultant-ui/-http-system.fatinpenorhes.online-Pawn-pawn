@@ -21,6 +21,7 @@ import {
 } from "../components/ui/dialog";
 import { Plus, Trash2, Pencil, Car, Bike, Cpu } from "lucide-react";
 import { toast } from "sonner";
+import FileUpload from "../components/FileUpload";
 
 const KIND_META = {
   car: { Icon: Car, fields: vehicleFields },
@@ -37,8 +38,8 @@ function vehicleFields(t) {
     { k: "plate", label: t("plate") },
     { k: "chassis", label: t("chassis") },
     { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
-    { k: "photo_url", label: t("photo_url"), full: true },
-    { k: "document_url", label: t("document_url"), full: true },
+    { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
+    { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
     { k: "description", label: t("description"), full: true, textarea: true },
   ];
 }
@@ -50,8 +51,8 @@ function electronicFields(t) {
     { k: "model", label: t("model"), required: true },
     { k: "serial", label: t("serial") },
     { k: "condition", label: t("condition"), placeholder: "Good / Fair" },
-    { k: "photo_url", label: t("photo_url"), full: true },
-    { k: "document_url", label: t("document_url"), full: true },
+    { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
+    { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
     { k: "description", label: t("description"), full: true, textarea: true },
   ];
 }
@@ -222,7 +223,15 @@ function ItemTable({ kind }) {
                     {f.label}
                     {f.required ? " *" : ""}
                   </Label>
-                  {f.textarea ? (
+                  {f.upload ? (
+                    <FileUpload
+                      value={form[f.k] ?? ""}
+                      onChange={(v) => onChange(f.k, v)}
+                      accept={f.accept}
+                      label={f.label}
+                      testid={`item-${kind}-${f.k}`}
+                    />
+                  ) : f.textarea ? (
                     <Textarea
                       value={form[f.k] ?? ""}
                       onChange={(e) => onChange(f.k, e.target.value)}

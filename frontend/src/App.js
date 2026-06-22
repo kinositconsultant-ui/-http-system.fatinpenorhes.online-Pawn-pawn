@@ -24,6 +24,8 @@ import Payments from "@/pages/Payments";
 import Auctions from "@/pages/Auctions";
 import Reports from "@/pages/Reports";
 import Users from "@/pages/Users";
+import Settings from "@/pages/Settings";
+import AuditLog from "@/pages/AuditLog";
 
 function App() {
   return (
@@ -60,6 +62,8 @@ function App() {
                 <Route path="/auctions" element={<Auctions />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/users" element={<Users />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/audit-log" element={<AuditLog />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

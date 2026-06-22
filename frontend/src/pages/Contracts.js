@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const blank = {
@@ -33,25 +33,35 @@ const blank = {
   notes: "",
 };
 
+const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15 };
+
 export default function Contracts() {
   const { t } = useLang();
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [itemsByKind, setItemsByKind] = useState({ car: [], motorcycle: [], electronic: [] });
+  const [defaults, setDefaults] = useState(DEFAULT_RATE_FALLBACK);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
 
   const load = async () => {
-    const [c, cl, cars, mc, el] = await Promise.all([
+    const [c, cl, cars, mc, el, s] = await Promise.all([
       api.get("/contracts"),
       api.get("/clients"),
       api.get("/items/car"),
       api.get("/items/motorcycle"),
       api.get("/items/electronic"),
+      api.get("/settings"),
     ]);
     setRows(c.data);
     setClients(cl.data);
     setItemsByKind({ car: cars.data, motorcycle: mc.data, electronic: el.data });
+    setDefaults({
+      car: s.data.interest_rate_car ?? 10,
+      motorcycle: s.data.interest_rate_motorcycle ?? 15,
+      electronic: s.data.interest_rate_electronic ?? 15,
+    });
+    // align default if dialog is closed (will be applied when opening)
   };
 
   useEffect(() => {
@@ -59,7 +69,14 @@ export default function Contracts() {
   }, []);
 
   const onChange = (k, v) =>
-    setForm((f) => ({ ...f, [k]: v, ...(k === "item_type" ? { item_id: "" } : {}) }));
+    setForm((f) => {
+      const next = { ...f, [k]: v };
+      if (k === "item_type") {
+        next.item_id = "";
+        next.interest_rate = String(defaults[v] ?? 10);
+      }
+      return next;
+    });
 
   const submit = async () => {
     try {
@@ -93,6 +110,18 @@ export default function Contracts() {
       await api.post("/auctions/move", { contract_id: id, starting_price: 0 });
       toast.success("Moved to auction");
       load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+
+  const sendWhatsApp = async (id, language) => {
+    try {
+      const { data } = await api.post("/whatsapp/send", { contract_id: id, language });
+      const note = data.status === "mocked"
+        ? "WhatsApp (mocked — set token in Settings)"
+        : `WhatsApp ${data.status}`;
+      toast.success(note);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     }
@@ -295,6 +324,16 @@ export default function Contracts() {
                         title={t("move_to_auction")}
                       >
                         <Gavel className="w-4 h-4" />
+                      </button>
+                    )}
+                    {["active", "overdue"].includes(r.status) && (
+                      <button
+                        onClick={() => sendWhatsApp(r.id, "en")}
+                        data-testid={`contract-whatsapp-${r.id}`}
+                        className="p-1 hover:text-[#4C7F62]"
+                        title={t("send_whatsapp")}
+                      >
+                        <MessageCircle className="w-4 h-4" />
                       </button>
                     )}
                     <button

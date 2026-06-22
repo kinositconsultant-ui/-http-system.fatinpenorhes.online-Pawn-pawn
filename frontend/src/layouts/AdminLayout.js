@@ -12,6 +12,8 @@ import {
   BarChart3,
   UserCog,
   LogOut,
+  Settings as SettingsIcon,
+  ScrollText,
 } from "lucide-react";
 
 const links = [
@@ -23,6 +25,8 @@ const links = [
   { to: "/auctions", key: "auctions", icon: Gavel, testid: "nav-auctions" },
   { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports" },
   { to: "/users", key: "users", icon: UserCog, testid: "nav-users", adminOnly: true },
+  { to: "/settings", key: "settings", icon: SettingsIcon, testid: "nav-settings", adminOnly: true },
+  { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", adminOnly: true },
 ];
 
 export default function AdminLayout() {

@@ -8,10 +8,10 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import uuid
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional, Literal
 
-from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, Header
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -27,7 +27,14 @@ from auth import (
     clear_auth_cookies,
     decode_token,
 )
-from pdf_utils import build_contract_pdf, build_receipt_pdf
+from pdf_utils import (
+    build_contract_pdf,
+    build_receipt_pdf,
+    DEFAULT_TNC_EN,
+    DEFAULT_TNC_TET,
+)
+import storage as objstore
+import whatsapp as wapp
 
 # ---- Setup ----
 mongo_url = os.environ["MONGO_URL"]
@@ -87,6 +94,32 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+def require_roles(*allowed: str):
+    async def _dep(user: dict = Depends(get_current_user)) -> dict:
+        if user.get("role") not in allowed:
+            raise HTTPException(status_code=403, detail=f"Requires role in {allowed}")
+        return user
+    return _dep
+
+
+# ---- Audit logging ----
+async def write_audit(actor: dict, action: str, resource: str, resource_id: str | None = None, payload: dict | None = None):
+    try:
+        await db.audit_log.insert_one({
+            "id": new_id(),
+            "actor_id": actor.get("id"),
+            "actor_email": actor.get("email"),
+            "actor_role": actor.get("role"),
+            "action": action,
+            "resource": resource,
+            "resource_id": resource_id or "",
+            "payload": payload or {},
+            "created_at": utcnow_iso(),
+        })
+    except Exception as e:  # never block primary operation due to logging
+        logger.warning(f"audit log failed: {e}")
+
+
 @api.post("/auth/login")
 async def auth_login(payload: LoginIn, response: Response):
     email = payload.email.lower()
@@ -127,6 +160,10 @@ async def auth_refresh(request: Request, response: Response):
     return {"ok": True}
 
 
+# Helpers for role gates
+require_not_cashier = require_roles("admin", "staff")
+
+
 # =====================================================================
 # Users (admin manages staff)
 # =====================================================================
@@ -134,7 +171,7 @@ class UserCreateIn(BaseModel):
     email: EmailStr
     password: str
     name: str
-    role: Literal["admin", "staff"] = "staff"
+    role: Literal["admin", "staff", "cashier"] = "staff"
 
 
 @api.get("/users")
@@ -345,6 +382,66 @@ async def _fetch_item(kind: str, iid: str) -> Optional[dict]:
 
 
 # =====================================================================
+# Settings (single document)
+# =====================================================================
+DEFAULT_SETTINGS = {
+    "id": "singleton",
+    "interest_rate_car": 10,
+    "interest_rate_motorcycle": 15,
+    "interest_rate_electronic": 15,
+    "terms_and_conditions_en": DEFAULT_TNC_EN,
+    "terms_and_conditions_tet": DEFAULT_TNC_TET,
+    "whatsapp_template_en": "due_date_reminder",
+    "whatsapp_template_tet": "due_date_reminder_tet",
+    "whatsapp_token": "",
+    "whatsapp_phone_id": "",
+    "reminder_days_before": 3,
+}
+
+
+async def get_settings_doc() -> dict:
+    doc = await db.settings.find_one({"id": "singleton"}, {"_id": 0})
+    if not doc:
+        await db.settings.insert_one(DEFAULT_SETTINGS.copy())
+        return DEFAULT_SETTINGS.copy()
+    # Backfill defaults for any new keys
+    merged = {**DEFAULT_SETTINGS, **doc}
+    return merged
+
+
+class SettingsIn(BaseModel):
+    interest_rate_car: int = 10
+    interest_rate_motorcycle: int = 15
+    interest_rate_electronic: int = 15
+    terms_and_conditions_en: str = ""
+    terms_and_conditions_tet: str = ""
+    whatsapp_template_en: str = ""
+    whatsapp_template_tet: str = ""
+    whatsapp_token: str = ""
+    whatsapp_phone_id: str = ""
+    reminder_days_before: int = 3
+
+
+@api.get("/settings")
+async def settings_get(_: dict = Depends(get_current_user)):
+    s = await get_settings_doc()
+    # do not return token to non-admins
+    return s
+
+
+@api.put("/settings")
+async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)):
+    update = payload.model_dump()
+    await db.settings.update_one(
+        {"id": "singleton"},
+        {"$set": update},
+        upsert=True,
+    )
+    await write_audit(admin, "update", "settings", "singleton", update)
+    return await get_settings_doc()
+
+
+# =====================================================================
 # Contracts
 # =====================================================================
 class ContractIn(BaseModel):
@@ -417,7 +514,7 @@ async def list_contracts(_: dict = Depends(get_current_user)):
 
 
 @api.post("/contracts")
-async def create_contract(payload: ContractIn, _: dict = Depends(get_current_user)):
+async def create_contract(payload: ContractIn, user: dict = Depends(require_not_cashier)):
     client_doc = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
     if not client_doc:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -428,6 +525,15 @@ async def create_contract(payload: ContractIn, _: dict = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Item is not available")
     contract_number = await _generate_contract_number()
     doc = payload.model_dump()
+    # Default interest by item type from settings
+    if not doc.get("interest_rate"):
+        sett = await get_settings_doc()
+        defaults = {
+            "car": sett.get("interest_rate_car", 10),
+            "motorcycle": sett.get("interest_rate_motorcycle", 15),
+            "electronic": sett.get("interest_rate_electronic", 15),
+        }
+        doc["interest_rate"] = defaults[payload.item_type]
     doc["id"] = new_id()
     doc["contract_number"] = contract_number
     doc["status"] = "active"
@@ -438,6 +544,7 @@ async def create_contract(payload: ContractIn, _: dict = Depends(get_current_use
         {"id": payload.item_id},
         {"$set": {"status": "pawned", "active_contract_id": doc["id"]}},
     )
+    await write_audit(user, "create", "contract", doc["id"], {"contract_number": contract_number, "loan_amount": doc["loan_amount"]})
     doc.pop("_id", None)
     return await _recompute_contract_status(doc)
 
@@ -470,9 +577,11 @@ async def contract_pdf(cid: str, _: dict = Depends(get_current_user)):
     c = await db.contracts.find_one({"id": cid}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
     client_doc = await db.clients.find_one({"id": c["client_id"]}, {"_id": 0}) or {}
     item = await _fetch_item(c["item_type"], c["item_id"]) or {}
-    pdf_bytes = build_contract_pdf(c, client_doc, item)
+    sett = await get_settings_doc()
+    pdf_bytes = build_contract_pdf(c, client_doc, item, sett)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
@@ -514,10 +623,13 @@ async def list_payments(contract_id: Optional[str] = None, _: dict = Depends(get
 
 
 @api.post("/payments")
-async def create_payment(payload: PaymentIn, _: dict = Depends(get_current_user)):
+async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_user)):
     contract = await db.contracts.find_one({"id": payload.contract_id}, {"_id": 0})
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
+    # Payment date must be between contract date and today (or due date — clients may pay anytime)
+    if payload.date and payload.date < contract.get("contract_date", payload.date):
+        raise HTTPException(status_code=400, detail="Payment date is before contract start date")
     receipt_number = await _generate_receipt_number()
     doc = payload.model_dump()
     doc["id"] = new_id()
@@ -531,6 +643,11 @@ async def create_payment(payload: PaymentIn, _: dict = Depends(get_current_user)
             {"id": contract["item_id"]},
             {"$set": {"status": "redeemed"}},
         )
+    await write_audit(user, "create", "payment", doc["id"], {
+        "receipt_number": receipt_number,
+        "amount": doc["amount"],
+        "contract_id": doc["contract_id"],
+    })
     doc.pop("_id", None)
     return {"payment": doc, "contract": updated}
 
@@ -796,6 +913,221 @@ async def contact_messages(_: dict = Depends(require_admin)):
 
 
 # =====================================================================
+# Dashboard trends (for charts)
+# =====================================================================
+@api.get("/dashboard/trends")
+async def dashboard_trends(_: dict = Depends(get_current_user)):
+    """Return last-6-month monthly aggregates and overdue snapshot."""
+    contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
+    payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
+    # Build last 6 buckets (YYYY-MM)
+    today = date.today()
+    buckets = []
+    for i in range(5, -1, -1):
+        # back i months
+        y, m = today.year, today.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        buckets.append(f"{y:04d}-{m:02d}")
+    by_month = {b: {"month": b, "loans": 0.0, "payments": 0.0, "interest": 0.0} for b in buckets}
+    for c in contracts:
+        ym = (c.get("contract_date") or "")[:7]
+        if ym in by_month:
+            loan = float(c.get("loan_amount", 0) or 0)
+            rate = float(c.get("interest_rate", 0) or 0)
+            by_month[ym]["loans"] += loan
+            by_month[ym]["interest"] += loan * rate / 100.0
+    for p in payments:
+        ym = (p.get("date") or "")[:7]
+        if ym in by_month:
+            by_month[ym]["payments"] += float(p.get("amount", 0) or 0)
+    months = [
+        {**v, "loans": round(v["loans"], 2),
+         "payments": round(v["payments"], 2),
+         "interest": round(v["interest"], 2)}
+        for v in by_month.values()
+    ]
+    # Overdue counts grouped by status snapshot per item type
+    by_type = {"car": 0, "motorcycle": 0, "electronic": 0}
+    today_iso = _today_iso()
+    for c in contracts:
+        if c.get("status") in ("redeemed", "sold"):
+            continue
+        if (c.get("due_date") or "") < today_iso and c.get("status") != "auction":
+            by_type[c.get("item_type", "car")] = by_type.get(c.get("item_type", "car"), 0) + 1
+    overdue_by_type = [{"type": k, "count": v} for k, v in by_type.items()]
+    return {"months": months, "overdue_by_type": overdue_by_type}
+
+
+# =====================================================================
+# File uploads (object storage)
+# =====================================================================
+ALLOWED_MIME = {
+    "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
+    "application/pdf", "application/octet-stream",
+}
+
+
+@api.post("/upload")
+async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if file.content_type and file.content_type not in ALLOWED_MIME and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=415, detail=f"Unsupported file type: {file.content_type}")
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (15MB max)")
+    ext = (file.filename or "bin").split(".")[-1].lower()
+    app_name = os.environ.get("APP_NAME", "fatin-penhores")
+    path = f"{app_name}/uploads/{user['id']}/{new_id()}.{ext}"
+    try:
+        result = objstore.put_object(path, data, file.content_type or "application/octet-stream")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Storage error: {e}")
+    record = {
+        "id": new_id(),
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": file.content_type,
+        "size": result.get("size", len(data)),
+        "is_deleted": False,
+        "uploaded_by": user["id"],
+        "created_at": utcnow_iso(),
+    }
+    await db.files.insert_one(record)
+    record.pop("_id", None)
+    # Frontend-friendly download URL (relative path)
+    record["url"] = f"/api/files/{result['path']}"
+    return record
+
+
+@api.get("/files/{path:path}")
+async def download_file(path: str, request: Request, auth: Optional[str] = Query(None)):
+    # Allow either cookie auth (default) or ?auth=<access_token> query param for <img> tags
+    if auth and not request.cookies.get("access_token"):
+        # Inject token into request cookies for dependency
+        request.scope.setdefault("headers", [])
+        request._cookies = {"access_token": auth, **request.cookies}  # type: ignore
+    # Verify user via cookie/header
+    token = request.cookies.get("access_token") or auth
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        data, content_type = objstore.get_object(path)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Storage error: {e}")
+    return Response(content=data, media_type=record.get("content_type") or content_type)
+
+
+@api.delete("/files/{file_id}")
+async def delete_file(file_id: str, _: dict = Depends(require_admin)):
+    await db.files.update_one({"id": file_id}, {"$set": {"is_deleted": True}})
+    return {"ok": True}
+
+
+# =====================================================================
+# WhatsApp reminders
+# =====================================================================
+class WhatsAppSendIn(BaseModel):
+    contract_id: str
+    language: Literal["en", "tet"] = "en"
+    extra: Optional[str] = None
+
+
+def _wa_template_name(settings: dict, language: str) -> str:
+    key = "whatsapp_template_en" if language == "en" else "whatsapp_template_tet"
+    return settings.get(key) or settings.get("whatsapp_template_en") or "due_date_reminder"
+
+
+def _wa_lang_code(language: str) -> str:
+    return "en" if language == "en" else "pt_PT"
+
+
+async def _send_reminder_for_contract(contract: dict, language: str, settings: dict, actor: dict) -> dict:
+    client_doc = await db.clients.find_one({"id": contract["client_id"]}, {"_id": 0}) or {}
+    phone = client_doc.get("phone", "")
+    name = client_doc.get("full_name", "Client")
+    cnum = contract.get("contract_number", "")
+    due = contract.get("due_date", "")
+    remaining = float(contract.get("remaining_balance", 0) or 0)
+    params = [name, cnum, due, f"USD {remaining:,.2f}"]
+    template = _wa_template_name(settings, language)
+    lang_code = _wa_lang_code(language)
+    result = await wapp.send_template(phone, template, lang_code, params, settings)
+    await db.whatsapp_log.insert_one({
+        "id": new_id(),
+        "contract_id": contract["id"],
+        "contract_number": cnum,
+        "client_id": client_doc.get("id"),
+        "client_phone": phone,
+        "language": language,
+        "template": template,
+        "parameters": params,
+        "result": result,
+        "actor_id": actor.get("id"),
+        "created_at": utcnow_iso(),
+    })
+    return result
+
+
+@api.post("/whatsapp/send")
+async def whatsapp_send(payload: WhatsAppSendIn, user: dict = Depends(get_current_user)):
+    c = await db.contracts.find_one({"id": payload.contract_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
+    settings = await get_settings_doc()
+    result = await _send_reminder_for_contract(c, payload.language, settings, user)
+    await write_audit(user, "whatsapp_send", "contract", c["id"], {"result_status": result.get("status")})
+    return result
+
+
+@api.post("/whatsapp/reminders/run")
+async def whatsapp_reminders_run(language: str = Query("en"), user: dict = Depends(require_not_cashier)):
+    """Send reminders to all contracts due in N days or overdue (not yet redeemed/auctioned)."""
+    settings = await get_settings_doc()
+    days_before = int(settings.get("reminder_days_before", 3))
+    today = date.today()
+    target_due = (today + timedelta(days=days_before)).isoformat()
+    today_iso = today.isoformat()
+    contracts = await db.contracts.find(
+        {"status": {"$in": ["active", "overdue"]}},
+        {"_id": 0},
+    ).to_list(5000)
+    sent: list[dict] = []
+    for c in contracts:
+        c = await _recompute_contract_status(c)
+        due = c.get("due_date", "")
+        if due <= target_due or due < today_iso:
+            r = await _send_reminder_for_contract(c, language, settings, user)
+            sent.append({"contract_number": c.get("contract_number"), "result": r.get("status")})
+    return {"count": len(sent), "sent": sent}
+
+
+@api.get("/whatsapp/logs")
+async def whatsapp_logs(_: dict = Depends(get_current_user)):
+    return await db.whatsapp_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+# =====================================================================
+# Audit log
+# =====================================================================
+@api.get("/audit-log")
+async def audit_log_list(
+    limit: int = Query(200, ge=1, le=1000),
+    resource: Optional[str] = None,
+    _: dict = Depends(require_admin),
+):
+    q = {"resource": resource} if resource else {}
+    return await db.audit_log.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+
+
+# =====================================================================
 # Health
 # =====================================================================
 @api.get("/")
@@ -825,8 +1157,20 @@ async def on_startup():
     await db.contracts.create_index("contract_number", unique=True)
     await db.payments.create_index("id", unique=True)
     await db.payments.create_index("receipt_number", unique=True)
+    await db.audit_log.create_index("created_at")
+    await db.files.create_index("id", unique=True)
+    await db.files.create_index("storage_path")
     for coll in COLLECTION_MAP.values():
         await db[coll].create_index("id", unique=True)
+
+    # Initialize object storage (best-effort)
+    try:
+        objstore.init_storage()
+    except Exception as e:
+        logger.warning(f"Object storage not initialized: {e}")
+
+    # Seed settings
+    await get_settings_doc()
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@fatinpenhores.tl").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")

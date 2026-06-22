@@ -106,6 +106,7 @@ export default function Users() {
                   <SelectContent>
                     <SelectItem value="admin">admin</SelectItem>
                     <SelectItem value="staff">staff</SelectItem>
+                    <SelectItem value="cashier">cashier</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
