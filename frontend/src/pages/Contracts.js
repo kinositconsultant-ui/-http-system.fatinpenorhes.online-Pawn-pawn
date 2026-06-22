@@ -156,6 +156,11 @@ export default function Contracts() {
     if (!it) return id;
     return `${it.brand || ""} ${it.model || ""}`.trim();
   };
+  const shortContract = (num) => {
+    if (!num) return "—";
+    const m = String(num).match(/^CTR-(\d{4})-0*(\d+)$/);
+    return m ? `CT-${m[1]}-${m[2]}` : num;
+  };
 
   const availableItems = itemsByKind[form.item_type]?.filter(
     (i) => i.status === "in_stock" || !i.status
@@ -310,7 +315,7 @@ export default function Contracts() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
-                <Td className="font-medium whitespace-nowrap">{r.contract_number}</Td>
+                <Td className="font-medium whitespace-nowrap" title={r.contract_number}>{shortContract(r.contract_number)}</Td>
                 <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
                 <Td className="max-w-[160px]">
                   <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">

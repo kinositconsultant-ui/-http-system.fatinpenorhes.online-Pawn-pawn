@@ -42,21 +42,28 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen flex bg-[#FAFAF9] text-stone-900">
-      <aside className="w-64 shrink-0 border-r border-stone-200 bg-white px-5 py-7 flex flex-col">
-        <div className="mb-8 flex items-center gap-3">
-          <img
-            src="/brand/logo.jpg"
-            alt="FP"
-            className="w-12 h-12 rounded-md object-contain bg-white border border-stone-200"
-          />
-          <div>
-            <div className="text-eyebrow text-stone-500 mb-0.5">Admin Console</div>
-            <div className="font-display text-lg font-semibold text-[#1B2D5C] leading-tight">
+      <aside className="w-64 shrink-0 bg-[#4A5568] px-4 py-6 flex flex-col text-white shadow-xl">
+        <div className="mb-5 flex flex-col items-center gap-2">
+          <div className="w-24 h-24 rounded-md bg-white p-2 shadow-md flex items-center justify-center">
+            <img
+              src="/brand/logo.jpg"
+              alt="FP"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <div className="text-center">
+            <div className="font-display text-xl font-semibold text-white tracking-wide drop-shadow-sm">
               Fatin Penhores
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 mt-0.5">
+              Admin Console
             </div>
           </div>
         </div>
-        <nav className="space-y-1 flex-1">
+
+        <div className="h-px bg-white/10 mb-3" />
+
+        <nav className="space-y-2 flex-1">
           {links.map((l) => {
             if (l.adminOnly && user?.role !== "admin") return null;
             const Icon = l.icon;
@@ -66,10 +73,10 @@ export default function AdminLayout() {
                 to={l.to}
                 data-testid={l.testid}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
+                  `flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
                     isActive
-                      ? "bg-[#1B2D5C] text-white"
-                      : "text-stone-600 hover:bg-stone-100"
+                      ? "bg-[#1B2D5C] text-white shadow-md ring-1 ring-white/20"
+                      : "bg-white text-[#1B2D5C] hover:bg-[#FFF8E1] hover:text-[#1B2D5C]"
                   }`
                 }
               >
@@ -79,19 +86,21 @@ export default function AdminLayout() {
             );
           })}
         </nav>
-        <div className="pt-4 border-t border-stone-200 mt-4 space-y-3">
+
+        <div className="pt-4 mt-4 space-y-3">
+          <div className="h-px bg-white/10" />
           <LangToggle />
-          <div className="text-xs text-stone-500">
+          <div className="text-xs text-white/70">
             {user?.name} · {user?.role}
           </div>
           <button
             onClick={handleLogout}
             data-testid="logout-btn"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm bg-stone-100 hover:bg-stone-200 transition"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-colors shadow-md"
           >
             <LogOut className="w-4 h-4" /> {t("logout")}
           </button>
-          <div className="text-[10px] text-stone-400 leading-relaxed pt-1">
+          <div className="text-[10px] text-white/50 leading-relaxed pt-1 text-center">
             FATIN PENHORES UNIP., LDA<br />
             Caicoli, Dili, Timor-Leste<br />
             WhatsApp: +670 78372678<br />
