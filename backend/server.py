@@ -804,6 +804,11 @@ class AuctionMoveIn(BaseModel):
 class AuctionSoldIn(BaseModel):
     sold_price: float
     buyer_name: str = ""
+    buyer_phone: str = ""
+    buyer_email: str = ""
+    buyer_address: str = ""
+    buyer_id_number: str = ""
+    tax_percent: float = 0.0
     notes: str = ""
 
 
@@ -852,8 +857,23 @@ async def move_to_auction(payload: AuctionMoveIn, _: dict = Depends(get_current_
     return doc
 
 
+async def _generate_invoice_number() -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = f"INV-{year}-"
+    last = await db.invoices.find({"invoice_number": {"$regex": f"^{prefix}"}}) \
+        .sort("invoice_number", -1).limit(1).to_list(1)
+    if last:
+        try:
+            seq = int(last[0]["invoice_number"].split("-")[-1]) + 1
+        except Exception:
+            seq = 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:04d}"
+
+
 @api.post("/auctions/{aid}/sold")
-async def mark_sold(aid: str, payload: AuctionSoldIn, _: dict = Depends(get_current_user)):
+async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(require_not_cashier)):
     a = await db.auctions.find_one({"id": aid}, {"_id": 0})
     if not a:
         raise HTTPException(status_code=404, detail="Auction not found")
@@ -861,6 +881,10 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, _: dict = Depends(get_curr
         "status": "sold",
         "sold_price": payload.sold_price,
         "buyer_name": payload.buyer_name,
+        "buyer_phone": payload.buyer_phone,
+        "buyer_email": payload.buyer_email,
+        "buyer_address": payload.buyer_address,
+        "buyer_id_number": payload.buyer_id_number,
         "sold_at": utcnow_iso(),
         "notes": payload.notes,
     }
@@ -869,7 +893,95 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, _: dict = Depends(get_curr
         {"id": a["item_id"]},
         {"$set": {"status": "sold"}},
     )
-    return {**a, **update}
+    # Auto-create invoice
+    inv_number = await _generate_invoice_number()
+    subtotal = float(payload.sold_price)
+    tax = round(subtotal * float(payload.tax_percent or 0) / 100.0, 2)
+    invoice = {
+        "id": new_id(),
+        "invoice_number": inv_number,
+        "auction_id": aid,
+        "contract_number": a.get("contract_number"),
+        "item_type": a["item_type"],
+        "item_id": a["item_id"],
+        "buyer_name": payload.buyer_name,
+        "buyer_phone": payload.buyer_phone,
+        "buyer_email": payload.buyer_email,
+        "buyer_address": payload.buyer_address,
+        "buyer_id_number": payload.buyer_id_number,
+        "subtotal": round(subtotal, 2),
+        "tax_percent": float(payload.tax_percent or 0),
+        "tax_amount": tax,
+        "total": round(subtotal + tax, 2),
+        "status": "issued",
+        "date": date.today().isoformat(),
+        "notes": payload.notes,
+        "created_at": utcnow_iso(),
+        "created_by": user["id"],
+    }
+    await db.invoices.insert_one(invoice)
+    await db.auctions.update_one({"id": aid}, {"$set": {"invoice_id": invoice["id"], "invoice_number": inv_number}})
+    await write_audit(user, "sold_auction", "auction", aid, {"sold_price": payload.sold_price, "invoice_number": inv_number})
+    invoice.pop("_id", None)
+    return {**a, **update, "invoice_id": invoice["id"], "invoice_number": inv_number, "invoice": invoice}
+
+
+# =====================================================================
+# Invoices
+# =====================================================================
+class InvoiceUpdateIn(BaseModel):
+    buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    buyer_email: Optional[str] = None
+    buyer_address: Optional[str] = None
+    buyer_id_number: Optional[str] = None
+    tax_percent: Optional[float] = None
+    status: Optional[Literal["issued", "paid", "cancelled"]] = None
+    notes: Optional[str] = None
+
+
+@api.get("/invoices")
+async def list_invoices(_: dict = Depends(get_current_user)):
+    return await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+
+
+@api.get("/invoices/{iid}")
+async def get_invoice(iid: str, _: dict = Depends(get_current_user)):
+    inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+@api.put("/invoices/{iid}")
+async def update_invoice(iid: str, payload: InvoiceUpdateIn, user: dict = Depends(require_not_cashier)):
+    inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    update = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
+    if "tax_percent" in update:
+        sub = float(inv["subtotal"])
+        tax = round(sub * float(update["tax_percent"]) / 100.0, 2)
+        update["tax_amount"] = tax
+        update["total"] = round(sub + tax, 2)
+    await db.invoices.update_one({"id": iid}, {"$set": update})
+    await write_audit(user, "update", "invoice", iid, update)
+    return await db.invoices.find_one({"id": iid}, {"_id": 0})
+
+
+@api.get("/invoices/{iid}/pdf")
+async def invoice_pdf(iid: str, _: dict = Depends(get_current_user)):
+    from pdf_utils import build_invoice_pdf
+    inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    item = await _fetch_item(inv["item_type"], inv["item_id"]) or {}
+    pdf_bytes = build_invoice_pdf(inv, item)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{inv["invoice_number"]}.pdf"'},
+    )
 
 
 @api.delete("/auctions/{aid}")
@@ -1660,6 +1772,11 @@ async def finance_summary(
     gross_profit = interest_received + total_penalty
     net_profit = gross_profit - expenses_total
 
+    # Invoices
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(5000)
+    total_invoices = len(invoices)
+    total_invoiced = sum(float(i.get("total", 0) or 0) for i in invoices)
+
     return {
         "cash_on_hand": round(cash_on_hand, 2),
         "capital_received": round(capital_received, 2),
@@ -1675,6 +1792,8 @@ async def finance_summary(
         "gross_profit": round(gross_profit, 2),
         "net_profit": round(net_profit, 2),
         "expenses_by_category": by_category_list,
+        "total_invoices": total_invoices,
+        "total_invoiced": round(total_invoiced, 2),
     }
 
 
@@ -1926,6 +2045,8 @@ async def on_startup():
     await db.audit_log.create_index("created_at")
     await db.files.create_index("id", unique=True)
     await db.files.create_index("storage_path")
+    await db.invoices.create_index("id", unique=True)
+    await db.invoices.create_index("invoice_number", unique=True)
     for coll in COLLECTION_MAP.values():
         await db[coll].create_index("id", unique=True)
 
