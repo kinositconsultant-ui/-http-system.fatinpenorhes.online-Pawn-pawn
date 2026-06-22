@@ -62,18 +62,27 @@ def _money(v):
     return f"USD ${float(v or 0):,.2f}"
 
 
+_LOGO_BYTES: bytes | None = None
+
+
 def _logo_flowable(width_cm=2.4):
-    if LOGO_PATH.exists():
+    global _LOGO_BYTES
+    if _LOGO_BYTES is None and LOGO_PATH.exists():
         try:
-            img = RLImage(str(LOGO_PATH))
-            ratio = img.imageWidth / max(img.imageHeight, 1)
-            w = width_cm * cm
-            img.drawWidth = w
-            img.drawHeight = w / ratio if ratio else w
-            return img
+            _LOGO_BYTES = LOGO_PATH.read_bytes()
         except Exception:
-            return None
-    return None
+            _LOGO_BYTES = b""
+    if not _LOGO_BYTES:
+        return None
+    try:
+        img = RLImage(BytesIO(_LOGO_BYTES))
+        ratio = img.imageWidth / max(img.imageHeight, 1)
+        w = width_cm * cm
+        img.drawWidth = w
+        img.drawHeight = w / ratio if ratio else w
+        return img
+    except Exception:
+        return None
 
 
 def _branded_header(s):

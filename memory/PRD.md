@@ -50,7 +50,16 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Client payment history** endpoint GET /api/clients/{id}/payments aggregated across every contract.
 - **Tetum contract PDF** matching the official template with 14 articles, header band, summary box, item detail table, signature block.
 
-## Implemented (Iter 4 — 2026-02)
+## Implemented (Iter 5 — 2026-02)
+- **Branded rebrand** from forest green to **company navy** `#1B2D5C / #0F1B3A` (from logo).
+- **FP logo image** embedded in: Contract PDF, Receipt PDF, Report PDF (top header), AdminLayout sidebar, PublicLayout header & footer, Login hero.
+- **PDF header & footer** show full company details: `FATIN PENHORES UNIPESSOAL, LDA · Caicoli, Dili, Timor-Leste · Tel: 78372678 · fatinpenhores@gmail.com` + copyright `© 2026 Fatin Penhores. All Rights Reserved.` plus a navy left-edge accent bar and silver inner bar matching the logo.
+- **Reports**: PDF export button = **red**, Excel button = **green**.
+- Public site Contact / About / footer updated with new address, tel, and email.
+- Logo bytes are cached in memory after first read to avoid per-request disk IO.
+
+## Test Coverage (cumulative)
+- Backend: **98/98 PASS** (iter1 33 + iter2 22 + iter4-old 22 + iter5 15 + iter6 6).
 - **Reports module overhauled** to match user mockup: 6 tabs (Active Contracts, Payments, Overdue, Auction, Inventory, Financial), each with 2–4 KPI cards + detail table.
 - **Filter bar** (Month / Year / Category / Sub-category) with Filter, Reset, Print, PDF, Excel buttons.
 - **Excel export** via openpyxl with branded sheet (KPI block + table). **PDF export** via ReportLab landscape A4.
