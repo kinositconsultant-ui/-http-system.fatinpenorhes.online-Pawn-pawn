@@ -301,9 +301,7 @@ export default function Contracts() {
               <Th>{t("client")}</Th>
               <Th>{t("item")}</Th>
               <Th right>{t("loan_amount")}</Th>
-              <Th right>{t("interest_rate")}</Th>
-              <Th>{t("contract_date")}</Th>
-              <Th>{t("due_date")}</Th>
+              <Th>{t("contract_date")} → {t("due_date")}</Th>
               <Th right>{t("remaining_balance")}</Th>
               <Th right>{t("penalty")}</Th>
               <Th>{t("status")}</Th>
@@ -312,73 +310,81 @@ export default function Contracts() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-stone-100">
-                <Td className="font-medium">{r.contract_number}</Td>
-                <Td>{clientName(r.client_id)}</Td>
-                <Td>
-                  <span className="text-xs uppercase tracking-wider text-stone-500 mr-1">
+              <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
+                <Td className="font-medium whitespace-nowrap">{r.contract_number}</Td>
+                <Td className="max-w-[180px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
+                <Td className="max-w-[200px]">
+                  <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">
                     {r.item_type}
                   </span>
-                  {itemLabel(r.item_type, r.item_id)}
+                  <span className="truncate align-middle" title={itemLabel(r.item_type, r.item_id)}>
+                    {itemLabel(r.item_type, r.item_id)}
+                  </span>
                 </Td>
-                <Td right>${Number(r.loan_amount).toLocaleString()}</Td>
-                <Td right>{r.interest_rate}%</Td>
-                <Td>{r.contract_date}</Td>
-                <Td>{r.due_date}</Td>
-                <Td right>${Number(r.remaining_balance ?? 0).toLocaleString()}</Td>
-                <Td right className={Number(r.penalty || 0) > 0 ? "text-[#993333] font-medium" : "text-stone-400"} >
+                <Td right className="whitespace-nowrap">
+                  <div>${Number(r.loan_amount).toLocaleString()}</div>
+                  <div className="text-xs text-stone-500">@ {r.interest_rate}%</div>
+                </Td>
+                <Td className="whitespace-nowrap text-xs">
+                  <div>{r.contract_date}</div>
+                  <div className="text-stone-500">→ {r.due_date}</div>
+                </Td>
+                <Td right className="whitespace-nowrap">${Number(r.remaining_balance ?? 0).toLocaleString()}</Td>
+                <Td right className={`whitespace-nowrap ${Number(r.penalty || 0) > 0 ? "text-[#993333] font-medium" : "text-stone-400"}`} >
                   ${Number(r.penalty || 0).toLocaleString()}
                 </Td>
-                <Td>
+                <Td className="whitespace-nowrap">
                   <StatusBadge status={r.status} />
                 </Td>
                 <Td right>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-1.5">
                     <a
                       href={`${API_BASE}/contracts/${r.id}/pdf`}
                       target="_blank"
                       rel="noreferrer"
                       data-testid={`contract-pdf-${r.id}`}
-                      className="p-1 hover:text-[#1B2D5C]"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                      title={t("download_pdf")}
                     >
-                      <FileDown className="w-4 h-4" />
+                      <FileDown className="w-3.5 h-3.5" />
                     </a>
                     {r.status === "overdue" && (
                       <button
                         onClick={() => openReactivate(r)}
                         data-testid={`contract-reactivate-${r.id}`}
-                        className="p-1 hover:text-[#4C7F62]"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
                         title={t("reactivate")}
                       >
-                        <RefreshCw className="w-4 h-4" />
+                        <RefreshCw className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {["active", "overdue"].includes(r.status) && (
                       <button
                         onClick={() => moveToAuction(r.id)}
                         data-testid={`contract-auction-${r.id}`}
-                        className="p-1 hover:text-[#C17767]"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
                         title={t("move_to_auction")}
                       >
-                        <Gavel className="w-4 h-4" />
+                        <Gavel className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {["active", "overdue"].includes(r.status) && (
                       <button
                         onClick={() => sendWhatsApp(r.id, "en")}
                         data-testid={`contract-whatsapp-${r.id}`}
-                        className="p-1 hover:text-[#4C7F62]"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#25D366] text-white hover:bg-[#1EA952] transition-colors"
                         title={t("send_whatsapp")}
                       >
-                        <MessageCircle className="w-4 h-4" />
+                        <MessageCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
                     <button
                       onClick={() => remove(r.id)}
                       data-testid={`contract-delete-${r.id}`}
-                      className="p-1 hover:text-[#993333]"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#993333] text-white hover:bg-[#7A2828] transition-colors"
+                      title={t("delete")}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </Td>
@@ -386,7 +392,7 @@ export default function Contracts() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan="11" className="p-8 text-center text-stone-500">
+                <td colSpan="9" className="p-8 text-center text-stone-500">
                   No contracts
                 </td>
               </tr>
@@ -465,7 +471,7 @@ function Field({ label, children }) {
 function Th({ children, right }) {
   return (
     <th
-      className={`px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold ${
+      className={`px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
         right ? "text-right" : ""
       }`}
     >
@@ -475,5 +481,9 @@ function Th({ children, right }) {
 }
 
 function Td({ children, right, className = "" }) {
-  return <td className={`px-4 py-3 ${right ? "text-right" : ""} ${className}`}>{children}</td>;
+  return (
+    <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`}>
+      {children}
+    </td>
+  );
 }
