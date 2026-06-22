@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 8 (Finance/Invoices PDF exports) verified end-to-end. Backend: NEW test_iter8_finance_pdf.py 23/23 PASS — finance summary PDF (default + month/year), capital-sources PDF, expenses PDF (no filter / category=Salary / month+year), /api/finance/summary now exposes total_invoices+total_invoiced (int+float), /api/invoices list, /api/invoices/export/pdf (list), /api/invoices/{id}/pdf (single), route ordering check (export/pdf not eaten by /{iid}), full sold-auction flow that auto-creates an Invoice (client BI -> item electronic -> contract -> /auctions/move -> /auctions/{aid}/sold) returns invoice_id+invoice_number, the invoice surfaces in /api/invoices, auction stores invoice_id, single-invoice PDF returns application/pdf with INV-* in Content-Disposition, unauth PDF endpoints return 401, and 7-endpoint regression all 200. Full regression of prior suites: backend_test (33) + iter2 (22) + iter4 (22) + iter5_reports (15) + iter6_branding (6) + iter7_finance (20) = 118/118 PASS. TOTAL BACKEND: 141/141. All PDF endpoints return application/pdf, body starts with %PDF, and >5KB except the empty-list edge (still PDF). Frontend (Playwright, admin login on REACT_APP_BACKEND_URL): /finance loads, [finance-summary-pdf-btn] is an <A> with href https://.../api/finance/summary/export/pdf; Capital tab shows [capital-pdf-btn] -> /api/finance/capital-sources/export/pdf; Expenses tab shows [expense-pdf-btn] (default /api/finance/expenses/export/pdf) AND [expense-filter-category] dropdown — selecting 'Salary' correctly rewrites href to ?category=Salary; [finance-tab-invoices] renders an invoices table with 3 rows, bulk [invoice-pdf-btn] -> /api/invoices/export/pdf, per-row [invoice-pdf-{id}] -> /api/invoices/{id}/pdf (3 detected); /auctions shows 2 [auction-invoice-{aid}] links pointing to /api/invoices/{id}/pdf. Screenshot confirms 3 invoices rendered (INV-2026-0001..0003) with PDF buttons in actions column.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Finance dashboard", "issues": ["Cash on Hand renders as $-119,062.00 (negative) — sign rendering is fine, but business semantics may surprise users; consider showing 'Net Cash (deficit)' label when negative. Pre-existing, not part of this iteration."]},
+      {"screen": "Finance charts", "issues": ["Recharts ResponsiveContainer still logs width(-1)/height(-1) on first paint (carry-over from iter6/7). Cosmetic."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_finance_pdf.py",
+    "/app/test_reports/pytest/iter8_finance_pdf.xml",
+    "/app/test_reports/pytest/iter8_regression.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Auto-create invoices does not de-duplicate on re-POSTing /auctions/{aid}/sold — current code overwrites auction.invoice_id but every call creates another Invoice doc (the test class only marks sold once; manual re-calls would orphan rows). Consider returning the existing invoice if status already 'sold'.",
+    "OPTIONAL: GET /api/finance/summary still calls _recompute_contract_status(c) inside a loop over ALL contracts (carry-over). Move to a background task.",
+    "OPTIONAL: server.py is now ~2164 lines (+200 since iter7) — split into routers before adding more PDF exports.",
+    "OPTIONAL: 'Cash on Hand' KPI can be negative in seeded test data; consider absolute + 'deficit' badge for clarity."
+  ],
+  "critical_code_review_comments": [
+    "Route ordering: /api/invoices/export/pdf (line 977) is declared BEFORE /api/invoices/{iid}/pdf (line 988) and /api/invoices/{iid} (line 953) — verified working today (FastAPI matches by declaration order), but a future refactor that re-sorts these would silently break: 'export' would be captured as iid. Suggest renaming to /api/invoices/_export or pinning declaration order with a comment.",
+    "Auto-invoice flow in /api/auctions/{aid}/sold (server.py:880) never checks if a.status == 'sold' before creating a new invoice — re-calling the endpoint would mint duplicate INV-* numbers and leave dangling Invoice docs (auction.invoice_id only stores the latest). Add idempotency guard.",
+    "Tax math in mark_sold uses payload.tax_percent (Optional[float] | None). When None, `float(payload.tax_percent or 0)` is fine, but the response sets tax_percent=0.0 even if the original Invoice schema would prefer null. Cosmetic but worth aligning.",
+    "_generate_invoice_number sorts lexicographically on 'invoice_number' string then parses suffix int — works while 4-digit padding holds (up to 9999/year). Add an explicit comment or move to atomic counter doc.",
+    "Single-invoice PDF response uses inv['invoice_number'] in Content-Disposition without quoting — fine for INV-YYYY-NNNN but could break if invoice numbers ever contain spaces/quotes.",
+    "build_invoice_pdf gets {} when _fetch_item returns None (item deleted) — silently renders blank item info. Consider rendering a 'Deleted item' marker for traceability.",
+    "Finance.js InvoicesSection: no empty-state UI under TabsContent when invoices=[] (the screenshot shows 3 today; consider skeleton/empty placeholder when totals are zero)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_finance_pdf.py — NEW (23 tests across 6 classes covering all 5 PDF endpoints + summary keys + sold-flow + auth + regression)"
+  ],
+  "success_rate": {"backend": "100% (141/141: 23 iter8 + 118 regression)", "frontend": "100% on iter8 selectors (finance-summary-pdf-btn, capital-pdf-btn, expense-pdf-btn, expense-filter-category w/ href rewrite, finance-tab-invoices + table, invoice-pdf-btn, 3x invoice-pdf-{id}, 2x auction-invoice-{aid})"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md). Cookie-based JWT (httpOnly).",
+  "seed_data_creation": "Per-run seed: TEST_iter8 Salary+Utilities expenses (auto-cleanup not strictly needed; TEST_iter8_ prefix); TEST_iter8 client (id_type=BI), TEST iter8 electronic item, contract CTR-YYYY-NNNN, auction, sold + INV-YYYY-NNNN invoice. All clearly TEST_iter8_ prefixed for future cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter8 adds 5 PDF endpoints under /api/finance/* and /api/invoices/{,/{iid}}/pdf. Auth is cookie-based; unauth returns 401. Auctions sold-flow now auto-creates an Invoice doc and writes invoice_id back to auction. /api/finance/summary returns 16 keys (was 14): added total_invoices (int) + total_invoiced (float). For contracts: item_type literal is car/motorcycle/electronic (NOT gold); contract requires item_id, loan_amount, contract_date, due_date, interest_rate is Literal[10,15]. To-auction endpoint is POST /api/auctions/move with {contract_id, starting_price} — not /api/contracts/{cid}/auction. Clients require id_type (BI/Electoral/Passport/Drivers License). No /api/reports/kpis endpoint exists — use /api/finance/summary or /api/reports/v2/{type}. Route ordering: /api/invoices/export/pdf is declared before /api/invoices/{iid}/pdf — current order works, do not re-sort.",
+  "rca of the issue": "N/A — no failures in final run. Self-corrections during authoring: (1) Initial regression list used /api/reports/kpis which returns 400 'Unknown report type' — swapped to /api/finance/summary. (2) Sold-flow fixture had to be updated three times: client schema requires id_type, contract schema uses item_id/loan_amount/contract_date (not item_payload/principal_amount/start_date) and item_type literal excludes 'gold', and to-auction is POST /api/auctions/move (not /api/contracts/{id}/auction). All resolved; final 23/23 + 118/118 regression PASS."
+}

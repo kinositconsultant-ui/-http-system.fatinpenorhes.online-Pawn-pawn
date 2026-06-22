@@ -443,6 +443,387 @@ def build_report_pdf(report_type: str, data: dict) -> bytes:
     return buf.getvalue()
 
 
+def _section_title(s, text):
+    return Paragraph(text, ParagraphStyle(
+        "Sec", parent=s["DocTitle"], fontSize=12, alignment=0, spaceBefore=2, spaceAfter=6,
+    ))
+
+
+def _kv_table(rows, col_widths=(5.5 * cm, 5.5 * cm)):
+    t = Table(rows, colWidths=list(col_widths))
+    t.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, RULE),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return t
+
+
+def _data_table(columns, rows, col_widths=None, footer_row=None):
+    """Branded data table. columns = list[str], rows = list[list[str]]."""
+    header = [c for c in columns]
+    body = [header] + [list(r) for r in rows]
+    if footer_row:
+        body.append(list(footer_row))
+    t = Table(body, colWidths=col_widths, repeatRows=1)
+    style = [
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8.5),
+        ("FONT", (0, 1), (-1, -1), "Helvetica", 8),
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.2, RULE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]
+    if footer_row:
+        last = len(body) - 1
+        style += [
+            ("FONT", (0, last), (-1, last), "Helvetica-Bold", 9),
+            ("BACKGROUND", (0, last), (-1, last), colors.HexColor("#EEF2F7")),
+            ("TEXTCOLOR", (0, last), (-1, last), NAVY),
+            ("LINEABOVE", (0, last), (-1, last), 0.6, NAVY),
+        ]
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _new_doc(landscape_mode=False):
+    from reportlab.lib.pagesizes import landscape as _ls
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=_ls(A4) if landscape_mode else A4,
+        leftMargin=1.6 * cm, rightMargin=1.6 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.6 * cm,
+    )
+    return buf, doc
+
+
+def build_invoice_pdf(invoice: dict, item: dict | None = None) -> bytes:
+    """Single invoice PDF for sold auction items."""
+    s = _styles()
+    buf, doc = _new_doc()
+    story = [_branded_header(s),
+             Paragraph("Sales Invoice · Resibu Venda", s["Sub"]),
+             Paragraph(f"INVOICE {invoice.get('invoice_number', '')}", s["DocTitle"])]
+
+    meta = [
+        ["Invoice No.", invoice.get("invoice_number", ""),
+         "Date", invoice.get("date", "")],
+        ["Contract No.", invoice.get("contract_number") or "—",
+         "Status", str(invoice.get("status", "issued")).upper()],
+        ["Item Type", str(invoice.get("item_type", "")).title(),
+         "Item Ref.", (item or {}).get("brand", "") or (item or {}).get("description", "")[:30] or "—"],
+    ]
+    box = Table(meta, colWidths=[3.6 * cm, 5.2 * cm, 3.6 * cm, 4.6 * cm])
+    box.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+        ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("TEXTCOLOR", (2, 0), (2, -1), MUTED),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+        ("BOX", (0, 0), (-1, -1), 0.5, NAVY),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, RULE),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(box)
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(_section_title(s, "Bill To · Komprador"))
+    buyer = [
+        ["Name", invoice.get("buyer_name", "") or "—"],
+        ["Phone", invoice.get("buyer_phone", "") or "—"],
+        ["Email", invoice.get("buyer_email", "") or "—"],
+        ["Address", invoice.get("buyer_address", "") or "—"],
+        ["ID Number", invoice.get("buyer_id_number", "") or "—"],
+    ]
+    story.append(_kv_table(buyer, (4 * cm, 12 * cm)))
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Line item
+    desc_bits = []
+    if item:
+        if item.get("brand"):
+            desc_bits.append(item["brand"])
+        if item.get("model"):
+            desc_bits.append(item["model"])
+        if item.get("manufacture_year"):
+            desc_bits.append(str(item["manufacture_year"]))
+        if item.get("description"):
+            desc_bits.append(item["description"])
+    desc = " · ".join(desc_bits) or str(invoice.get("item_type", "")).title()
+    line_rows = [
+        ["1", f"{str(invoice.get('item_type', '')).title()} — {desc}", "1", _money(invoice.get("subtotal", 0))],
+    ]
+    line_tbl = _data_table(
+        ["#", "Description", "Qty", "Amount"],
+        line_rows,
+        col_widths=[1 * cm, 11.4 * cm, 1.5 * cm, 3 * cm],
+    )
+    story.append(line_tbl)
+    story.append(Spacer(1, 0.3 * cm))
+
+    totals = [
+        ["Subtotal", _money(invoice.get("subtotal", 0))],
+        [f"Tax ({float(invoice.get('tax_percent', 0) or 0):.2f}%)", _money(invoice.get("tax_amount", 0))],
+        ["TOTAL", _money(invoice.get("total", 0))],
+    ]
+    tot = Table(totals, colWidths=[12.9 * cm, 4 * cm])
+    tot.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
+        ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 11),
+        ("BACKGROUND", (0, -1), (-1, -1), NAVY),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, RULE),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(tot)
+
+    if invoice.get("notes"):
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(Paragraph(f"<b>Notes:</b> {invoice['notes']}", s["Body"]))
+
+    story.append(Spacer(1, 1.2 * cm))
+    sign = Table(
+        [["_______________________", "_______________________"],
+         ["Buyer Signature · Komprador", "Authorized Officer"]],
+        colWidths=[8 * cm, 8 * cm],
+    )
+    sign.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TEXTCOLOR", (0, 1), (-1, 1), MUTED),
+        ("TOPPADDING", (0, 1), (-1, 1), 2),
+    ]))
+    story.append(sign)
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def build_invoices_list_pdf(invoices: list[dict]) -> bytes:
+    """List of all invoices."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    total = sum(float(i.get("total", 0) or 0) for i in invoices)
+    story = [
+        _branded_header(s),
+        Paragraph("Invoices Register · Rejistu Resibu", s["DocTitle"]),
+        Paragraph(f"Total Invoices: <b>{len(invoices)}</b> · Total Amount: <b>{_money(total)}</b>", s["Body"]),
+        Spacer(1, 0.3 * cm),
+    ]
+    rows = []
+    for inv in invoices:
+        rows.append([
+            inv.get("invoice_number", ""),
+            inv.get("date", ""),
+            inv.get("buyer_name", "") or "—",
+            inv.get("contract_number") or "—",
+            str(inv.get("item_type", "")).title(),
+            _money(inv.get("subtotal", 0)),
+            _money(inv.get("tax_amount", 0)),
+            _money(inv.get("total", 0)),
+            str(inv.get("status", "issued")).upper(),
+        ])
+    columns = ["Invoice No.", "Date", "Buyer", "Contract", "Item Type", "Subtotal", "Tax", "Total", "Status"]
+    footer = ["", "", "", "", "TOTAL", "", "", _money(total), ""]
+    story.append(_data_table(
+        columns, rows,
+        col_widths=[3.0 * cm, 2.2 * cm, 4.5 * cm, 3.0 * cm, 2.4 * cm, 2.4 * cm, 2.2 * cm, 2.6 * cm, 2.0 * cm],
+        footer_row=footer,
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def build_capital_sources_pdf(sources: list[dict]) -> bytes:
+    """List of capital sources with totals."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    total_principal = sum(float(x.get("principal_amount", 0) or 0) for x in sources)
+    total_repaid = sum(float(x.get("total_repaid", 0) or 0) for x in sources)
+    total_outstanding = sum(float(x.get("outstanding", 0) or 0) for x in sources)
+    story = [
+        _branded_header(s),
+        Paragraph("Capital Sources · Fontes Kapitál", s["DocTitle"]),
+        Paragraph(
+            f"Sources: <b>{len(sources)}</b> · Principal: <b>{_money(total_principal)}</b> · "
+            f"Repaid: <b>{_money(total_repaid)}</b> · Outstanding: <b>{_money(total_outstanding)}</b>",
+            s["Body"]),
+        Spacer(1, 0.3 * cm),
+    ]
+    rows = []
+    for x in sources:
+        rows.append([
+            x.get("name", ""),
+            str(x.get("source_type", "")).title(),
+            _money(x.get("principal_amount", 0)),
+            f"{float(x.get('interest_rate', 0) or 0):.2f}% / {x.get('interest_period', '')}",
+            _money(x.get("total_repaid", 0)),
+            _money(x.get("outstanding", 0)),
+            x.get("start_date", "") or "—",
+            x.get("due_date", "") or "—",
+        ])
+    footer = ["", "TOTAL", _money(total_principal), "",
+              _money(total_repaid), _money(total_outstanding), "", ""]
+    story.append(_data_table(
+        ["Name", "Type", "Principal", "Rate / Period", "Repaid", "Outstanding", "Start", "Due"],
+        rows,
+        col_widths=[5 * cm, 2.4 * cm, 3 * cm, 3.4 * cm, 3 * cm, 3.2 * cm, 2.4 * cm, 2.4 * cm],
+        footer_row=footer,
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def build_expenses_pdf(expenses: list[dict], category: str | None = None,
+                       month: int | None = None, year: int | None = None,
+                       by_category: list[dict] | None = None) -> bytes:
+    """Expenses list with optional filter; supports per-category breakdown."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    total = sum(float(e.get("amount", 0) or 0) for e in expenses)
+
+    filters = []
+    if category:
+        filters.append(f"Category: <b>{category}</b>")
+    if month:
+        filters.append(f"Month: <b>{month:02d}</b>")
+    if year:
+        filters.append(f"Year: <b>{year}</b>")
+    filter_line = " · ".join(filters) if filters else "All expenses"
+
+    title = f"Operating Expenses — {category}" if category else "Operating Expenses · Despeza Operasional"
+
+    story = [
+        _branded_header(s),
+        Paragraph(title, s["DocTitle"]),
+        Paragraph(f"{filter_line} · Entries: <b>{len(expenses)}</b> · Total: <b>{_money(total)}</b>", s["Body"]),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    if by_category and not category:
+        story.append(_section_title(s, "Summary by Category"))
+        cat_rows = [[c.get("category", ""), _money(c.get("amount", 0))]
+                    for c in by_category]
+        cat_footer = ["TOTAL", _money(sum(float(c.get("amount", 0) or 0) for c in by_category))]
+        story.append(_data_table(
+            ["Category", "Amount"], cat_rows,
+            col_widths=[10 * cm, 4 * cm], footer_row=cat_footer,
+        ))
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(_section_title(s, "Detailed Entries"))
+
+    rows = []
+    for e in expenses:
+        rows.append([
+            e.get("date", ""),
+            e.get("category", ""),
+            e.get("paid_to", "") or "—",
+            str(e.get("payment_method", "")).title(),
+            (e.get("description", "") or "—")[:55],
+            _money(e.get("amount", 0)),
+        ])
+    footer = ["", "", "", "", "TOTAL", _money(total)]
+    story.append(_data_table(
+        ["Date", "Category", "Paid To", "Method", "Description", "Amount"], rows,
+        col_widths=[2.4 * cm, 2.6 * cm, 4 * cm, 2.4 * cm, 8 * cm, 3 * cm],
+        footer_row=footer,
+    ))
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def build_finance_summary_pdf(summary: dict, month: int | None = None, year: int | None = None) -> bytes:
+    """Full Finance Summary PDF — KPIs + cash-flow breakdown + expenses by category."""
+    s = _styles()
+    buf, doc = _new_doc()
+
+    period = []
+    if month:
+        period.append(f"Month {month:02d}")
+    if year:
+        period.append(f"Year {year}")
+    period_line = " · ".join(period) if period else "Lifetime"
+
+    story = [
+        _branded_header(s),
+        Paragraph("Finance Summary · Sumáriu Finanseiru", s["DocTitle"]),
+        Paragraph(f"Period: <b>{period_line}</b>", s["Body"]),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    # KPI block
+    def _row(label, key, color=None):
+        v = summary.get(key)
+        return [label, _money(v) if isinstance(v, (int, float)) else str(v)]
+
+    kpis = [
+        _row("Cash on Hand", "cash_on_hand"),
+        _row("Capital Received", "capital_received"),
+        _row("Capital Repaid", "capital_repaid"),
+        _row("Capital Outstanding", "capital_outstanding"),
+        _row("Loans Disbursed", "loans_disbursed"),
+        _row("Client Payments", "client_payments"),
+        _row("Auction Sales", "auction_sales"),
+        _row("Interest Received", "interest_received"),
+        _row("Total Penalty", "total_penalty"),
+        _row("Expenses (Period)", "expenses_period"),
+        _row("Expenses (Lifetime)", "expenses_total"),
+        _row("Gross Profit", "gross_profit"),
+        _row("Net Profit", "net_profit"),
+        ["Total Invoices", str(summary.get("total_invoices", 0))],
+        _row("Total Invoiced", "total_invoiced"),
+    ]
+    story.append(_section_title(s, "Key Indicators"))
+    story.append(_kv_table(kpis, (8 * cm, 8 * cm)))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # Expenses by category
+    by_cat = summary.get("expenses_by_category") or []
+    if by_cat:
+        story.append(_section_title(s, "Expenses by Category"))
+        rows = [[c.get("category", ""), _money(c.get("amount", 0))] for c in by_cat]
+        total_cat = sum(float(c.get("amount", 0) or 0) for c in by_cat)
+        footer = ["TOTAL", _money(total_cat)]
+        story.append(_data_table(
+            ["Category", "Amount"], rows,
+            col_widths=[10 * cm, 6 * cm], footer_row=footer,
+        ))
+        story.append(Spacer(1, 0.4 * cm))
+
+    # Cash flow snapshot
+    story.append(_section_title(s, "Cash Flow Snapshot"))
+    flow_rows = [
+        ["Capital In (received)", _money(summary.get("capital_received", 0))],
+        ["Client Payments", _money(summary.get("client_payments", 0))],
+        ["Auction Sales", _money(summary.get("auction_sales", 0))],
+        ["Loans Out (disbursed)", f"-{_money(summary.get('loans_disbursed', 0))}"],
+        ["Expenses (lifetime)", f"-{_money(summary.get('expenses_total', 0))}"],
+        ["Capital Repaid", f"-{_money(summary.get('capital_repaid', 0))}"],
+    ]
+    footer = ["NET CASH ON HAND", _money(summary.get("cash_on_hand", 0))]
+    story.append(_data_table(
+        ["Flow", "Amount"], flow_rows,
+        col_widths=[10 * cm, 6 * cm], footer_row=footer,
+    ))
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 # Keep default bilingual T&C (used by Settings UI)
 DEFAULT_TNC_EN = """1. The Client pledges the item described above as security for the loan amount stated.
 2. Maximum contract term is 2 months from the contract date.

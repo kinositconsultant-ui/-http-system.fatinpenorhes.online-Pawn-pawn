@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { api } from "../lib/api";
+import { api, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "../components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Wallet, Landmark, Receipt, TrendingUp, ArrowDownCircle,
+  FileText, Download,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -49,27 +50,42 @@ export default function Finance() {
   const [sources, setSources] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [invoices, setInvoices] = useState([]);
 
   const load = useCallback(async () => {
-    const [s, srcs, exps, cats] = await Promise.all([
+    const [s, srcs, exps, cats, invs] = await Promise.all([
       api.get("/finance/summary"),
       api.get("/funding-sources"),
       api.get("/expenses"),
       api.get("/expense-categories"),
+      api.get("/invoices"),
     ]);
     setSummary(s.data);
     setSources(srcs.data);
     setExpenses(exps.data);
     setCategories(cats.data);
+    setInvoices(invs.data);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   return (
     <div className="space-y-8" data-testid="finance-root">
-      <header>
-        <div className="text-eyebrow">Treasury</div>
-        <h1 className="font-display text-4xl font-semibold mt-1">Finance</h1>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="text-eyebrow">Treasury</div>
+          <h1 className="font-display text-4xl font-semibold mt-1">Finance</h1>
+        </div>
+        <a
+          href={pdfUrl("/finance/summary/export/pdf")}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="finance-summary-pdf-btn"
+        >
+          <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2">
+            <FileText className="w-4 h-4" /> {t("summary_pdf")}
+          </Button>
+        </a>
       </header>
 
       {/* KPI cards */}
@@ -139,21 +155,27 @@ export default function Finance() {
         </Card>
       </div>
 
-      {/* Tabs: Capital + Expenses */}
+      {/* Tabs: Capital + Expenses + Invoices */}
       <Tabs defaultValue="capital" data-testid="finance-tabs">
         <TabsList>
           <TabsTrigger value="capital" data-testid="finance-tab-capital">
-            <Landmark className="w-4 h-4 mr-2" /> Capital Sources
+            <Landmark className="w-4 h-4 mr-2" /> {t("capital_sources")}
           </TabsTrigger>
           <TabsTrigger value="expenses" data-testid="finance-tab-expenses">
-            <ArrowDownCircle className="w-4 h-4 mr-2" /> Expenses
+            <ArrowDownCircle className="w-4 h-4 mr-2" /> {t("expenses")}
+          </TabsTrigger>
+          <TabsTrigger value="invoices" data-testid="finance-tab-invoices">
+            <Receipt className="w-4 h-4 mr-2" /> {t("invoices")}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="capital">
-          <CapitalSection sources={sources} reload={load} />
+          <CapitalSection sources={sources} reload={load} t={t} />
         </TabsContent>
         <TabsContent value="expenses">
-          <ExpensesSection expenses={expenses} categories={categories} reload={load} />
+          <ExpensesSection expenses={expenses} categories={categories} reload={load} t={t} />
+        </TabsContent>
+        <TabsContent value="invoices">
+          <InvoicesSection invoices={invoices} t={t} />
         </TabsContent>
       </Tabs>
     </div>
@@ -181,7 +203,7 @@ const blankSource = {
   due_date: "", notes: "",
 };
 
-function CapitalSection({ sources, reload }) {
+function CapitalSection({ sources, reload, t }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blankSource);
   const [editingId, setEditingId] = useState(null);
@@ -219,7 +241,17 @@ function CapitalSection({ sources, reload }) {
 
   return (
     <div className="space-y-4 mt-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <a
+          href={pdfUrl("/finance/capital-sources/export/pdf")}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="capital-pdf-btn"
+        >
+          <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+            <FileText className="w-4 h-4" /> {t("export_pdf")}
+          </Button>
+        </a>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(blankSource); setEditingId(null); } }}>
           <DialogTrigger asChild>
             <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="capital-new-btn">
@@ -347,10 +379,19 @@ const blankExpense = {
   paid_to: "", description: "", payment_method: "cash", receipt_url: "",
 };
 
-function ExpensesSection({ expenses, categories, reload }) {
+function ExpensesSection({ expenses, categories, reload, t }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blankExpense);
   const [editingId, setEditingId] = useState(null);
+  const [filterCat, setFilterCat] = useState("all");
+
+  const filtered = filterCat === "all"
+    ? expenses
+    : expenses.filter((e) => e.category === filterCat);
+
+  const pdfHref = filterCat === "all"
+    ? pdfUrl("/finance/expenses/export/pdf")
+    : pdfUrl(`/finance/expenses/export/pdf?category=${encodeURIComponent(filterCat)}`);
 
   const submit = async () => {
     try {
@@ -370,8 +411,33 @@ function ExpensesSection({ expenses, categories, reload }) {
 
   return (
     <div className="space-y-4 mt-4">
-      <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(blankExpense); setEditingId(null); } }}>
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs uppercase tracking-wider text-stone-500">
+            {t("sub_category") || "Category"}
+          </Label>
+          <Select value={filterCat} onValueChange={setFilterCat}>
+            <SelectTrigger className="w-48" data-testid="expense-filter-category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("all_categories")}</SelectItem>
+              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <a
+            href={pdfHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="expense-pdf-btn"
+          >
+            <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+              <FileText className="w-4 h-4" /> {t("export_pdf")}
+            </Button>
+          </a>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(blankExpense); setEditingId(null); } }}>
           <DialogTrigger asChild>
             <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="expense-new-btn">
               <Plus className="w-4 h-4 mr-1" /> New Expense
@@ -415,6 +481,7 @@ function ExpensesSection({ expenses, categories, reload }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
@@ -425,7 +492,7 @@ function ExpensesSection({ expenses, categories, reload }) {
             ))}</tr>
           </thead>
           <tbody>
-            {expenses.map((e) => (
+            {filtered.map((e) => (
               <tr key={e.id} className="border-t border-stone-100">
                 <td className="px-4 py-3">{e.date}</td>
                 <td className="px-4 py-3">
@@ -447,8 +514,80 @@ function ExpensesSection({ expenses, categories, reload }) {
                 </td>
               </tr>
             ))}
-            {expenses.length === 0 && (
-              <tr><td colSpan="7" className="p-8 text-center text-stone-500">No expenses yet</td></tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan="7" className="p-8 text-center text-stone-500">No expenses {filterCat !== "all" ? `in ${filterCat}` : "yet"}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Invoices (from sold auctions) ---------- */
+function InvoicesSection({ invoices, t }) {
+  const total = invoices.reduce((sum, i) => sum + Number(i.total || 0), 0);
+  return (
+    <div className="space-y-4 mt-4">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div className="text-sm text-stone-600">
+          <span data-testid="invoice-count">{invoices.length}</span>{" "}
+          {t("invoices")} · {t("total")}: <span className="font-semibold text-[#1B2D5C]" data-testid="invoice-total-sum">{fmt(total)}</span>
+        </div>
+        <a
+          href={pdfUrl("/invoices/export/pdf")}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="invoice-pdf-btn"
+        >
+          <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+            <FileText className="w-4 h-4" /> {t("export_pdf")}
+          </Button>
+        </a>
+      </div>
+
+      <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
+        <table className="min-w-full text-sm" data-testid="invoices-table">
+          <thead className="bg-stone-50 text-left">
+            <tr>{[t("invoice_number"), t("issue_date"), t("buyer"), "Contract", "Item", t("subtotal"), t("tax"), t("total"), t("status"), t("actions")].map((h, i) => (
+              <th key={i} className="px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold">{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv) => (
+              <tr key={inv.id} className="border-t border-stone-100" data-testid={`invoice-row-${inv.id}`}>
+                <td className="px-4 py-3 font-medium">{inv.invoice_number}</td>
+                <td className="px-4 py-3">{inv.date}</td>
+                <td className="px-4 py-3">{inv.buyer_name || "—"}</td>
+                <td className="px-4 py-3 text-stone-600">{inv.contract_number || "—"}</td>
+                <td className="px-4 py-3">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">{inv.item_type}</span>
+                </td>
+                <td className="px-4 py-3">{fmt(inv.subtotal)}</td>
+                <td className="px-4 py-3">{fmt(inv.tax_amount)}</td>
+                <td className="px-4 py-3 font-semibold text-[#1B2D5C]">{fmt(inv.total)}</td>
+                <td className="px-4 py-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    inv.status === "paid" ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
+                    inv.status === "cancelled" ? "bg-stone-100 text-stone-700 border-stone-200" :
+                    "bg-amber-50 text-amber-800 border-amber-200"
+                  }`}>{inv.status || "issued"}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <a
+                    href={pdfUrl(`/invoices/${inv.id}/pdf`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid={`invoice-pdf-${inv.id}`}
+                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]"
+                  >
+                    <Download className="w-3 h-3" /> PDF
+                  </a>
+                </td>
+              </tr>
+            ))}
+            {invoices.length === 0 && (
+              <tr><td colSpan="10" className="p-8 text-center text-stone-500">{t("no_invoices")}</td></tr>
             )}
           </tbody>
         </table>

@@ -31,6 +31,11 @@ from pdf_utils import (
     build_contract_pdf,
     build_receipt_pdf,
     build_report_pdf,
+    build_invoice_pdf,
+    build_invoices_list_pdf,
+    build_capital_sources_pdf,
+    build_expenses_pdf,
+    build_finance_summary_pdf,
     DEFAULT_TNC_EN,
     DEFAULT_TNC_TET,
 )
@@ -969,9 +974,19 @@ async def update_invoice(iid: str, payload: InvoiceUpdateIn, user: dict = Depend
     return await db.invoices.find_one({"id": iid}, {"_id": 0})
 
 
+@api.get("/invoices/export/pdf")
+async def invoices_list_pdf(_: dict = Depends(get_current_user)):
+    invoices = await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    pdf_bytes = build_invoices_list_pdf(invoices)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="invoices.pdf"'},
+    )
+
+
 @api.get("/invoices/{iid}/pdf")
 async def invoice_pdf(iid: str, _: dict = Depends(get_current_user)):
-    from pdf_utils import build_invoice_pdf
     inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -1795,6 +1810,69 @@ async def finance_summary(
         "total_invoices": total_invoices,
         "total_invoiced": round(total_invoiced, 2),
     }
+
+
+# ---- Finance PDF exports ----------------------------------------------
+@api.get("/finance/summary/export/pdf")
+async def finance_summary_pdf(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    user: dict = Depends(get_current_user),
+):
+    summary = await finance_summary(month=month, year=year, _=user)  # type: ignore[arg-type]
+    pdf_bytes = build_finance_summary_pdf(summary, month=month, year=year)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="finance-summary.pdf"'},
+    )
+
+
+@api.get("/finance/capital-sources/export/pdf")
+async def capital_sources_pdf(_: dict = Depends(get_current_user)):
+    sources = await db.funding_sources.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for r in sources:
+        repaid = await db.funding_repayments.find({"source_id": r["id"]}, {"_id": 0}).to_list(500)
+        total_repaid = sum(float(x.get("amount", 0) or 0) for x in repaid)
+        r["total_repaid"] = round(total_repaid, 2)
+        r["outstanding"] = round(max(0.0, float(r["principal_amount"]) - total_repaid), 2)
+    pdf_bytes = build_capital_sources_pdf(sources)
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="capital-sources.pdf"'},
+    )
+
+
+@api.get("/finance/expenses/export/pdf")
+async def expenses_pdf(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    category: Optional[str] = None,
+    _: dict = Depends(get_current_user),
+):
+    rows = await db.expenses.find({}, {"_id": 0}).sort("date", -1).to_list(5000)
+    rows = _apply_date_filter(rows, "date", month, year)
+    if category:
+        rows = [r for r in rows if r.get("category") == category]
+
+    by_category_list: list[dict] = []
+    if not category:
+        by_cat: dict[str, float] = {}
+        for e in rows:
+            cat = e.get("category", "Other")
+            by_cat[cat] = by_cat.get(cat, 0.0) + float(e.get("amount", 0) or 0)
+        by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_cat.items()]
+
+    pdf_bytes = build_expenses_pdf(
+        rows, category=category, month=month, year=year, by_category=by_category_list or None,
+    )
+    fname = f"expenses-{category}.pdf" if category else "expenses.pdf"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{fname}"'},
+    )
 
 
 # =====================================================================

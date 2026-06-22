@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "../components/ui/dialog";
+import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Auctions() {
@@ -102,6 +103,18 @@ export default function Auctions() {
                     >
                       {t("mark_sold")}
                     </Button>
+                  )}
+                  {r.status === "sold" && r.invoice_id && (
+                    <a
+                      href={pdfUrl(`/invoices/${r.invoice_id}/pdf`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`auction-invoice-${r.id}`}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]"
+                      title={r.invoice_number}
+                    >
+                      <FileText className="w-3 h-3" /> {r.invoice_number || t("invoice")}
+                    </a>
                   )}
                 </Td>
               </tr>
