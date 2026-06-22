@@ -390,7 +390,7 @@ export default function Clients() {
                               href={`${API_BASE}/payments/${p.id}/pdf`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[#1B2D5C] hover:underline"
+                              className="inline-flex items-center gap-1 text-[#DC2626] hover:text-[#B91C1C] hover:underline"
                             >
                               <FileText className="w-3.5 h-3.5" /> PDF
                             </a>

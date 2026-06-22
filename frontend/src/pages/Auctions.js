@@ -111,7 +111,7 @@ export default function Auctions() {
                         target="_blank"
                         rel="noopener noreferrer"
                         data-testid={`auction-invoice-${r.id}`}
-                        className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md bg-[#1B2D5C] text-white text-xs font-medium hover:bg-[#0F1B3A] transition-colors whitespace-nowrap"
+                        className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md bg-[#DC2626] text-white text-xs font-medium hover:bg-[#B91C1C] transition-colors whitespace-nowrap"
                         title={r.invoice_number}
                       >
                         <FileText className="w-3 h-3" /> {r.invoice_number || t("invoice")}

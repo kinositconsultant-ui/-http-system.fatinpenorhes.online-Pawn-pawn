@@ -82,7 +82,7 @@ export default function Finance() {
           rel="noopener noreferrer"
           data-testid="finance-summary-pdf-btn"
         >
-          <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2">
+          <Button className="bg-[#DC2626] hover:bg-[#B91C1C] text-white gap-2">
             <FileText className="w-4 h-4" /> {t("summary_pdf")}
           </Button>
         </a>
@@ -248,7 +248,7 @@ function CapitalSection({ sources, reload, t }) {
           rel="noopener noreferrer"
           data-testid="capital-pdf-btn"
         >
-          <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+          <Button variant="outline" className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white">
             <FileText className="w-4 h-4" /> {t("export_pdf")}
           </Button>
         </a>
@@ -433,7 +433,7 @@ function ExpensesSection({ expenses, categories, reload, t }) {
             rel="noopener noreferrer"
             data-testid="expense-pdf-btn"
           >
-            <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+            <Button variant="outline" className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white">
               <FileText className="w-4 h-4" /> {t("export_pdf")}
             </Button>
           </a>
@@ -540,7 +540,7 @@ function InvoicesSection({ invoices, t }) {
           rel="noopener noreferrer"
           data-testid="invoice-pdf-btn"
         >
-          <Button variant="outline" className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white">
+          <Button variant="outline" className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white">
             <FileText className="w-4 h-4" /> {t("export_pdf")}
           </Button>
         </a>
@@ -579,7 +579,7 @@ function InvoicesSection({ invoices, t }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid={`invoice-pdf-${inv.id}`}
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]"
+                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C]"
                   >
                     <Download className="w-3 h-3" /> PDF
                   </a>

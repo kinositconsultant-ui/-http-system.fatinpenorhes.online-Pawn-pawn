@@ -346,7 +346,7 @@ export default function Contracts() {
                       target="_blank"
                       rel="noreferrer"
                       data-testid={`contract-pdf-${r.id}`}
-                      className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
                       title={t("download_pdf")}
                     >
                       <FileDown className="w-3 h-3" />
