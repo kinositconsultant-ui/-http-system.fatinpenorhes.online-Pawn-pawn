@@ -1,11 +1,11 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 3)
+**Last updated:** 2026-02 (Iteration 8)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
 
-Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Auction → Report.
+Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Auction → Invoice → Report.
 
 ## User Personas
 - **Admin** — full access including users, settings, audit log, deletions.
@@ -49,6 +49,20 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **10% Penalty** of original loan amount auto-applied when contract is overdue (excludes interest); shown in dedicated Contracts table column.
 - **Client payment history** endpoint GET /api/clients/{id}/payments aggregated across every contract.
 - **Tetum contract PDF** matching the official template with 14 articles, header band, summary box, item detail table, signature block.
+
+## Implemented (Iter 8 — 2026-02)
+- **Finance/Invoices PDF exports** (per user request "add pdf in finance module in each category"):
+  - `GET /api/finance/summary/export/pdf` — branded Finance Summary PDF (KPIs + cash flow + expenses by category).
+  - `GET /api/finance/capital-sources/export/pdf` — Capital Sources register with totals (principal/repaid/outstanding).
+  - `GET /api/finance/expenses/export/pdf?category=&month=&year=` — Operating Expenses PDF with optional per-category filter (Salary/Maintenance/Utilities/etc.) and date filters; includes a by-category summary when no filter is set.
+  - `GET /api/invoices/export/pdf` — Invoice Register (all invoices).
+  - `GET /api/invoices/{id}/pdf` — Single Invoice PDF (auto-generated when an auction is marked sold).
+- **Auctions sold flow now idempotent** — re-posting `/auctions/{aid}/sold` returns the existing invoice rather than minting duplicates.
+- **Frontend**: "Summary PDF" button in Finance header, "Export PDF" buttons on Capital Sources & Expenses tabs, category-filter dropdown in Expenses tab, new "Invoices" tab listing all invoices with per-row PDF buttons + bulk export. Auctions page shows an invoice download link on sold rows.
+- **EN/TET i18n** keys added for invoice/finance terms.
+
+## Test Coverage (cumulative)
+- Backend: **141/141 PASS** (118 prior + 23 new iter8 finance/invoice PDF tests).
 
 ## Implemented (Iter 6 — 2026-02)
 - **Finance / Treasury module** — admin-only page at `/finance`.

@@ -882,6 +882,11 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
     a = await db.auctions.find_one({"id": aid}, {"_id": 0})
     if not a:
         raise HTTPException(status_code=404, detail="Auction not found")
+    if a.get("status") == "sold" and a.get("invoice_id"):
+        # Idempotent — return existing invoice instead of minting a duplicate
+        existing = await db.invoices.find_one({"id": a["invoice_id"]}, {"_id": 0})
+        if existing:
+            return {**a, "invoice": existing}
     update = {
         "status": "sold",
         "sold_price": payload.sold_price,
