@@ -12,7 +12,21 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
       },
+      fontFamily: {
+        sans: ['"Work Sans"', 'system-ui', 'sans-serif'],
+        display: ['Outfit', 'system-ui', 'sans-serif'],
+      },
       colors: {
+        forest: {
+          DEFAULT: '#2F4F4F',
+          dark: '#1D3333',
+        },
+        terracotta: {
+          DEFAULT: '#C17767',
+          dark: '#A96253',
+        },
+        sage: '#8F9779',
+        cream: '#FAFAF9',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
