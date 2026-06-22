@@ -49,7 +49,7 @@ const MONEY_KEYS = new Set([
 const fmtMoney = (v) => {
   const n = Number(v ?? 0);
   return `$${n.toLocaleString("en-US", {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
+    minimumFractionDigits: 0, maximumFractionDigits: 2,
   })}`;
 };
 
@@ -259,13 +259,13 @@ export default function Reports() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm" data-testid="report-table">
+          <table className="min-w-full text-xs" data-testid="report-table">
             <thead className="bg-stone-50 text-left">
               <tr>
                 {(data?.columns || []).map((c) => (
                   <th
                     key={c}
-                    className="px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap"
+                    className="px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap"
                   >
                     {prettify(c)}
                   </th>
@@ -277,9 +277,9 @@ export default function Reports() {
                 <tr><td colSpan="20" className="p-8 text-center text-stone-500">Loading…</td></tr>
               )}
               {!loading && (data?.rows || []).map((r, i) => (
-                <tr key={r.id || r.contract_number || i} className="border-t border-stone-100">
+                <tr key={r.id || r.contract_number || i} className="border-t border-stone-100 hover:bg-stone-50/50">
                   {(data?.columns || []).map((c) => (
-                    <td key={c} className="px-4 py-3 whitespace-nowrap">{fmtCell(c, r[c])}</td>
+                    <td key={c} className="px-2.5 py-2 whitespace-nowrap">{fmtCell(c, r[c])}</td>
                   ))}
                 </tr>
               ))}

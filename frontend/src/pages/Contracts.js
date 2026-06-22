@@ -303,7 +303,6 @@ export default function Contracts() {
               <Th right>{t("loan_amount")}</Th>
               <Th>{t("contract_date")} → {t("due_date")}</Th>
               <Th right>{t("remaining_balance")}</Th>
-              <Th right>{t("penalty")}</Th>
               <Th>{t("status")}</Th>
               <Th right>{t("actions")}</Th>
             </tr>
@@ -312,12 +311,12 @@ export default function Contracts() {
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                 <Td className="font-medium whitespace-nowrap">{r.contract_number}</Td>
-                <Td className="max-w-[180px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
-                <Td className="max-w-[200px]">
+                <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
+                <Td className="max-w-[160px]">
                   <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">
                     {r.item_type}
                   </span>
-                  <span className="truncate align-middle" title={itemLabel(r.item_type, r.item_id)}>
+                  <span className="truncate align-middle text-xs" title={itemLabel(r.item_type, r.item_id)}>
                     {itemLabel(r.item_type, r.item_id)}
                   </span>
                 </Td>
@@ -329,62 +328,66 @@ export default function Contracts() {
                   <div>{r.contract_date}</div>
                   <div className="text-stone-500">→ {r.due_date}</div>
                 </Td>
-                <Td right className="whitespace-nowrap">${Number(r.remaining_balance ?? 0).toLocaleString()}</Td>
-                <Td right className={`whitespace-nowrap ${Number(r.penalty || 0) > 0 ? "text-[#993333] font-medium" : "text-stone-400"}`} >
-                  ${Number(r.penalty || 0).toLocaleString()}
+                <Td right className="whitespace-nowrap">
+                  <div className="font-medium">${Number(r.remaining_balance ?? 0).toLocaleString()}</div>
+                  {Number(r.penalty || 0) > 0 && (
+                    <div className="text-[10px] text-[#993333] font-medium">
+                      +${Number(r.penalty).toLocaleString()} {t("penalty").toLowerCase()}
+                    </div>
+                  )}
                 </Td>
                 <Td className="whitespace-nowrap">
                   <StatusBadge status={r.status} />
                 </Td>
                 <Td right>
-                  <div className="flex justify-end gap-1.5">
+                  <div className="flex justify-end gap-1">
                     <a
                       href={`${API_BASE}/contracts/${r.id}/pdf`}
                       target="_blank"
                       rel="noreferrer"
                       data-testid={`contract-pdf-${r.id}`}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
                       title={t("download_pdf")}
                     >
-                      <FileDown className="w-3.5 h-3.5" />
+                      <FileDown className="w-3 h-3" />
                     </a>
                     {r.status === "overdue" && (
                       <button
                         onClick={() => openReactivate(r)}
                         data-testid={`contract-reactivate-${r.id}`}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
                         title={t("reactivate")}
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
+                        <RefreshCw className="w-3 h-3" />
                       </button>
                     )}
                     {["active", "overdue"].includes(r.status) && (
                       <button
                         onClick={() => moveToAuction(r.id)}
                         data-testid={`contract-auction-${r.id}`}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
                         title={t("move_to_auction")}
                       >
-                        <Gavel className="w-3.5 h-3.5" />
+                        <Gavel className="w-3 h-3" />
                       </button>
                     )}
                     {["active", "overdue"].includes(r.status) && (
                       <button
                         onClick={() => sendWhatsApp(r.id, "en")}
                         data-testid={`contract-whatsapp-${r.id}`}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#25D366] text-white hover:bg-[#1EA952] transition-colors"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#25D366] text-white hover:bg-[#1EA952] transition-colors"
                         title={t("send_whatsapp")}
                       >
-                        <MessageCircle className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-3 h-3" />
                       </button>
                     )}
                     <button
                       onClick={() => remove(r.id)}
                       data-testid={`contract-delete-${r.id}`}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#993333] text-white hover:bg-[#7A2828] transition-colors"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#993333] text-white hover:bg-[#7A2828] transition-colors"
                       title={t("delete")}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </Td>
@@ -392,7 +395,7 @@ export default function Contracts() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan="9" className="p-8 text-center text-stone-500">
+                <td colSpan="8" className="p-8 text-center text-stone-500">
                   No contracts
                 </td>
               </tr>

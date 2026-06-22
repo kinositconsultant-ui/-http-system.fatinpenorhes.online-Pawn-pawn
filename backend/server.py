@@ -1141,6 +1141,10 @@ async def _report_active_contracts(filters: dict) -> dict:
     rows = await _enrich_contracts_with_item_meta(rows)
     rows = _apply_date_filter(rows, "contract_date", filters.get("month"), filters.get("year"))
     rows = _apply_item_filter(rows, filters.get("category"), filters.get("sub_category"))
+    # Combine brand + model into single item label
+    for r in rows:
+        parts = [r.get("item_brand") or "", r.get("item_model") or ""]
+        r["item"] = " ".join([p for p in parts if p]) or "—"
     total_contracts = len(rows)
     total_loan = sum(float(r.get("loan_amount", 0) or 0) for r in rows)
     tax_accumulate = sum(float(r.get("interest_amount", 0) or 0) for r in rows)
@@ -1156,7 +1160,7 @@ async def _report_active_contracts(filters: dict) -> dict:
             "tax_accumulate": round(tax_accumulate, 2),
             "almost_expired": almost_expired,
         },
-        "columns": ["contract_number", "item_type", "item_brand", "item_model", "loan_amount",
+        "columns": ["contract_number", "item_type", "item", "loan_amount",
                     "interest_rate", "interest_amount", "contract_date", "due_date", "status"],
         "rows": rows,
     }
