@@ -50,6 +50,18 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Client payment history** endpoint GET /api/clients/{id}/payments aggregated across every contract.
 - **Tetum contract PDF** matching the official template with 14 articles, header band, summary box, item detail table, signature block.
 
+## Implemented (Iter 6 — 2026-02)
+- **Finance / Treasury module** — admin-only page at `/finance`.
+  - **Capital Sources** CRUD (Bank / Company / Personal / Partner / Other) with principal, interest rate, period, start/due date, plus **Repayments** to reduce outstanding balance.
+  - **Operating Expenses** CRUD with categories Salary / Maintenance / Travel / Meals / Compensation / Utilities / Rent / Other; cashiers blocked from creating expenses.
+  - **Finance Summary** KPIs: cash_on_hand, capital_received/repaid/outstanding, loans_disbursed, client_payments, auction_sales, expenses_total + period, gross_profit, net_profit + expenses_by_category breakdown.
+  - **Cash flow BarChart** (inflows green / outflows terracotta) + **Expenses Pie chart** by category.
+- **Treasury report** as 7th tab on Reports with Excel + PDF export.
+- **WhatsApp number** updated everywhere to `WhatsApp: +670 78372678` (PDF header & footer, Login hero, AdminLayout sidebar, Public footer, Public Contact, Public About).
+
+## Test Coverage (cumulative)
+- Backend: **118/118 PASS** (iter1 33 + iter2 22 + iter4-old 22 + iter5 15 + iter6 6 + iter7 20).
+
 ## Implemented (Iter 5 — 2026-02)
 - **Branded rebrand** from forest green to **company navy** `#1B2D5C / #0F1B3A` (from logo).
 - **FP logo image** embedded in: Contract PDF, Receipt PDF, Report PDF (top header), AdminLayout sidebar, PublicLayout header & footer, Login hero.
