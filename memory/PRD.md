@@ -50,22 +50,30 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Client payment history** endpoint GET /api/clients/{id}/payments aggregated across every contract.
 - **Tetum contract PDF** matching the official template with 14 articles, header band, summary box, item detail table, signature block.
 
-## Test Coverage
-- Backend: **77/77 PASS** across iter1 (33) + iter2 (22) + iter3 (22).
-- Frontend: all data-testid selectors verified — photo upload, Drivers License option, view dialog with contracts + payment history tables, market_value + manufacture_year inputs, Reactivate dialog, Penalty column.
+## Implemented (Iter 4 — 2026-02)
+- **Reports module overhauled** to match user mockup: 6 tabs (Active Contracts, Payments, Overdue, Auction, Inventory, Financial), each with 2–4 KPI cards + detail table.
+- **Filter bar** (Month / Year / Category / Sub-category) with Filter, Reset, Print, PDF, Excel buttons.
+- **Excel export** via openpyxl with branded sheet (KPI block + table). **PDF export** via ReportLab landscape A4.
+- **Item `location` field** added to Car / Motorcycle / Electronic (e.g., "Warehouse A / Shop / Off-site"). Listed in Inventory report.
+- Inventory KPIs: total_items, total_amount, active_items, overdue_items, by_type{car, motorcycle, electronic}.
+- Financial KPIs: total_loan, total_payment, interest_received, total_penalty, profit (= interest_received + total_penalty).
+
+## Test Coverage (cumulative)
+- Backend: **92/92 PASS** (iter1 33 + iter2 22 + iter4-old 22 + iter5 15).
+- Frontend: 100% — all 6 report tabs, filters, KPI cards (20 across tabs), export links, and item-car-location field verified.
 
 ## Prioritized Backlog
-### P1 — Next phase
-- Email notifications via Resend / SendGrid alongside WhatsApp.
-- Daily scheduled job to auto-trigger `/api/whatsapp/reminders/run` (cron / Emergent scheduled task).
-- Real Meta WhatsApp token + approved templates (`due_date_reminder` EN + TET) configured by user in Settings.
-- Dashboard date-range filter.
-- Stamp `last_penalty_applied` on contracts on reactivate (audit history).
+### P1 — Suggested next
+- Real Meta WhatsApp creds + daily scheduled reminders.
+- Email reminders via Resend (needs key).
+- Performance: stop recomputing every contract status inside report GET — move to a background job.
+- Cache report snapshots for last finished month.
+- Toast/banner on Reports load error.
 
 ### P2
-- Split `server.py` (~1320 lines) into routers (clients/items/contracts/payments/auctions/files/whatsapp/audit/dashboard/settings).
-- Audit log on item update / delete (currently only on create).
-- Shadcn Calendar in date pickers (currently native).
+- Split `server.py` (~1700 lines) into routers.
+- Audit log on item update/delete.
+- Calendar component on date pickers.
 - Dedicated cashier UI shell.
 
 ## Credentials

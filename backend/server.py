@@ -1043,12 +1043,14 @@ async def _report_payments(filters: dict) -> dict:
         amt = float(r.get("amount", 0) or 0)
         if r.get("type") == "interest_only":
             interest_received += amt
-    # Total penalty: sum of penalty currently shown on overdue contracts (snapshot)
-    contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
-    total_penalty = 0.0
-    for c in contracts:
-        c = await _recompute_contract_status(c)
-        total_penalty += float(c.get("penalty", 0) or 0)
+    # Total penalty: sum of penalty on overdue contracts narrowed by the same filters
+    overdue_contracts = await db.contracts.find({"status": "overdue"}, {"_id": 0}).to_list(5000)
+    for c in overdue_contracts:
+        await _recompute_contract_status(c)
+    overdue_contracts = await _enrich_contracts_with_item_meta(overdue_contracts)
+    overdue_contracts = _apply_date_filter(overdue_contracts, "due_date", filters.get("month"), filters.get("year"))
+    overdue_contracts = _apply_item_filter(overdue_contracts, filters.get("category"), filters.get("sub_category"))
+    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in overdue_contracts)
     return {
         "kpis": {
             "total_transactions": total_transactions,
