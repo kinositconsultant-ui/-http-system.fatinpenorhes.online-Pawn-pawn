@@ -157,14 +157,28 @@ export default function Finance() {
 
       {/* Tabs: Capital + Expenses + Invoices */}
       <Tabs defaultValue="capital" data-testid="finance-tabs">
-        <TabsList>
-          <TabsTrigger value="capital" data-testid="finance-tab-capital">
+        <TabsList
+          className="bg-stone-100 border border-stone-200 p-1 rounded-lg gap-1 h-auto"
+        >
+          <TabsTrigger
+            value="capital"
+            data-testid="finance-tab-capital"
+            className="data-[state=active]:bg-[#1B2D5C] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#1B2D5C] px-4 py-2 rounded-md font-medium transition-colors"
+          >
             <Landmark className="w-4 h-4 mr-2" /> {t("capital_sources")}
           </TabsTrigger>
-          <TabsTrigger value="expenses" data-testid="finance-tab-expenses">
+          <TabsTrigger
+            value="expenses"
+            data-testid="finance-tab-expenses"
+            className="data-[state=active]:bg-[#C17767] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#C17767] px-4 py-2 rounded-md font-medium transition-colors"
+          >
             <ArrowDownCircle className="w-4 h-4 mr-2" /> {t("expenses")}
           </TabsTrigger>
-          <TabsTrigger value="invoices" data-testid="finance-tab-invoices">
+          <TabsTrigger
+            value="invoices"
+            data-testid="finance-tab-invoices"
+            className="data-[state=active]:bg-[#4C7F62] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#4C7F62] px-4 py-2 rounded-md font-medium transition-colors"
+          >
             <Receipt className="w-4 h-4 mr-2" /> {t("invoices")}
           </TabsTrigger>
         </TabsList>
