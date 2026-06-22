@@ -325,7 +325,7 @@ async def list_items(kind: str, _: dict = Depends(get_current_user)):
 
 
 @api.post("/items/{kind}")
-async def create_item(kind: str, payload: dict, _: dict = Depends(get_current_user)):
+async def create_item(kind: str, payload: dict, user: dict = Depends(require_not_cashier)):
     if kind not in ITEM_KINDS:
         raise HTTPException(status_code=400, detail="Invalid item kind")
     model = _item_model(kind)
@@ -336,6 +336,7 @@ async def create_item(kind: str, payload: dict, _: dict = Depends(get_current_us
     doc = {**validated, "id": new_id(), "kind": kind, "status": "in_stock",
            "created_at": utcnow_iso()}
     await db[COLLECTION_MAP[kind]].insert_one(doc)
+    await write_audit(user, "create", f"item.{kind}", doc["id"], {"brand": doc.get("brand"), "model": doc.get("model")})
     doc.pop("_id", None)
     return doc
 
