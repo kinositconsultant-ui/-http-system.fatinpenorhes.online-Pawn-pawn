@@ -228,8 +228,8 @@ class TestContractFlow:
             "item_type": "electronic",
             "loan_amount": 100.0,
             "interest_rate": 10,
-            "contract_date": "2025-01-01",
-            "due_date": "2099-12-31",
+            "contract_date": __import__("datetime").date.today().isoformat(),
+            "due_date": (__import__("datetime").date.today() + __import__("datetime").timedelta(days=30)).isoformat(),
         })
         assert r.status_code == 200, r.text
         body = r.json()
@@ -253,14 +253,14 @@ class TestContractFlow:
         cid = seed["contract"]["id"]
         # partial 50
         r1 = admin_session.post(f"{API}/payments", json={
-            "contract_id": cid, "amount": 50.0, "type": "partial", "date": "2025-01-15"
+            "contract_id": cid, "amount": 50.0, "type": "partial", "date": __import__("datetime").date.today().isoformat()
         })
         assert r1.status_code == 200
         assert r1.json()["contract"]["status"] == "active"
         assert r1.json()["contract"]["remaining_balance"] == 60.0
         # full remaining
         r2 = admin_session.post(f"{API}/payments", json={
-            "contract_id": cid, "amount": 60.0, "type": "full", "date": "2025-01-20"
+            "contract_id": cid, "amount": 60.0, "type": "full", "date": __import__("datetime").date.today().isoformat()
         })
         assert r2.status_code == 200
         assert r2.json()["contract"]["status"] == "redeemed"

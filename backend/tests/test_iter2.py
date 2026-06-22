@@ -6,6 +6,9 @@ import io
 import uuid
 import requests
 import pytest
+from datetime import date, timedelta
+_CD = date.today().isoformat()
+_DD = (date.today() + timedelta(days=30)).isoformat()
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get("REACT_APP_BACKEND_URL") else "https://pawnly-pro.preview.emergentagent.com"
 API = f"{BASE_URL}/api"
@@ -114,7 +117,7 @@ class TestContractDefaultRate:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": seed_client["id"], "item_id": item["id"], "item_type": "car",
             "loan_amount": 100.0, "interest_rate": 15,
-            "contract_date": "2025-06-01", "due_date": "2025-12-31",
+            "contract_date": _CD, "due_date": _DD,
         })
         assert ct.status_code == 200, ct.text
         assert ct.json()["interest_rate"] == 15
@@ -127,7 +130,7 @@ class TestContractDefaultRate:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": seed_client["id"], "item_id": item["id"], "item_type": "motorcycle",
             "loan_amount": 100.0,
-            "contract_date": "2025-06-01", "due_date": "2025-12-31",
+            "contract_date": _CD, "due_date": _DD,
         })
         # NOTE: ContractIn declares interest_rate as required Literal[10,15] -> Pydantic 422.
         # We assert the spec behavior, allowing for current bug.
@@ -152,7 +155,7 @@ class TestContractPdfRicher:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": c["id"], "item_id": item["id"], "item_type": "electronic",
             "loan_amount": 200.0, "interest_rate": 15,
-            "contract_date": "2025-06-01", "due_date": "2025-12-31",
+            "contract_date": _CD, "due_date": _DD,
         }).json()
         r = admin.get(f"{API}/contracts/{ct['id']}/pdf")
         assert r.status_code == 200
@@ -177,7 +180,7 @@ class TestPaymentDateValidation:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": c["id"], "item_id": item["id"], "item_type": "electronic",
             "loan_amount": 100.0, "interest_rate": 10,
-            "contract_date": "2025-06-01", "due_date": "2025-12-31",
+            "contract_date": _CD, "due_date": _DD,
         }).json()
         bad = admin.post(f"{API}/payments", json={
             "contract_id": ct["id"], "amount": 10.0, "type": "partial", "date": "2025-05-01"
@@ -237,7 +240,7 @@ class TestWhatsApp:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": c["id"], "item_id": item["id"], "item_type": "car",
             "loan_amount": 100.0, "interest_rate": 10,
-            "contract_date": "2025-01-01", "due_date": "2025-12-31",
+            "contract_date": _CD, "due_date": _DD,
         }).json()
         yield ct
         admin.delete(f"{API}/contracts/{ct['id']}")
@@ -294,7 +297,7 @@ class TestCashierRBAC:
         ct = admin.post(f"{API}/contracts", json={
             "client_id": c["id"], "item_id": item["id"], "item_type": "electronic",
             "loan_amount": 100.0, "interest_rate": 10,
-            "contract_date": "2025-01-01", "due_date": "2099-12-31",
+            "contract_date": _CD, "due_date": _DD,
         }).json()
         yield {"client": c, "item": item, "contract": ct}
         admin.delete(f"{API}/contracts/{ct['id']}")
@@ -318,14 +321,14 @@ class TestCashierRBAC:
             "item_id": seed_for_payment["item"]["id"],
             "item_type": "electronic",
             "loan_amount": 50.0, "interest_rate": 10,
-            "contract_date": "2025-01-01", "due_date": "2099-12-31",
+            "contract_date": _CD, "due_date": _DD,
         })
         assert r.status_code == 403
 
     def test_cashier_can_create_payment(self, cashier, seed_for_payment):
         r = cashier.post(f"{API}/payments", json={
             "contract_id": seed_for_payment["contract"]["id"],
-            "amount": 5.0, "type": "partial", "date": "2025-02-01"
+            "amount": 5.0, "type": "partial", "date": _CD
         })
         assert r.status_code == 200, r.text
 

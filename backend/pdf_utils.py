@@ -1,4 +1,4 @@
-"""PDF generation utilities — pawn contracts and payment receipts."""
+"""PDF generation — Fatin Penhores contracts and receipts (Tetum articles + sample format)."""
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -10,69 +10,128 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
-    PageBreak,
+    KeepTogether,
 )
 
 
 def _styles():
     base = getSampleStyleSheet()
     return {
-        "Title": ParagraphStyle(
-            "TitleX",
-            parent=base["Title"],
-            fontName="Helvetica-Bold",
-            fontSize=20,
-            textColor=colors.HexColor("#2F4F4F"),
-            spaceAfter=4,
+        "Brand": ParagraphStyle(
+            "BrandX", parent=base["Title"], fontName="Helvetica-Bold",
+            fontSize=18, textColor=colors.HexColor("#2F4F4F"), spaceAfter=2,
         ),
         "Sub": ParagraphStyle(
-            "SubX",
-            parent=base["Normal"],
-            fontSize=10,
-            textColor=colors.HexColor("#57534E"),
-            spaceAfter=12,
+            "SubX", parent=base["Normal"], fontSize=9,
+            textColor=colors.HexColor("#57534E"), spaceAfter=2,
         ),
-        "H2": ParagraphStyle(
-            "H2X",
-            parent=base["Heading2"],
-            fontSize=12,
-            textColor=colors.HexColor("#1C1917"),
-            spaceBefore=12,
-            spaceAfter=6,
+        "DocTitle": ParagraphStyle(
+            "DocTitle", parent=base["Title"], fontName="Helvetica-Bold",
+            fontSize=15, alignment=1, textColor=colors.HexColor("#1C1917"),
+            spaceBefore=12, spaceAfter=10,
+        ),
+        "Article": ParagraphStyle(
+            "Article", parent=base["Heading3"], fontName="Helvetica-Bold",
+            fontSize=10, textColor=colors.HexColor("#2F4F4F"),
+            spaceBefore=10, spaceAfter=4,
         ),
         "Body": ParagraphStyle(
-            "BodyX",
-            parent=base["Normal"],
-            fontSize=9.5,
-            textColor=colors.HexColor("#1C1917"),
-            leading=14,
+            "BodyX", parent=base["Normal"], fontSize=9.5,
+            textColor=colors.HexColor("#1C1917"), leading=13,
+            spaceAfter=4,
         ),
         "Small": ParagraphStyle(
-            "SmallX",
-            parent=base["Normal"],
-            fontSize=8.5,
+            "Sml", parent=base["Normal"], fontSize=8,
             textColor=colors.HexColor("#57534E"),
-            leading=12,
+        ),
+        "Center": ParagraphStyle(
+            "Center", parent=base["Normal"], fontSize=9, alignment=1,
+            textColor=colors.HexColor("#1C1917"),
         ),
     }
 
 
-def _kv_table(rows, col1=5.0, col2=11.0):
-    t = Table(rows, colWidths=[col1 * cm, col2 * cm])
-    t.setStyle(
-        TableStyle(
-            [
-                ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
-                ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
-                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
-                ("TEXTCOLOR", (1, 0), (1, -1), colors.HexColor("#1C1917")),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
+def _money(v):
+    return f"USD ${float(v or 0):,.2f}"
+
+
+def _header_table(s, contract: dict, client: dict, total_due: float):
+    """Top summary box matching sample layout."""
+    money = _money
+    item_kind = contract.get("item_type", "").lower()
+    type_label_map = {"car": "VEHICLE - CAR", "motorcycle": "VEHICLE - MOTORCYCLE", "electronic": "ELECTRONIC"}
+    rows = [
+        ["Nú Kontratu", contract.get("contract_number", ""),
+         "Tipo Kontratu", type_label_map.get(item_kind, item_kind.upper())],
+        ["Montante Empréstimu", money(contract.get("loan_amount", 0)),
+         "Taxa Interese", f"{float(contract.get('interest_rate', 0)):.2f}%"],
+        ["Total Selu", money(total_due),
+         "Status", str(contract.get("status", "active")).upper()],
+        ["Data Hahu", contract.get("contract_date", ""),
+         "Data Remata", contract.get("due_date", "")],
+        ["Naran Kliente", client.get("full_name", ""),
+         "Telefone", client.get("phone", "")],
+    ]
+    t = Table(rows, colWidths=[3.6 * cm, 5.2 * cm, 3.6 * cm, 4.6 * cm])
+    t.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+        ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#57534E")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F4")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D6D3D1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    return t
+
+
+def _article(s, title: str, body_lines: list[str]):
+    parts = [Paragraph(title, s["Article"])]
+    for line in body_lines:
+        parts.append(Paragraph(line, s["Body"]))
+    return KeepTogether(parts)
+
+
+def _item_table(s, item_kind: str, item: dict, loan: float):
+    money = _money
+    rows = [
+        ["Deskrisaun:", item.get("description") or "—"],
+        ["Brand:", item.get("brand") or "—"],
+        ["Model:", item.get("model") or "—"],
+    ]
+    if item_kind in ("car", "motorcycle"):
+        rows += [
+            ["Tinan Fabrika:", str(item.get("manufacture_year") or "—")],
+            ["Kolór:", item.get("color") or "—"],
+            ["Plate Number:", item.get("plate") or "—"],
+            ["Chassis Number:", item.get("chassis") or "—"],
+            ["Fuel %:", f"{item.get('fuel_percent', 0)}%"],
+        ]
+    elif item_kind == "electronic":
+        rows += [
+            ["Kategoría:", item.get("category") or "—"],
+            ["Serial Number:", item.get("serial") or "—"],
+            ["Tinan Fabrika:", str(item.get("manufacture_year") or "—")],
+            ["Kondisaun:", item.get("condition") or "—"],
+        ]
+    rows += [
+        ["Valor Merkadu:", money(item.get("market_value", 0))],
+        ["Loan Amount:", money(loan)],
+    ]
+    t = Table(rows, colWidths=[4.5 * cm, 12 * cm])
+    t.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
     return t
 
 
@@ -82,95 +141,117 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=2 * cm, rightMargin=2 * cm,
-        topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+        leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.4 * cm,
     )
-    story = []
-    story.append(Paragraph("FATIN PENHORES", s["Title"]))
-    story.append(Paragraph("Pawn Contract · Kontratu Penhór", s["Sub"]))
 
-    story.append(_kv_table([
-        ["Contract No.", contract.get("contract_number", "")],
-        ["Contract Date", contract.get("contract_date", "")],
-        ["Due Date", contract.get("due_date", "")],
-        ["Status", str(contract.get("status", "")).upper()],
-    ]))
-
-    # Client section
-    story.append(Paragraph("Client · Kliente", s["H2"]))
-    story.append(_kv_table([
-        ["Full Name", client.get("full_name", "")],
-        ["ID Type", client.get("id_type", "")],
-        ["ID Number", client.get("id_number", "")],
-        ["Phone", client.get("phone", "")],
-        ["Address", client.get("address", "")],
-        ["Municipality / Posto", f"{client.get('municipality','')} / {client.get('posto','')}"],
-        ["Suco / Aldeia", f"{client.get('suco','')} / {client.get('aldeia','')}"],
-    ]))
-
-    # Item section
-    item_kind = contract.get("item_type", "")
-    story.append(Paragraph(f"Pawned Item · Sasán Penhór ({item_kind.title()})", s["H2"]))
-    base_rows = [
-        ["Brand · Marka", item.get("brand", "")],
-        ["Model · Modelu", item.get("model", "")],
-        ["Description · Deskrisaun", item.get("description", "") or "—"],
-    ]
-    if item_kind in ("car", "motorcycle"):
-        base_rows.extend([
-            ["Year · Tinan", str(item.get("year", "") or "—")],
-            ["Color · Kolór", item.get("color", "") or "—"],
-            ["Plate · Matrícula", item.get("plate", "") or "—"],
-            ["Chassis", item.get("chassis", "") or "—"],
-            ["Fuel %", f"{item.get('fuel_percent', 0)}%"],
-        ])
-    elif item_kind == "electronic":
-        base_rows.extend([
-            ["Category · Kategoría", item.get("category", "") or "—"],
-            ["Serial No.", item.get("serial", "") or "—"],
-            ["Condition", item.get("condition", "") or "—"],
-        ])
-    story.append(_kv_table(base_rows))
-
-    # Loan details
-    story.append(Paragraph("Loan Terms · Termus Empréstimu", s["H2"]))
     loan = float(contract.get("loan_amount", 0) or 0)
     rate = float(contract.get("interest_rate", 0) or 0)
-    interest = loan * rate / 100.0
-    total_due = loan + interest
-    paid = float(contract.get("paid_amount", 0) or 0)
-    remaining = float(contract.get("remaining_balance", total_due - paid) or 0)
-    story.append(_kv_table([
-        ["Loan Amount", f"USD {loan:,.2f}"],
-        ["Interest Rate", f"{rate:.0f}%"],
-        ["Interest Amount", f"USD {interest:,.2f}"],
-        ["Total Due", f"USD {total_due:,.2f}"],
-        ["Paid So Far", f"USD {paid:,.2f}"],
-        ["Remaining", f"USD {remaining:,.2f}"],
+    interest_amount = round(loan * rate / 100.0, 2)
+    total_due = float(contract.get("total_due", loan + interest_amount))
+    item_kind = contract.get("item_type", "").lower()
+    start = contract.get("contract_date", "")
+    end = contract.get("due_date", "")
+
+    story = []
+    # Header band
+    header_tbl = Table([[
+        Paragraph("FATIN PENHOR", s["Brand"]),
+        Paragraph("Phone: +670 XXX XXXX<br/>Email: info@fatinpenhores.tl<br/>Dili, Timor-Leste", s["Small"]),
+    ]], colWidths=[10 * cm, 7 * cm])
+    header_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.HexColor("#2F4F4F")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(header_tbl)
+    story.append(Paragraph("Pawn Management System · Pawn Agreement Contract", s["Sub"]))
+    story.append(Paragraph("KONTRATU PENHOR", s["DocTitle"]))
+
+    # Summary box
+    story.append(_header_table(s, contract, client, total_due))
+    story.append(Spacer(1, 0.3 * cm))
+
+    # Articles (Tetum)
+    story.append(_article(s, "Artigu 1º — Objetu Kontratu", [
+        "Kredor fó empréstimu osan ba kliente. Atu garante pagamentu dívida, kliente entrega sasán hanesan garantia penhor."
     ]))
 
-    # Terms & Conditions
-    tnc_en = sett.get("terms_and_conditions_en") or DEFAULT_TNC_EN
-    tnc_tet = sett.get("terms_and_conditions_tet") or DEFAULT_TNC_TET
-    story.append(Paragraph("Terms & Conditions", s["H2"]))
-    for line in [ln for ln in tnc_en.split("\n") if ln.strip()]:
-        story.append(Paragraph(line.strip(), s["Body"]))
-    story.append(Spacer(1, 0.3 * cm))
-    story.append(Paragraph("Termus no Kondisaun", s["H2"]))
-    for line in [ln for ln in tnc_tet.split("\n") if ln.strip()]:
-        story.append(Paragraph(line.strip(), s["Body"]))
+    story.append(_article(s, "Artigu 2º — Montante Empréstimu ho Interese", [
+        f"Montante empréstimu mak: USD ${loan:,.2f}.",
+        f"Taxa interese: {rate:.2f}% kada fulan.",
+        f"Prazu kontratu: {start} to'o {end}.",
+        f"Total selu inklui interese mak: USD ${total_due:,.2f}.",
+    ]))
 
-    # Signatures
-    story.append(Spacer(1, 1.2 * cm))
+    story.append(_article(s, "Artigu 3º — Interese", [
+        f"Kliente konkorda selu interese ho taxa: {rate:.2f}% kada fulan. Interese sei kalkula durante tempu empréstimu.",
+        "Maski kliente selu loan iha loron seluk depois data hahu, taxa interese minimu ida sei aplika.",
+    ]))
+
+    story.append(_article(s, "Artigu 4º — Prazu Kontratu", [
+        f"Prazu kontratu hahu husi {start} to'o {end}.",
+        "Prazu maximu ida ne'e mak fulan rua (2). Aluga ka ekstensaun bele halo se parte rua konkorda.",
+    ]))
+
+    # Item details
+    item_label_map = {"car": "Karreta", "motorcycle": "Motorizada", "electronic": "Eletróniku"}
+    story.append(Paragraph(f"Artigu 5º — Deskrisaun Detalhado Sasán Penhor ({item_label_map.get(item_kind, item_kind)})", s["Article"]))
+    story.append(_item_table(s, item_kind, item, loan))
+
+    story.append(_article(s, "Artigu 6º — Responsabilidade Legal Kliente", [
+        "Kliente garante katak sasán ne'e ninia propriedade legal, la iha disputa legal, no la iha penhor iha fatin seluk. Se deklarasaun ida ne'e falsu, kredor bele hato'o keixa penal.",
+    ]))
+    story.append(_article(s, "Artigu 7º — Proibisaun Alienasaun", [
+        "Durante kontratu, kliente la bele vende, transfere propriedade, penhor iha fatin seluk, sconde ka muda sasán.",
+    ]))
+    story.append(_article(s, "Artigu 8º — Multa Atrasu", [
+        "Se kliente la selu tuir prazu kontratu, sei aplika multa 10% husi montante empréstimu orijinál (la inklui taxa interese).",
+        f"Multa estimada: USD ${(loan * 0.10):,.2f}.",
+    ]))
+    story.append(_article(s, "Artigu 9º — Sasán, Ekipamentus Pezadu, Veikulu no Patrimonio", [
+        "Dokumentus orizinal husi sasán, ekipamentus pezadu, veikulu no patrimonio sei sai garantia no kompania mak sei rai.",
+        "Kompania sei la uza sasán penhor ba interese privadu.",
+    ]))
+    story.append(_article(s, "Artigu 10º — Direitu Venda Sasán", [
+        "Se dívida la selu to'o prazu final, kredor bele vende sasán penhor atu cobre dívida.",
+    ]))
+    story.append(_article(s, "Artigu 11º — Força Executiva", [
+        "Kontratu ida ne'e iha força executiva no bele uza diretamente iha tribunal.",
+    ]))
+    story.append(_article(s, "Artigu 12º — Despeza Legal", [
+        "Se mosu prosesu tribunal, kliente responsabiliza selu despeza legal, apreensaun no indemnizasaun.",
+    ]))
+    story.append(_article(s, "Artigu 13º — Jurisdisaun", [
+        "Disputa hotu sei resolve iha Tribunal Distrital Díli, tuir lei vigór iha República Demokrátika de Timor-Leste.",
+    ]))
+    story.append(_article(s, "Artigu 14º — Deklarasaun Final", [
+        "Parte rua deklara katak lee ona kontratu, komprende kondisaun hotu no konkorda voluntariamente.",
+    ]))
+
+    # Custom T&C from settings (if any), appended
+    tnc_en = (sett.get("terms_and_conditions_en") or "").strip()
+    if tnc_en:
+        story.append(Paragraph("Additional Terms (English)", s["Article"]))
+        for line in tnc_en.split("\n"):
+            if line.strip():
+                story.append(Paragraph(line.strip(), s["Body"]))
+
+    story.append(Spacer(1, 0.8 * cm))
+
     sign = Table(
-        [["_______________________", "_______________________"],
-         ["Client Signature · Asinatura Kliente", "Authorized Officer · Ofisiál Autorizadu"]],
-        colWidths=[8 * cm, 8 * cm],
+        [
+            ["_______________________", "_______________________", "_______________________"],
+            ["Diretor / Manager", "Witness / Testemunha", "Kliente Penhor"],
+            ["Fatin Penhor Management", "Naran: ____________________", client.get("full_name", "")],
+        ],
+        colWidths=[5.5 * cm, 5.5 * cm, 5.5 * cm],
     )
     sign.setStyle(TableStyle([
-        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 8.5),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#57534E")),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#57534E")),
         ("TOPPADDING", (0, 1), (-1, 1), 2),
     ]))
     story.append(sign)
@@ -188,38 +269,58 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         topMargin=1.8 * cm, bottomMargin=1.8 * cm,
     )
     story = []
-    story.append(Paragraph("FATIN PENHORES", s["Title"]))
-    story.append(Paragraph("Payment Receipt · Resibu Pagamentu", s["Sub"]))
+    story.append(Paragraph("FATIN PENHOR", s["Brand"]))
+    story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
+    story.append(Spacer(1, 0.3 * cm))
 
-    story.append(_kv_table([
-        ["Receipt No.", payment.get("receipt_number", "")],
-        ["Payment Date", payment.get("date", "")],
-        ["Payment Type", str(payment.get("type", "")).replace("_", " ").title()],
-        ["Contract No.", contract.get("contract_number", "")],
+    money = _money
+    box1 = Table([
+        ["Receipt No.", payment.get("receipt_number", ""), "Payment Date", payment.get("date", "")],
+        ["Payment Type", str(payment.get("type", "")).replace("_", " ").title(),
+         "Contract No.", contract.get("contract_number", "")],
+        ["Client", client.get("full_name", ""), "Phone", client.get("phone", "")],
+    ], colWidths=[3.5 * cm, 5.2 * cm, 3.5 * cm, 4.8 * cm])
+    box1.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+        ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#57534E")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F4")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D6D3D1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
     ]))
+    story.append(box1)
+    story.append(Spacer(1, 0.5 * cm))
 
-    story.append(Paragraph("Client · Kliente", s["H2"]))
-    story.append(_kv_table([
-        ["Full Name", client.get("full_name", "")],
-        ["Phone", client.get("phone", "")],
-        ["ID Number", client.get("id_number", "")],
-    ]))
-
-    story.append(Paragraph("Payment Details", s["H2"]))
     amt = float(payment.get("amount", 0))
     loan = float(contract.get("loan_amount", 0))
     rate = float(contract.get("interest_rate", 0))
-    story.append(_kv_table([
-        ["Original Loan", f"USD {loan:,.2f}"],
-        ["Interest Rate", f"{rate:.0f}%"],
-        ["Amount Paid", f"USD {amt:,.2f}"],
-        ["Remaining Balance", f"USD {remaining:,.2f}"],
+    box2 = Table([
+        ["Original Loan", money(loan)],
+        ["Interest Rate", f"{rate:.2f}%"],
+        ["Amount Paid (this receipt)", money(amt)],
+        ["Principal Remaining", money(contract.get("principal_remaining", 0))],
+        ["Interest Remaining", money(contract.get("interest_remaining", 0))],
+        ["Penalty (if overdue)", money(contract.get("penalty", 0))],
+        ["Total Remaining Balance", money(remaining)],
+    ], colWidths=[6.5 * cm, 10.5 * cm])
+    box2.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
     ]))
+    story.append(box2)
 
     story.append(Spacer(1, 1.2 * cm))
     sign = Table(
         [["_______________________", "_______________________"],
-         ["Client Signature", "Authorized Officer"]],
+         ["Asinatura Kliente · Client", "Ofisiál Autorizadu · Officer"]],
         colWidths=[8 * cm, 8 * cm],
     )
     sign.setStyle(TableStyle([
@@ -234,21 +335,21 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     return buf.getvalue()
 
 
-# Default bilingual T&C — admin can override in Settings.
+# Default bilingual T&C (kept for back-compat; new PDF embeds Tetum articles directly)
 DEFAULT_TNC_EN = """1. The Client pledges the item described above as security for the loan amount stated.
-2. The Client may repay the loan in full, in part, or pay interest only at any time between the contract date and the due date.
-3. Interest is applied at the agreed rate on the original loan amount and is non-refundable once the contract is signed.
-4. Standard interest rates: Car 10%, Motorcycle 15%, Electronic 15% (unless agreed otherwise on the contract).
-5. If the loan and interest are not fully repaid by the due date, Fatin Penhores may move the item to public auction without further notice.
-6. The Client must present a valid identification document (BI, Electoral Card or Passport) to redeem the item.
-7. Fatin Penhores is not responsible for any pre-existing damage or undisclosed defects in the item.
-8. Both parties confirm the item description, loan amount and due date stated above are correct."""
+2. Maximum contract term is 2 months from the contract date.
+3. The Client may repay the loan in full, in part, or pay interest-only at any time within the term.
+4. Even if the loan is repaid the day after contract date, the minimum agreed interest still applies.
+5. Standard interest rates: Car 10%, Motorcycle 15%, Electronic 15%.
+6. Partial payments reduce the principal first; interest is then calculated only on the remaining principal.
+7. Late payment penalty: 10% of the original loan amount (does not include the interest fee).
+8. If unpaid after the due date, the item may be moved to public auction or the contract may be reactivated by the Officer."""
 
-DEFAULT_TNC_TET = """1. Kliente hatama sasán iha leten ne'e nudar garantia ba empréstimu osan ne'ebé hatama tiha.
-2. Kliente bele selu kompletu, parsiál, ka selu juru deit iha tempu ne'ebé deit entre data kontratu ho data limite.
-3. Juru aplika ho taxa ne'ebé akorda ona ba osan empréstimu orijinál, no la fila fali bainhira kontratu asina ona.
-4. Taxa juru padraun: Karreta 10%, Motorizada 15%, Eletróniku 15% (se la akorda buat seluk iha kontratu).
-5. Se osan empréstimu ho juru la selu kompleta to'o data limite, Fatin Penhores bele hatama sasán ba leilaun públiku sein avizu tan.
-6. Kliente tenke hatudu BI, Kartaun Eleitorál ka Pasaporte atu foti sasán fali.
-7. Fatin Penhores la responsabiliza ba estragu ne'ebé iha ona ka difeitu ne'ebé la deklara husi kliente.
-8. Parte rua konfirma katak deskrisaun sasán, osan empréstimu no data limite iha leten ne'e los."""
+DEFAULT_TNC_TET = """1. Kliente entrega sasán ne'ebé deskreve iha leten nudar garantia ba osan empréstimu.
+2. Prazu maximu kontratu mak fulan rua (2) hahu husi data kontratu.
+3. Kliente bele selu kompletu, parsiál, ka selu juru deit iha tempu ne'ebé deit durante prazu.
+4. Maski selu loan iha loron tuir mai ba data kontratu, taxa interese minimu sei aplika.
+5. Taxa juru padraun: Karreta 10%, Motorizada 15%, Eletróniku 15%.
+6. Pagamentu parsiál hamenus uluk principal; interese kalkula tan iha balansu principal ne'ebé restu.
+7. Multa atrasu: 10% husi montante empréstimu orijinál (la inklui taxa interese).
+8. Se la selu kompleta to'o data limite, sasán bele hatama ba leilaun ka kontratu bele halo aktivu fali husi Ofisiál."""

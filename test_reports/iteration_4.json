@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 4 end-to-end testing complete. Backend: NEW iter4 suite (test_iter4.py) 22/22 PASS — Drivers License id_type + photo_url, manufacture_year + market_value on car/motorcycle/electronic, 62-day contract cap (boundary + over-cap + due<contract date), payment math (partial reduces principal first, interest_only reduces interest, interest_amount fixed at full rate), penalty = 10% of original loan when overdue, reactivate clears penalty + flips to active (with future-only + 62-day cap), /clients/{id}/payments enriches with contract_number + item_type, contract PDF returns application/pdf > 4KB starting with %PDF, RBAC (cashier 403 on clients/items/contracts/reactivate). Regression: backend_test.py 33/33 + test_iter2.py 22/22 PASS after fixing pre-existing test fixtures that used >62-day terms or pre-contract payment dates (test-data only — no business logic changed). Total backend: 77/77 PASS. Frontend (Playwright on REACT_APP_BACKEND_URL): client-photo-btn present, Drivers License option present in id_type select, client-view-<id> opens detail dialog with client-contracts-table + client-payments-table, items-tab-car form exposes item-car-manufacture_year + item-car-market_value inputs, overdue rows render contract-reactivate-<id> buttons (16 found) that open a dialog with reactivate-due-date + reactivate-confirm.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Contracts table", "issue": "No dedicated 'Penalty' column — penalty is silently rolled into Remaining Balance. The review request says 'the row's Penalty column reads $0'. Currently a user can't visually distinguish the 10% penalty from the rest of the remaining balance.", "selector": "[data-testid=contracts-table] thead", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reactivate Contract dialog", "issues": ["Native browser date picker (input type=date) used instead of a shadcn Calendar/Popover. Consistent with the rest of the app's contract-date inputs so it's a system-wide stylistic choice rather than an iter4 regression."]},
+      {"screen": "All dialogs (clients, contracts, reactivate, items)", "issues": ["React warning in console: 'Missing Description or aria-describedby for {DialogContent}' — accessibility hint. Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter4.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_iter2.py",
+    "/app/test_reports/pytest/iter4_results.xml",
+    "/app/test_reports/pytest/iter4_full.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/MEDIUM: add a 'Penalty' column to the Contracts table (Contracts.js) showing r.penalty so users can see the 10% surcharge separately from remaining balance (matches review spec wording).",
+    "OPTIONAL/LOW: pass `aria-describedby` (or render a <DialogDescription>) on the Reactivate / Detail / New-Item dialogs to silence the React shadcn warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1320 lines. Strongly recommend splitting into routers (clients, items, contracts, payments, auctions, files, whatsapp, audit, dashboard, settings) before iter5 — risk of merge conflicts grows fast.",
+    "_recompute_contract_status writes to the DB inside a read path (`update_one` when status flips). Acceptable but means GET /contracts has hidden side effects. Consider a background job, or skip the write when status is unchanged.",
+    "`/api/files/{path:path}` mutates `request._cookies` (private API) — works but brittle across Starlette upgrades; cleaner to read the token from the query param directly and skip the cookie injection.",
+    "`/api/public/auction-items` still returns `year` from item docs (line 988) — but iter4 dropped 'year' from CarIn/MotorcycleIn/ElectronicIn in favour of manufacture_year. Field will always be None. Either drop it from the response or map to manufacture_year for back-compat with public listing.",
+    "Penalty currently flips to 0 the moment status leaves 'overdue' (recompute is stateless). Acceptable per spec, but it means an admin who reactivates loses the historical penalty record. Consider stamping `last_penalty_applied` on the contract for auditing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py — replaced 2 hardcoded due_dates (2099-12-31 and a 2025 payment date) with today-relative dates so they pass the new iter4 62-day rule and payment-date validation.",
+    "/app/backend/tests/test_iter2.py — added _CD/_DD module constants (today + today+30d) and swapped all 2025/2099 fixture dates so the iter2 regression suite is rule-compliant.",
+    "/app/backend/tests/test_iter4.py — new file (22 tests) for iter4 acceptance."
+  ],
+  "success_rate": {"backend": "100% (77/77: 22/22 iter4 + 33/33 iter1 + 22/22 iter2)", "frontend": "100% on the iter4 selectors checked (photo, Drivers License, view dialog, manufacture_year, market_value, reactivate dialog) — 1 medium UX gap (no Penalty column)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "TEST_-prefixed clients/items/contracts/users created per-test; reactivate tests deliberately create overdue contracts (contract_date = today-2d, due_date = today-1d). No cleanup needed beyond Mongo growth; consider adding a TEST_-cleanup fixture in a later iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter4 is fully green on the backend and the iter4-specific frontend selectors are all present. The only outstanding item is cosmetic: Contracts.js does not show a dedicated Penalty column even though the contract row payload now includes r.penalty (and r.principal_remaining / r.interest_remaining). If main agent adds that column, re-test only the Contracts page. Public endpoint /api/public/auction-items still references the removed `year` field — would be a clean follow-up. The 'date' input used in the Reactivate dialog is the native browser picker — same pattern as the New Contract dialog, so any switch to a shadcn Calendar should be applied across both forms.",
+  "rca of the issue": "N/A — no functional iter4 bug found. The regression-suite test failures were entirely a fixture-data problem: pre-existing tests hard-coded contract terms (e.g. 2025-01-01 → 2099-12-31, 7-month spans, 2025-01-15 payments on contracts dated 'today') that conflicted with the two new iter4 server rules (max 62-day contract term, payment date must be >= contract_date). Fix was to make the fixtures relative to date.today() so they remain rule-compliant indefinitely; no business logic in server.py was modified."
+}

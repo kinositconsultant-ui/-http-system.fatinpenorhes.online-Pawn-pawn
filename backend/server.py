@@ -214,7 +214,7 @@ async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
 # =====================================================================
 class ClientIn(BaseModel):
     full_name: str
-    id_type: Literal["BI", "Electoral", "Passport"]
+    id_type: Literal["BI", "Electoral", "Passport", "Drivers License"]
     id_number: str
     phone: str
     address: str = ""
@@ -222,6 +222,7 @@ class ClientIn(BaseModel):
     posto: str = ""
     suco: str = ""
     aldeia: str = ""
+    photo_url: str = ""
     notes: str = ""
 
 
@@ -248,6 +249,33 @@ async def get_client(cid: str, _: dict = Depends(get_current_user)):
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
     return c
+
+
+@api.get("/clients/{cid}/contracts")
+async def client_contracts(cid: str, _: dict = Depends(get_current_user)):
+    rows = await db.contracts.find({"client_id": cid}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    out = []
+    for r in rows:
+        out.append(await _recompute_contract_status(r))
+    return out
+
+
+@api.get("/clients/{cid}/payments")
+async def client_payment_history(cid: str, _: dict = Depends(get_current_user)):
+    """Return every payment for every contract owned by this client (full history)."""
+    contracts = await db.contracts.find({"client_id": cid}, {"_id": 0}).to_list(500)
+    if not contracts:
+        return []
+    contract_ids = [c["id"] for c in contracts]
+    by_id = {c["id"]: c for c in contracts}
+    payments = await db.payments.find(
+        {"contract_id": {"$in": contract_ids}}, {"_id": 0}
+    ).sort("date", -1).to_list(2000)
+    for p in payments:
+        c = by_id.get(p["contract_id"], {})
+        p["contract_number"] = c.get("contract_number")
+        p["item_type"] = c.get("item_type")
+    return payments
 
 
 @api.put("/clients/{cid}")
@@ -282,7 +310,8 @@ class CarIn(BaseModel):
     chassis: str = ""
     fuel_percent: int = 0
     color: str = ""
-    year: Optional[int] = None
+    manufacture_year: Optional[int] = None
+    market_value: float = 0.0
     photo_url: str = ""
     document_url: str = ""
 
@@ -295,7 +324,8 @@ class MotorcycleIn(BaseModel):
     chassis: str = ""
     fuel_percent: int = 0
     color: str = ""
-    year: Optional[int] = None
+    manufacture_year: Optional[int] = None
+    market_value: float = 0.0
     photo_url: str = ""
     document_url: str = ""
 
@@ -307,6 +337,8 @@ class ElectronicIn(BaseModel):
     description: str = ""
     serial: str = ""
     condition: str = ""
+    manufacture_year: Optional[int] = None
+    market_value: float = 0.0
     photo_url: str = ""
     document_url: str = ""
 
@@ -478,30 +510,75 @@ def _today_iso() -> str:
 
 
 async def _recompute_contract_status(contract: dict) -> dict:
-    """Compute live status and remaining balance, then persist if changed."""
-    if contract.get("status") in ("redeemed", "auction", "sold"):
-        return contract
+    """Compute live status, principal/interest split, and penalty."""
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
-    paid = sum(float(p["amount"]) for p in payments)
     loan = float(contract["loan_amount"])
     rate = float(contract["interest_rate"])
-    interest = loan * rate / 100.0
-    total_due = loan + interest
-    remaining = max(0.0, total_due - paid)
-    status = contract.get("status", "active")
-    if remaining <= 0.01:
+    interest = round(loan * rate / 100.0, 2)
+
+    # Split payments into interest vs principal
+    interest_paid = 0.0
+    principal_paid = 0.0
+    interest_remaining = interest
+    for p in sorted(payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))):
+        amt = float(p.get("amount", 0))
+        ptype = p.get("type", "partial")
+        if ptype == "interest_only":
+            take = min(amt, max(0.0, interest - interest_paid))
+            interest_paid += take
+            # any excess flows to principal
+            extra = amt - take
+            if extra > 0:
+                principal_paid += extra
+        elif ptype == "partial":
+            # partial pay reduces principal first per user rule
+            principal_paid += amt
+        elif ptype == "full":
+            # split: cover interest first, then principal
+            take = max(0.0, interest - interest_paid)
+            interest_paid += min(amt, take)
+            principal_paid += max(0.0, amt - take)
+
+    principal_paid = min(principal_paid, loan)
+    interest_paid = min(interest_paid, interest)
+    principal_remaining = round(max(0.0, loan - principal_paid), 2)
+    interest_remaining = round(max(0.0, interest - interest_paid), 2)
+
+    # Penalty: 10% of original loan if overdue and not fully redeemed (does NOT include interest)
+    today = _today_iso()
+    is_overdue = contract.get("due_date", today) < today
+    redeemed = (principal_remaining + interest_remaining) <= 0.01
+    penalty = 0.0
+    if is_overdue and not redeemed and contract.get("status") != "auction":
+        penalty = round(loan * 0.10, 2)
+
+    total_due = round(principal_remaining + interest_remaining + penalty, 2)
+
+    # Status
+    if contract.get("status") == "auction":
+        status = "auction"
+    elif contract.get("status") == "sold":
+        status = "sold"
+    elif redeemed:
         status = "redeemed"
-    elif contract["due_date"] < _today_iso():
+    elif is_overdue:
         status = "overdue"
     else:
         status = "active"
+
     if status != contract.get("status"):
         await db.contracts.update_one({"id": contract["id"]}, {"$set": {"status": status}})
+
     contract["status"] = status
-    contract["paid_amount"] = round(paid, 2)
-    contract["remaining_balance"] = round(remaining, 2)
-    contract["interest_amount"] = round(interest, 2)
-    contract["total_due"] = round(total_due, 2)
+    contract["paid_amount"] = round(principal_paid + interest_paid, 2)
+    contract["principal_paid"] = round(principal_paid, 2)
+    contract["interest_paid"] = round(interest_paid, 2)
+    contract["principal_remaining"] = principal_remaining
+    contract["interest_remaining"] = interest_remaining
+    contract["interest_amount"] = interest
+    contract["penalty"] = penalty
+    contract["total_due"] = total_due
+    contract["remaining_balance"] = total_due
     return contract
 
 
@@ -525,6 +602,17 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
         raise HTTPException(status_code=404, detail="Item not found")
     if item.get("status") not in ("in_stock", None):
         raise HTTPException(status_code=400, detail="Item is not available")
+    # Max 2 months between contract date and due date
+    try:
+        cd = date.fromisoformat(payload.contract_date)
+        dd = date.fromisoformat(payload.due_date)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid date format (YYYY-MM-DD)")
+    if dd < cd:
+        raise HTTPException(status_code=422, detail="Due date must be after contract date")
+    days = (dd - cd).days
+    if days > 62:  # ~2 months
+        raise HTTPException(status_code=422, detail="Contract term cannot exceed 2 months")
     contract_number = await _generate_contract_number()
     doc = payload.model_dump()
     # Default interest by item type from settings
@@ -549,6 +637,37 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
     await write_audit(user, "create", "contract", doc["id"], {"contract_number": contract_number, "loan_amount": doc["loan_amount"]})
     doc.pop("_id", None)
     return await _recompute_contract_status(doc)
+
+
+class ReactivateIn(BaseModel):
+    new_due_date: str  # YYYY-MM-DD
+    notes: str = ""
+
+
+@api.post("/contracts/{cid}/reactivate")
+async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depends(require_not_cashier)):
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
+    if c["status"] not in ("overdue", "active"):
+        raise HTTPException(status_code=400, detail="Only overdue or active contracts can be reactivated")
+    try:
+        nd = date.fromisoformat(payload.new_due_date)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid date")
+    if nd <= date.today():
+        raise HTTPException(status_code=422, detail="New due date must be in the future")
+    if (nd - date.today()).days > 62:
+        raise HTTPException(status_code=422, detail="Reactivated term cannot exceed 2 months from today")
+    await db.contracts.update_one(
+        {"id": cid},
+        {"$set": {"due_date": payload.new_due_date, "status": "active",
+                  "reactivated_at": utcnow_iso(), "reactivate_notes": payload.notes}},
+    )
+    await write_audit(user, "reactivate", "contract", cid, {"new_due_date": payload.new_due_date})
+    refreshed = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    return await _recompute_contract_status(refreshed)
 
 
 @api.get("/contracts/{cid}")

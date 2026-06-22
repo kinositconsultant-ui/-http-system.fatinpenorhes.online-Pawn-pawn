@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const blank = {
@@ -122,6 +122,29 @@ export default function Contracts() {
         ? "WhatsApp (mocked — set token in Settings)"
         : `WhatsApp ${data.status}`;
       toast.success(note);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+
+  const [reactOpen, setReactOpen] = useState(false);
+  const [reactRow, setReactRow] = useState(null);
+  const [reactDate, setReactDate] = useState("");
+
+  const openReactivate = (row) => {
+    setReactRow(row);
+    // default new due date = today + 30 days
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    setReactDate(d.toISOString().slice(0, 10));
+    setReactOpen(true);
+  };
+  const confirmReactivate = async () => {
+    try {
+      await api.post(`/contracts/${reactRow.id}/reactivate`, { new_due_date: reactDate });
+      toast.success("Contract reactivated");
+      setReactOpen(false);
+      load();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     }
@@ -316,6 +339,16 @@ export default function Contracts() {
                     >
                       <FileDown className="w-4 h-4" />
                     </a>
+                    {r.status === "overdue" && (
+                      <button
+                        onClick={() => openReactivate(r)}
+                        data-testid={`contract-reactivate-${r.id}`}
+                        className="p-1 hover:text-[#4C7F62]"
+                        title={t("reactivate")}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    )}
                     {["active", "overdue"].includes(r.status) && (
                       <button
                         onClick={() => moveToAuction(r.id)}
@@ -349,7 +382,7 @@ export default function Contracts() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan="10" className="p-8 text-center text-stone-500">
+                <td colSpan="11" className="p-8 text-center text-stone-500">
                   No contracts
                 </td>
               </tr>
@@ -357,6 +390,43 @@ export default function Contracts() {
           </tbody>
         </table>
       </div>
+
+      {/* Reactivate dialog */}
+      <Dialog open={reactOpen} onOpenChange={setReactOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("reactivate_contract")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-stone-600">
+              {reactRow?.contract_number} — extending due date. Total contract length still capped at 2 months from the original start date.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-stone-500">
+                {t("new_due_date")}
+              </Label>
+              <Input
+                type="date"
+                value={reactDate}
+                onChange={(e) => setReactDate(e.target.value)}
+                data-testid="reactivate-due-date"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReactOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={confirmReactivate}
+              className="bg-[#4C7F62] hover:bg-[#3F6B52]"
+              data-testid="reactivate-confirm"
+            >
+              {t("reactivate")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -33,7 +33,8 @@ function vehicleFields(t) {
   return [
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
-    { k: "year", label: t("year"), type: "number" },
+    { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
+    { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "color", label: t("color") },
     { k: "plate", label: t("plate") },
     { k: "chassis", label: t("chassis") },
@@ -50,6 +51,8 @@ function electronicFields(t) {
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
     { k: "serial", label: t("serial") },
+    { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
+    { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "condition", label: t("condition"), placeholder: "Good / Fair" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
@@ -66,6 +69,8 @@ function emptyFor(kind) {
       description: "",
       serial: "",
       condition: "",
+      manufacture_year: "",
+      market_value: 0,
       photo_url: "",
       document_url: "",
     };
@@ -78,7 +83,8 @@ function emptyFor(kind) {
     chassis: "",
     fuel_percent: 0,
     color: "",
-    year: "",
+    manufacture_year: "",
+    market_value: 0,
     photo_url: "",
     document_url: "",
   };
@@ -148,11 +154,12 @@ function ItemTable({ kind }) {
 
   const submit = async () => {
     const payload = { ...form };
-    // coerce numbers
     if ("fuel_percent" in payload && payload.fuel_percent !== "")
       payload.fuel_percent = Number(payload.fuel_percent);
-    if ("year" in payload && payload.year !== "")
-      payload.year = payload.year ? Number(payload.year) : null;
+    if ("manufacture_year" in payload)
+      payload.manufacture_year = payload.manufacture_year ? Number(payload.manufacture_year) : null;
+    if ("market_value" in payload && payload.market_value !== "")
+      payload.market_value = Number(payload.market_value);
     try {
       if (editingId) {
         await api.put(`/items/${kind}/${editingId}`, payload);
