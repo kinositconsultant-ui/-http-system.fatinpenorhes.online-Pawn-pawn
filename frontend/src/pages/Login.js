@@ -5,6 +5,7 @@ import { useLang } from "../context/LangContext";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import LangToggle from "../components/LangToggle";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -45,7 +46,10 @@ export default function Login() {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center p-8 relative">
+        <div className="absolute top-6 right-6">
+          <LangToggle />
+        </div>
         <form
           onSubmit={onSubmit}
           className="w-full max-w-md space-y-6 bg-white p-8 rounded-lg border border-stone-200 shadow-sm"

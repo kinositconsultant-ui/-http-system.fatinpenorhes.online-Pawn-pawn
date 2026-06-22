@@ -232,11 +232,12 @@ async def list_clients(_: dict = Depends(get_current_user)):
 
 
 @api.post("/clients")
-async def create_client(payload: ClientIn, _: dict = Depends(get_current_user)):
+async def create_client(payload: ClientIn, user: dict = Depends(require_not_cashier)):
     doc = payload.model_dump()
     doc["id"] = new_id()
     doc["created_at"] = utcnow_iso()
     await db.clients.insert_one(doc)
+    await write_audit(user, "create", "client", doc["id"], {"full_name": doc["full_name"]})
     doc.pop("_id", None)
     return doc
 
@@ -449,7 +450,7 @@ class ContractIn(BaseModel):
     item_id: str
     item_type: Literal["car", "motorcycle", "electronic"]
     loan_amount: float
-    interest_rate: Literal[10, 15]
+    interest_rate: Optional[Literal[10, 15]] = None  # derived from settings by item_type when omitted
     contract_date: str  # YYYY-MM-DD
     due_date: str       # YYYY-MM-DD
     notes: str = ""

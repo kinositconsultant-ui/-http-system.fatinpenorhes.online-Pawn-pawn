@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 3 retest of 4 fixes + regression. FIX 1 (POST /api/clients cashier=403) PASS. FIX 3 (POST /api/contracts default interest_rate from settings when omitted) PASS — motorcycle defaults to 15. FIX 4 (LangToggle on /login) PASS — EN/TET testids visible and TET click switches 'Sign In'→'Tama' and 'Welcome back'→'Bem-vindo fali'. FIX 2 (POST /api/items/{kind} cashier=403) NOT APPLIED — server.py line 328 still uses Depends(get_current_user); cashier successfully creates a car item (200). Regression backend_test.py: 33/33 PASS. test_iter2.py: 21/22 PASS (only test_cashier_cannot_create_car_item fails, exactly the unapplied FIX 2).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/items/{kind}", "issue": "FIX 2 not applied. server.py:328 still `async def create_item(kind: str, payload: dict, _: dict = Depends(get_current_user))`. Cashier creates car item with 200 instead of 403. Change dependency to Depends(require_not_cashier) (and ideally also on PUT /items/{kind}/{iid} and DELETE /items/{kind}/{iid} for symmetry, plus write_audit per the iteration-2 plan).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter3_iter2_results.xml",
+    "/app/test_reports/pytest/iter3_regression_results.xml"
+  ],
+  "action_items": [
+    "Apply FIX 2: change /app/backend/server.py line 328 dependency from get_current_user to require_not_cashier on POST /api/items/{kind}. The 4-fix batch claimed this was done but it is NOT — only the clients endpoint was patched.",
+    "Optional symmetry: also gate PUT/DELETE /items/{kind}/{iid} (lines 354, 369) with require_not_cashier, matching the cashier-cannot-mutate-stock contract."
+  ],
+  "critical_code_review_comments": [
+    "server.py still 1200 lines — needs router split (auth/users/clients/items/contracts/payments/auctions/reports/dashboard/settings/files/whatsapp/audit).",
+    "create_item & update_item accept `payload: dict` then validate via _item_model — fine, but no write_audit() call as the iter-2 plan called for; add audit on item create/update/delete for parity with clients/contracts.",
+    "ContractIn.interest_rate is now Optional[Literal[10,15]]=None — good. Consider also accepting and normalising int(payload) silently to 10/15 to give a friendlier 400 instead of 422 when callers send e.g. 12."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "98% (54/55: 33/33 regression + 21/22 iter2 — only items-cashier RBAC still fails)", "frontend": "100% (FIX 4 verified end-to-end)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md). Staff/cashier created per-run.",
+  "seed_data_creation": "TEST_-prefixed clients/items/contracts created and torn down per test class.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Only one outstanding failure: POST /api/items/{kind} must use require_not_cashier (server.py:328). FIX 1, 3, 4 are confirmed live. After FIX 2 is applied, re-run only `pytest /app/backend/tests/test_iter2.py::TestCashierRBAC -v` to confirm 22/22.",
+  "rca of the issue": "Main agent's iteration-3 patch updated server.py:235 (create_client) to require_not_cashier and made ContractIn.interest_rate Optional and added LangToggle to Login.js, but did NOT touch the corresponding create_item dependency. Code grep confirms `create_item` at line 328 still has `_: dict = Depends(get_current_user)`. Reproduction: login as a cashier user and POST /api/items/car {brand:'T',model:'M',plate:'CASH-1'} — returns 200 with the new item. Mitigation: single-line change to swap the dependency to `Depends(require_not_cashier)`, and optionally add a write_audit call matching create_client."
+}
