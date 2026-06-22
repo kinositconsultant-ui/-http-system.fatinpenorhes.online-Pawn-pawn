@@ -1,0 +1,86 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 1: Organic & Earthy",
+  "domain": "Finance / Retail (Pawn Shop Management)",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Work Sans",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight text-stone-900 font-semibold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight text-stone-900 font-medium",
+      "h3": "text-xl sm:text-2xl text-stone-800 font-medium",
+      "h4": "text-lg sm:text-xl text-stone-800 font-medium",
+      "body": "text-base text-stone-600 leading-relaxed",
+      "small_label": "text-xs tracking-[0.2em] uppercase text-stone-500 font-semibold"
+    }
+  },
+  "colors": {
+    "background": "#FAFAF9",
+    "surface": "#FFFFFF",
+    "primary": "#2F4F4F",
+    "primary_hover": "#1D3333",
+    "secondary": "#8F9779",
+    "accent": "#C17767",
+    "accent_hover": "#A96253",
+    "text_main": "#1C1917",
+    "text_muted": "#57534E",
+    "border": "#E7E5E4",
+    "success": "#4C7F62",
+    "warning": "#D4A373",
+    "error": "#993333"
+  },
+  "layout": {
+    "spacing_system": "Generous spacing: p-6 or p-8 for cards, gap-6 for dashboard grids.",
+    "dashboard_grid": "Mode B (Control Room): grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6. Flat backgrounds with 1px border. No excessive shadows.",
+    "marketing_grid": "Mode A (Tetris Grid): Asymmetric, large breathable sections for the public site.",
+    "alignment": "Left-align complex data forms and paragraphs. Top-level headers can be centered if balancing the layout."
+  },
+  "components": {
+    "buttons": "Solid primary color for primary actions. Minimal border radius (rounded-md). hover:bg-opacity-90 transition-all.",
+    "cards": "Flat Solid surfaces. bg-white, 1px border-stone-200, shadow-sm. Internal padding p-6.",
+    "tables": "Shadcn based. Dense data. Horizontal scrollable for pawn items. Frozen headers. Include inline filters for active/redeemed/overdue/auction states.",
+    "forms": "Shadcn based. Use distinct fieldsets for Timor-Leste geography (municipality, posto, suco, aldeia).",
+    "navigation": "Sticky header with backdrop-blur-xl bg-white/70. Clear separation between public site links and admin dashboard CTA."
+  },
+  "media": [
+    {
+      "category": "hero_public",
+      "url": "https://images.unsplash.com/photo-1591325408953-ef9298125f96?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHx0aW1vciUyMGxlc3RlJTIwZGlsaSUyMGxhbmRzY2FwZXxlbnwwfHx8fDE3ODIxMjY2MTZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Timor Leste Dili Landscape for the public-facing landing page hero to establish local trust."
+    },
+    {
+      "category": "pawn_jewelry_showcase",
+      "url": "https://images.unsplash.com/photo-1600003014755-ba31aa59c4b6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxqZXdlbHJ5JTIwbHV4dXJ5JTIwcGF3biUyMHdhdGNofGVufDB8fHx8MTc4MjEyNjYxNHww&ixlib=rb-4.1.0&q=85",
+      "description": "High-end watch, representing electronics/jewelry in the auction and warehouse sections."
+    },
+    {
+      "category": "pawn_vehicle_showcase",
+      "url": "https://images.pexels.com/photos/13574410/pexels-photo-13574410.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Warehouse garage with vehicles, representing the pawned cars/motorcycles storage."
+    }
+  ],
+  "accessibility_and_testing": {
+    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='submit-contract-btn', data-testid='client-id-input').",
+    "contrast": "Text over backgrounds must meet APCA or minimum WCAG AA. Interactive elements must highlight clearly on focus/hover."
+  },
+  "specific_flows": {
+    "dashboard_kpis": "Cards showing Total clients, Active contracts, Total loan amount (USD), Total payments, Profit/interest summary, Overdue contracts.",
+    "client_registration": "Forms including fields for BI/Electoral/Passport, phone, address, municipality, posto, suco, aldeia.",
+    "pawn_item_management": "Tabs or separate forms for Car, Motorcycle, Electronic. Vehicles require plate, chassis, fuel %. Electronics require brand, model, serial. Include document/photo upload dropzones.",
+    "contract_module": "Auto-generate CTR-YYYY-####. Loan amount input, interest rate select (10/15%), date pickers for contract and due date.",
+    "payment_module": "Input for full/partial/interest-only. Display remaining balance. Provide print receipt CTA.",
+    "bilingual": "UI copy structured to allow easy translation file mapping (EN/PT toggle in header)."
+  },
+  "instructions_to_main_agent": [
+    "Build the application using React (.js files, not .tsx), Tailwind CSS, and Shadcn UI components.",
+    "Implement a hybrid fullstack architecture: an admin dashboard and public marketing pages.",
+    "Update tailwind.config.js to include fonts 'Outfit' and 'Work Sans' and the specified organic color palette.",
+    "Use 'lucide-react' for all iconography.",
+    "Ensure the dashboard uses a 'Control Room' grid layout for the 6 requested KPIs.",
+    "Implement the complex inventory tables for pawn items with horizontal scroll and precise column headers.",
+    "Add 'data-testid' to ALL interactive elements (buttons, inputs, links, table rows).",
+    "Create a bilingual toggle component (EN/PT) that updates state/context.",
+    "Never use placeholder image services. Use the exact media URLs provided in the media section.",
+    "Forms must handle the specific Timor-Leste address taxonomy (municipality, posto, suco, aldeia)."
+  ]
+}
