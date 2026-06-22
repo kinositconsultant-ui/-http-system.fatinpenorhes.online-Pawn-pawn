@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 5 end-to-end testing complete. Backend: NEW test_iter5_reports.py 15/15 PASS — location field persists on car/motorcycle/electronic; /api/reports/v2/active-contracts returns kpis {total_contracts,total_loan,tax_accumulate,almost_expired} with only status='active' rows; /payments kpis match (interest_received = sum of type='interest_only' amounts); /overdue rows are all status='overdue' and total_outstanding equals sum of principal_remaining; /auction total_amount uses sold_price else starting_price; /inventory has by_type {car,motorcycle,electronic} and 'location' column in row schema; /financial profit == interest_received + total_penalty; unknown report type -> 400; month/year/category filters narrow rows correctly. Exports verified: financial xlsx (PK header, >4KB, openxmlformats content-type), active-contracts PDF (%PDF header), payments csv with receipt_number+contract_number header columns. Regression: 77/77 prior tests still pass (backend_test 33, test_iter2 22, test_iter4 22). Total backend: 92/92 PASS in 21s. Frontend (Playwright via REACT_APP_BACKEND_URL): /reports renders reports-root with all 6 report-tab-* buttons; filter-month, -year, -category, -sub-category, -apply, -reset, report-pdf, report-excel, report-table all visible; clicking each tab renders the expected KPI cards (kpi-total_contracts, kpi-total_loan, kpi-tax_accumulate, kpi-almost_expired, etc.) — 0 missing KPIs across all 6 tabs; report-pdf and report-excel hrefs correctly include &year=2026 after applying filter; /items 'New — Car' modal contains item-car-location input with placeholder 'Warehouse A / Shop / Off-site'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports filter bar", "issues": ["Filter labels use 't(key) === k' fallback to prettify which yields raw snake-case like 'sub_category' on missing translations — minor i18n gap, not breaking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter5_reports.py",
+    "/app/test_reports/pytest/iter5_results.xml",
+    "/app/test_reports/pytest/iter5_full.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: ensure i18n keys exist for all filter and KPI labels (sub_category, near_expired, total_outstanding, tax_accumulate, almost_expired) in both EN and Tetum so the UI never falls back to raw snake-case.",
+    "OPTIONAL/MEDIUM: /api/reports/v2/payments KPI 'total_penalty' is a global snapshot (sum over ALL overdue contracts) and is NOT narrowed by the month/year/category filters applied to the payments rows — this matches the spec literally ('snapshot') but can be confusing when a year filter is applied because the headline penalty number won't change. Document or apply filters to the contracts sweep.",
+    "OPTIONAL/LOW: /api/reports/v2/{type} re-runs _recompute_contract_status on every contract on every request (active-contracts, overdue, financial). For 1000+ contracts this becomes O(N) DB writes per page load. Consider caching status flips or doing them on a job."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1700 lines after reports/v2 added. Split into routers (reports, contracts, items, payments, auctions) before iter6.",
+    "_report_payments computes total_penalty by recomputing every contract status, not just filtered ones — N+1 query pattern. Pre-filter contracts to status='overdue' before the loop.",
+    "Reports.js does no error rendering: if /reports/v2/<tab> 500s, setData(null) shows '…' in KPIs and 'No data' silently. Add a toast/banner on error.",
+    "Reports.js exportUrl() does not URL-encode user-supplied filters.sub_category — currently typed verbatim into URLSearchParams via direct concat. Use URLSearchParams.toString() (already used in buildQuery), but for the href the value should also be URI-encoded. encodeURIComponent missing on sub_category in href but URLSearchParams handles it — OK.",
+    "Inventory report's 'overdue_items' counts items whose id appears in any 'overdue' contract regardless of the active filter — independent of the filters.month/year/category. Acceptable but inconsistent with rows being filtered."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter5_reports.py — NEW (15 tests)."
+  ],
+  "success_rate": {"backend": "100% (92/92: 15/15 iter5 + 77/77 regression)", "frontend": "100% on iter5 selectors (6 tabs, 4 filters, 2 export links, 20 KPI cards across tabs, item-car-location field)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Per-test TEST_-prefixed clients (TEST iter5 <ts>), cars (TEST_Toy), motorcycles (TEST_Hon), electronics (TEST_Sam), 1 active contract, 1 overdue contract, 1 auction listing, 1 interest_only payment per fixture run. No cleanup — Mongo growth is incremental; consider a TEST_ purge fixture in later iterations.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter5 reports/v2 + location field are fully green on backend and frontend. The reports/v2 builders call _recompute_contract_status in a loop and write to the contracts collection inside a GET — performance concern noted but no functional issue. Frontend Reports.js exposes data-testid for tabs, filters, KPIs (kpi-<key>), report-table, report-pdf, report-excel. Items.js 'New Car' modal has item-car-location. The legacy /api/reports/{type} endpoint is preserved for back-compat. PRD/test_credentials.md unchanged.",
+  "rca of the issue": "N/A — no functional iter5 bug found. One test bootstrap fix during authoring: year filter is clamped to ge=2000 by the FastAPI Query validator, so the filter-narrowing test had to use 2000 (no rows) instead of 1999 (422)."
+}

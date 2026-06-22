@@ -39,6 +39,7 @@ function vehicleFields(t) {
     { k: "plate", label: t("plate") },
     { k: "chassis", label: t("chassis") },
     { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
+    { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
     { k: "description", label: t("description"), full: true, textarea: true },
@@ -54,6 +55,7 @@ function electronicFields(t) {
     { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "condition", label: t("condition"), placeholder: "Good / Fair" },
+    { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
     { k: "description", label: t("description"), full: true, textarea: true },
@@ -71,6 +73,7 @@ function emptyFor(kind) {
       condition: "",
       manufacture_year: "",
       market_value: 0,
+      location: "",
       photo_url: "",
       document_url: "",
     };
@@ -85,6 +88,7 @@ function emptyFor(kind) {
     color: "",
     manufacture_year: "",
     market_value: 0,
+    location: "",
     photo_url: "",
     document_url: "",
   };
