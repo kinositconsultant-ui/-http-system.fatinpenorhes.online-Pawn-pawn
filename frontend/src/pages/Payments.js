@@ -194,22 +194,33 @@ export default function Payments() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-stone-100">
-                <Td className="font-medium">{r.receipt_number}</Td>
-                <Td>{contractLabel(r.contract_id)}</Td>
-                <Td>{r.type.replace("_", " ")}</Td>
-                <Td right>${Number(r.amount).toLocaleString()}</Td>
-                <Td>{r.date}</Td>
+              <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
+                <Td className="font-medium whitespace-nowrap">{r.receipt_number}</Td>
+                <Td className="whitespace-nowrap">{contractLabel(r.contract_id)}</Td>
+                <Td className="whitespace-nowrap">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    r.type === "full" ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
+                    r.type === "interest_only" ? "bg-amber-50 text-amber-800 border-amber-200" :
+                    "bg-stone-100 text-stone-700 border-stone-200"
+                  }`}>
+                    {r.type.replace("_", " ")}
+                  </span>
+                </Td>
+                <Td right className="whitespace-nowrap font-medium">${Number(r.amount).toLocaleString()}</Td>
+                <Td className="whitespace-nowrap">{r.date}</Td>
                 <Td right>
-                  <a
-                    href={`${API_BASE}/payments/${r.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    data-testid={`payment-pdf-${r.id}`}
-                    className="inline-flex items-center gap-1 text-[#1B2D5C] hover:underline"
-                  >
-                    <FileDown className="w-4 h-4" /> PDF
-                  </a>
+                  <div className="flex justify-end">
+                    <a
+                      href={`${API_BASE}/payments/${r.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-testid={`payment-pdf-${r.id}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                      title={t("download_pdf")}
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </Td>
               </tr>
             ))}
@@ -239,7 +250,7 @@ function Field({ label, full, children }) {
 function Th({ children, right }) {
   return (
     <th
-      className={`px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold ${
+      className={`px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
         right ? "text-right" : ""
       }`}
     >
@@ -249,5 +260,5 @@ function Th({ children, right }) {
 }
 
 function Td({ children, right, className = "" }) {
-  return <td className={`px-4 py-3 ${right ? "text-right" : ""} ${className}`}>{children}</td>;
+  return <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`}>{children}</td>;
 }

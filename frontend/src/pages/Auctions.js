@@ -72,17 +72,17 @@ export default function Auctions() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-stone-100">
-                <Td className="font-medium">{r.contract_number}</Td>
-                <Td>
-                  <span className="text-xs uppercase tracking-wider text-stone-500 mr-1">
+              <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
+                <Td className="font-medium whitespace-nowrap">{r.contract_number}</Td>
+                <Td className="whitespace-nowrap">
+                  <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5">
                     {r.item_type}
                   </span>
                 </Td>
-                <Td right>${Number(r.starting_price || 0).toLocaleString()}</Td>
-                <Td right>{r.sold_price ? `$${Number(r.sold_price).toLocaleString()}` : "—"}</Td>
-                <Td>{r.buyer_name || "—"}</Td>
-                <Td>
+                <Td right className="whitespace-nowrap">${Number(r.starting_price || 0).toLocaleString()}</Td>
+                <Td right className="whitespace-nowrap font-medium">{r.sold_price ? `$${Number(r.sold_price).toLocaleString()}` : "—"}</Td>
+                <Td className="whitespace-nowrap max-w-[180px] truncate" title={r.buyer_name || ""}>{r.buyer_name || "—"}</Td>
+                <Td className="whitespace-nowrap">
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full border ${
                       r.status === "listed"
@@ -94,28 +94,30 @@ export default function Auctions() {
                   </span>
                 </Td>
                 <Td right>
-                  {r.status === "listed" && (
-                    <Button
-                      size="sm"
-                      onClick={() => openSold(r)}
-                      data-testid={`auction-sold-${r.id}`}
-                      className="bg-[#C17767] hover:bg-[#A96253]"
-                    >
-                      {t("mark_sold")}
-                    </Button>
-                  )}
-                  {r.status === "sold" && r.invoice_id && (
-                    <a
-                      href={pdfUrl(`/invoices/${r.invoice_id}/pdf`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-testid={`auction-invoice-${r.id}`}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]"
-                      title={r.invoice_number}
-                    >
-                      <FileText className="w-3 h-3" /> {r.invoice_number || t("invoice")}
-                    </a>
-                  )}
+                  <div className="flex justify-end gap-1.5">
+                    {r.status === "listed" && (
+                      <button
+                        onClick={() => openSold(r)}
+                        data-testid={`auction-sold-${r.id}`}
+                        className="inline-flex items-center justify-center px-2.5 h-7 rounded-md bg-[#C17767] text-white text-xs font-medium hover:bg-[#A96253] transition-colors whitespace-nowrap"
+                        title={t("mark_sold")}
+                      >
+                        {t("mark_sold")}
+                      </button>
+                    )}
+                    {r.status === "sold" && r.invoice_id && (
+                      <a
+                        href={pdfUrl(`/invoices/${r.invoice_id}/pdf`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid={`auction-invoice-${r.id}`}
+                        className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md bg-[#1B2D5C] text-white text-xs font-medium hover:bg-[#0F1B3A] transition-colors whitespace-nowrap"
+                        title={r.invoice_number}
+                      >
+                        <FileText className="w-3 h-3" /> {r.invoice_number || t("invoice")}
+                      </a>
+                    )}
+                  </div>
                 </Td>
               </tr>
             ))}
@@ -180,7 +182,7 @@ export default function Auctions() {
 function Th({ children, right }) {
   return (
     <th
-      className={`px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold ${
+      className={`px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
         right ? "text-right" : ""
       }`}
     >
@@ -188,6 +190,6 @@ function Th({ children, right }) {
     </th>
   );
 }
-function Td({ children, right, className = "" }) {
-  return <td className={`px-4 py-3 ${right ? "text-right" : ""} ${className}`}>{children}</td>;
+function Td({ children, right, className = "", ...rest }) {
+  return <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`} {...rest}>{children}</td>;
 }

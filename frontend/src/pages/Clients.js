@@ -226,7 +226,7 @@ export default function Clients() {
           </thead>
           <tbody>
             {filtered.map((r) => (
-              <tr key={r.id} className="border-t border-stone-100">
+              <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                 <Td>
                   {r.photo_url ? (
                     <img
@@ -238,25 +238,40 @@ export default function Clients() {
                     <div className="w-10 h-10 rounded-full bg-stone-100 border border-stone-200" />
                   )}
                 </Td>
-                <Td className="font-medium">{r.full_name}</Td>
-                <Td>
+                <Td className="font-medium whitespace-nowrap max-w-[200px] truncate" title={r.full_name}>{r.full_name}</Td>
+                <Td className="whitespace-nowrap">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">
                     {r.id_type}
                   </span>
                 </Td>
-                <Td>{r.id_number}</Td>
-                <Td>{r.phone}</Td>
-                <Td>{r.municipality}</Td>
+                <Td className="whitespace-nowrap">{r.id_number}</Td>
+                <Td className="whitespace-nowrap">{r.phone}</Td>
+                <Td className="whitespace-nowrap">{r.municipality}</Td>
                 <Td right>
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => openDetail(r)} data-testid={`client-view-${r.id}`} className="p-1 hover:text-[#1B2D5C]" title={t("view_details")}>
-                      <Eye className="w-4 h-4" />
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      onClick={() => openDetail(r)}
+                      data-testid={`client-view-${r.id}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                      title={t("view_details")}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => edit(r)} data-testid={`client-edit-${r.id}`} className="p-1 hover:text-[#1B2D5C]">
-                      <Pencil className="w-4 h-4" />
+                    <button
+                      onClick={() => edit(r)}
+                      data-testid={`client-edit-${r.id}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
+                      title={t("edit")}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => remove(r.id)} data-testid={`client-delete-${r.id}`} className="p-1 hover:text-[#993333]">
-                      <Trash2 className="w-4 h-4" />
+                    <button
+                      onClick={() => remove(r.id)}
+                      data-testid={`client-delete-${r.id}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#993333] text-white hover:bg-[#7A2828] transition-colors"
+                      title={t("delete")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </Td>
@@ -419,11 +434,11 @@ function Field({ label, full, children }) {
 }
 function Th({ children, right }) {
   return (
-    <th className={`px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold ${right ? "text-right" : ""}`}>
+    <th className={`px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${right ? "text-right" : ""}`}>
       {children}
     </th>
   );
 }
-function Td({ children, right, className = "" }) {
-  return <td className={`px-4 py-3 ${right ? "text-right" : ""} ${className}`}>{children}</td>;
+function Td({ children, right, className = "", ...rest }) {
+  return <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`} {...rest}>{children}</td>;
 }
