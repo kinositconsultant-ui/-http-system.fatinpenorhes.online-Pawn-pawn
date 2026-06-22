@@ -30,6 +30,7 @@ from auth import (
 from pdf_utils import (
     build_contract_pdf,
     build_receipt_pdf,
+    build_report_pdf,
     DEFAULT_TNC_EN,
     DEFAULT_TNC_TET,
 )
@@ -1318,61 +1319,10 @@ async def reports_export(
             headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'},
         )
 
-    # PDF
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table as RLTable, TableStyle, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    from reportlab.lib.units import cm
-
-    base = getSampleStyleSheet()
-    title_style = ParagraphStyle("rT", parent=base["Title"], fontSize=15, textColor=colors.HexColor("#2F4F4F"))
-    sub_style = ParagraphStyle("rS", parent=base["Normal"], fontSize=9, textColor=colors.HexColor("#57534E"))
-
-    buf = BytesIO()
-    pdf_doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm, topMargin=1*cm, bottomMargin=1*cm)
-    story = [
-        Paragraph(f"Fatin Penhores — {report_type.replace('-', ' ').title()}", title_style),
-        Paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC", sub_style),
-        Spacer(1, 0.4*cm),
-    ]
-    # KPI table
-    kpi_pairs = [(k.replace("_", " ").title(), str(v)) for k, v in data["kpis"].items() if not isinstance(v, dict)]
-    if kpi_pairs:
-        kpi_tbl = RLTable([list(pair) for pair in kpi_pairs], colWidths=[5*cm, 5*cm])
-        kpi_tbl.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
-            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F4")),
-            ("BOX", (0, 0), (-1, -1), 0.25, colors.HexColor("#D6D3D1")),
-            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ]))
-        story.append(kpi_tbl)
-        story.append(Spacer(1, 0.4*cm))
-    # Data table
-    table_data = [[c.replace("_", " ").title() for c in columns]]
-    for r in rows[:300]:
-        table_data.append([str(r.get(c, "") or "") for c in columns])
-    if len(table_data) > 1:
-        rl_t = RLTable(table_data, repeatRows=1)
-        rl_t.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
-            ("FONT", (0, 1), (-1, -1), "Helvetica", 7.5),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2F4F4F")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.2, colors.HexColor("#E7E5E4")),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAF9")]),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        story.append(rl_t)
-    pdf_doc.build(story)
+    # PDF (uses branded report builder with logo + header/footer)
+    pdf_bytes = build_report_pdf(report_type, data)
     return Response(
-        content=buf.getvalue(),
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{name}.pdf"'},
     )

@@ -66,7 +66,7 @@ export default function Users() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#2F4F4F] hover:bg-[#1D3333]" data-testid="user-new-btn">
+            <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="user-new-btn">
               <Plus className="w-4 h-4 mr-1" /> {t("new")}
             </Button>
           </DialogTrigger>
@@ -117,7 +117,7 @@ export default function Users() {
               </Button>
               <Button
                 onClick={submit}
-                className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+                className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
                 data-testid="user-save"
               >
                 {t("save")}

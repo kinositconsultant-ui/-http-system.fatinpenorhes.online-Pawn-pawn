@@ -82,7 +82,7 @@ export default function Payments() {
         >
           <DialogTrigger asChild>
             <Button
-              className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+              className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
               data-testid="payment-new-btn"
             >
               <Plus className="w-4 h-4 mr-1" /> {t("new_payment")}
@@ -170,7 +170,7 @@ export default function Payments() {
               </Button>
               <Button
                 onClick={submit}
-                className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+                className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
                 data-testid="payment-save"
               >
                 {t("save")}
@@ -206,7 +206,7 @@ export default function Payments() {
                     target="_blank"
                     rel="noreferrer"
                     data-testid={`payment-pdf-${r.id}`}
-                    className="inline-flex items-center gap-1 text-[#2F4F4F] hover:underline"
+                    className="inline-flex items-center gap-1 text-[#1B2D5C] hover:underline"
                   >
                     <FileDown className="w-4 h-4" /> PDF
                   </a>

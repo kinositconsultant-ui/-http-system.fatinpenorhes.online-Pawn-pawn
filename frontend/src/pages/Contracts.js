@@ -177,7 +177,7 @@ export default function Contracts() {
         >
           <DialogTrigger asChild>
             <Button
-              className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+              className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
               data-testid="contract-new-btn"
             >
               <Plus className="w-4 h-4 mr-1" /> {t("new_contract")}
@@ -283,7 +283,7 @@ export default function Contracts() {
               </Button>
               <Button
                 onClick={submit}
-                className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+                className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
                 data-testid="contract-save"
               >
                 {t("save")}
@@ -339,7 +339,7 @@ export default function Contracts() {
                       target="_blank"
                       rel="noreferrer"
                       data-testid={`contract-pdf-${r.id}`}
-                      className="p-1 hover:text-[#2F4F4F]"
+                      className="p-1 hover:text-[#1B2D5C]"
                     >
                       <FileDown className="w-4 h-4" />
                     </a>

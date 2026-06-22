@@ -45,7 +45,7 @@ export default function Dashboard() {
       label: t("total_clients"),
       value: data?.total_clients ?? "—",
       Icon: Users,
-      tone: "text-[#2F4F4F]",
+      tone: "text-[#1B2D5C]",
       testid: "kpi-clients",
     },
     {
@@ -69,7 +69,7 @@ export default function Dashboard() {
       label: t("total_loan_amount"),
       value: data ? moneyFmt(data.total_loan_amount) : "—",
       Icon: Banknote,
-      tone: "text-[#2F4F4F]",
+      tone: "text-[#1B2D5C]",
       testid: "kpi-loan",
     },
     {
@@ -77,7 +77,7 @@ export default function Dashboard() {
       label: t("total_payments"),
       value: data ? moneyFmt(data.total_payments) : "—",
       Icon: Wallet,
-      tone: "text-[#2F4F4F]",
+      tone: "text-[#1B2D5C]",
       testid: "kpi-payments",
     },
     {
@@ -132,8 +132,8 @@ export default function Dashboard() {
               <AreaChart data={trends?.months || []}>
                 <defs>
                   <linearGradient id="gLoans" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2F4F4F" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#2F4F4F" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#1B2D5C" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#1B2D5C" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gPays" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#C17767" stopOpacity={0.4} />
@@ -154,7 +154,7 @@ export default function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="loans"
-                  stroke="#2F4F4F"
+                  stroke="#1B2D5C"
                   fill="url(#gLoans)"
                   strokeWidth={2}
                 />

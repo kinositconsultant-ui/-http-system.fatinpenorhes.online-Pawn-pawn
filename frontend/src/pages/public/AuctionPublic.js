@@ -69,7 +69,7 @@ export default function AuctionPublic() {
                 <div className="mt-4 flex items-end justify-between">
                   <div>
                     <div className="text-eyebrow">{t("starting_price")}</div>
-                    <div className="font-display text-xl text-[#2F4F4F] mt-1">
+                    <div className="font-display text-xl text-[#1B2D5C] mt-1">
                       ${Number(r.starting_price || 0).toLocaleString()}
                     </div>
                   </div>

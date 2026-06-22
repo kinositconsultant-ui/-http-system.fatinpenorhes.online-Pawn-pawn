@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 6 branding (navy rebrand + FP logo) verified end-to-end. Backend regression 92/92 PASS (backend_test 33 + test_iter2 22 + test_iter4 22 + test_iter5_reports 15) — no functional regressions. NEW test_iter6_branding.py 6/6 PASS verifying logo-embedded PDFs and Excel: contract PDF (/api/contracts/{id}/pdf) ~50KB %PDF, receipt PDF (/api/payments/{id}/pdf) ~50KB %PDF, report PDFs (/api/reports/v2/{financial,active-contracts}/export?format=pdf) 47–50KB %PDF (was ~10–15KB pre-branding, confirming logo embed), Excel xlsx ~7.6KB starting PK and openxmlformats content-type. Frontend smoke via Playwright on REACT_APP_BACKEND_URL: /login renders data-testid='login-brand' with <img src='/brand/logo.jpg'> in navy hero (visible) plus company info block (FATIN PENHORES UNIPESSOAL, LDA / Caicoli, Dili, Timor-Leste / Tel: 78372678 / fatinpenhores@gmail.com). After admin login at /reports: report-pdf button classes contain bg-red-50 + text-red-700 + border-red-200; report-excel button classes contain bg-emerald-50 + text-emerald-700 + border-emerald-200; all 6 report-tab-* buttons present and 4 default KPI cards load. AdminLayout sidebar shows img src='/brand/logo.jpg' and 'Fatin Penhores' company text. Public site / renders header logo /brand/logo.jpg and footer contains all required strings: FATIN PENHORES, Caicoli, Dili, Timor-Leste, 78372678, fatinpenhores@gmail.com, 'All Rights Reserved'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard charts (post-login)", "issues": ["Recharts ResponsiveContainer logs width(-1)/height(-1) warnings on first render — cosmetic only, charts still render after layout settles. Likely a sidebar/main flex sizing race on mount. Set minWidth=0 on the container or wrap in a div with explicit height to silence."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter6_branding.py",
+    "/app/test_reports/pytest/iter6_regression.xml",
+    "/app/test_reports/pytest/iter6_branding.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/LOW: Suppress Recharts width(-1)/height(-1) warnings on Dashboard by giving ResponsiveContainer a parent with explicit min-height or use aspect ratio.",
+    "OPTIONAL: server.py is now ~1700+ lines — split into routers (reports, contracts, items, payments, auctions) before iter7 (carry-over from iter5)."
+  ],
+  "critical_code_review_comments": [
+    "pdf_utils.build_report_pdf, contract PDF, and receipt PDF all read /app/backend/assets/logo.jpg on every request. For a 34KB file this is fine but consider lru_cache or loading once at import to avoid per-request disk IO under load.",
+    "Frontend /brand/logo.jpg is served as a static asset under /public/brand — verify ingress correctly serves this path on the production preview (it does in this env: served via React dev server; in prod build it will be /static asset).",
+    "Login.js hero column hides at small breakpoints — confirmed only via 1920×4000 viewport here; recommend Playwright smoke at 390×844 in future iterations to confirm mobile layout still readable.",
+    "Carry-over from iter5: _recompute_contract_status still runs inside GET reports/v2 builders (O(N) writes per call); reports rendering remains acceptable but should be moved to a scheduled job."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6_branding.py — NEW (6 tests: 4 branded-PDF size checks + 1 xlsx + 1 public smoke)"
+  ],
+  "success_rate": {"backend": "100% (98/98: 92 regression + 6 iter6)", "frontend": "100% on iter6 selectors (login-brand img, sidebar logo, report-pdf red, report-excel green, 6 tabs, KPIs, public footer strings)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md, unchanged).",
+  "seed_data_creation": "Per-run TEST_iter6_<ts> client (full_name, id_type='Passport'), TEST_Toyota car (brand+plate+location='Warehouse A'), 1 active contract (loan 1000, 30-day due), 1 interest_only payment of $100 — used to exercise contract PDF + receipt PDF endpoints.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter6 is branding-only (navy + FP logo + new company details). No business logic changed. test_iter6_branding.py asserts PDF size > 30KB as proxy for logo-embedded; pre-iter6 PDFs were ~10–15KB, post-iter6 are ~47–50KB. If a future iteration removes/replaces the logo, expect this test to fail loudly. Login page exposes data-testid='login-brand' on the navy hero <aside>. AdminLayout sidebar img is at 'aside img[src*=logo]'. Reports.js: report-pdf has bg-red-50/text-red-700/border-red-200 classes; report-excel has bg-emerald-50/text-emerald-700/border-emerald-200. Public footer (PublicLayout.js) hardcodes the 'FATIN PENHORES', address, tel, email and 'All Rights Reserved' strings. server.py is ~1700 lines (split recommended).",
+  "rca of the issue": "N/A — no failures. Two minor self-corrections in the new test file during authoring: (1) client schema uses 'full_name' + Title-Case id_type literals ('BI', 'Electoral', 'Passport', 'Drivers License'); (2) items POST is /api/items/{kind} with 'brand'+'plate' (not 'make'+'license_plate'); (3) contracts POST needs 'item_type' and 'loan_amount' (not 'principal'); (4) payments POST uses 'type'+'date' and returns {payment:{id}, contract:{}}."
+}

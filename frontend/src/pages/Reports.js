@@ -127,7 +127,7 @@ export default function Reports() {
             data-testid={`report-tab-${tb.key}`}
             className={`px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition ${
               tab === tb.key
-                ? "bg-[#2F4F4F] text-white shadow"
+                ? "bg-[#1B2D5C] text-white shadow"
                 : "bg-stone-100 text-stone-700 hover:bg-stone-200"
             }`}
           >
@@ -198,7 +198,7 @@ export default function Reports() {
           </FilterField>
 
           <div className="flex gap-2 ml-auto" data-testid="report-actions">
-            <Button onClick={load} className="bg-[#2F4F4F] hover:bg-[#1D3333]" data-testid="filter-apply">
+            <Button onClick={load} className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="filter-apply">
               <FilterIcon className="w-4 h-4 mr-1" /> {t("filter")}
             </Button>
             <Button variant="outline" onClick={resetFilters} data-testid="filter-reset">
@@ -211,7 +211,7 @@ export default function Reports() {
               href={exportUrl("pdf")}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm border border-stone-200 bg-white hover:bg-[#993333] hover:text-white hover:border-[#993333] transition"
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm border border-red-200 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white hover:border-red-600 transition"
               data-testid="report-pdf"
             >
               <FileText className="w-4 h-4" /> {t("pdf")}
@@ -220,7 +220,7 @@ export default function Reports() {
               href={exportUrl("xlsx")}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm border border-stone-200 bg-white hover:bg-[#4C7F62] hover:text-white hover:border-[#4C7F62] transition"
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition"
               data-testid="report-excel"
             >
               <FileSpreadsheet className="w-4 h-4" /> {t("excel")}

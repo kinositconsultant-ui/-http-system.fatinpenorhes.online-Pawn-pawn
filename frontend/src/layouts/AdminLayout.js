@@ -42,10 +42,17 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen flex bg-[#FAFAF9] text-stone-900">
       <aside className="w-64 shrink-0 border-r border-stone-200 bg-white px-5 py-7 flex flex-col">
-        <div className="mb-8">
-          <div className="text-eyebrow text-stone-500 mb-1">Admin Console</div>
-          <div className="font-display text-2xl font-semibold text-[#2F4F4F]">
-            Fatin Penhores
+        <div className="mb-8 flex items-center gap-3">
+          <img
+            src="/brand/logo.jpg"
+            alt="FP"
+            className="w-12 h-12 rounded-md object-contain bg-white border border-stone-200"
+          />
+          <div>
+            <div className="text-eyebrow text-stone-500 mb-0.5">Admin Console</div>
+            <div className="font-display text-lg font-semibold text-[#1B2D5C] leading-tight">
+              Fatin Penhores
+            </div>
           </div>
         </div>
         <nav className="space-y-1 flex-1">
@@ -60,7 +67,7 @@ export default function AdminLayout() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
                     isActive
-                      ? "bg-[#2F4F4F] text-white"
+                      ? "bg-[#1B2D5C] text-white"
                       : "text-stone-600 hover:bg-stone-100"
                   }`
                 }
@@ -83,6 +90,12 @@ export default function AdminLayout() {
           >
             <LogOut className="w-4 h-4" /> {t("logout")}
           </button>
+          <div className="text-[10px] text-stone-400 leading-relaxed pt-1">
+            FATIN PENHORES UNIP., LDA<br />
+            Caicoli, Dili, Timor-Leste<br />
+            Tel: 78372678<br />
+            © 2026 All Rights Reserved.
+          </div>
         </div>
       </aside>
       <main className="flex-1 overflow-x-hidden">

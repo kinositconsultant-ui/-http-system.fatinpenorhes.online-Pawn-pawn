@@ -16,7 +16,7 @@ export default function Home() {
             src="https://images.unsplash.com/photo-1591325408953-ef9298125f96?crop=entropy&cs=srgb&fm=jpg&q=85"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#2F4F4F]/85 via-[#2F4F4F]/65 to-[#2F4F4F]/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#1B2D5C]/85 via-[#1B2D5C]/65 to-[#1B2D5C]/30" />
         </div>
         <div className="relative max-w-7xl mx-auto px-6 lg:px-10 py-28 md:py-36 text-white">
           <div className="text-xs uppercase tracking-[0.3em] opacity-80 mb-4">
@@ -29,7 +29,7 @@ export default function Home() {
           <div className="mt-10 flex flex-wrap gap-4">
             <Link to="/auction">
               <Button
-                className="bg-white text-[#2F4F4F] hover:bg-stone-100"
+                className="bg-white text-[#1B2D5C] hover:bg-stone-100"
                 data-testid="home-cta-auction"
               >
                 {t("explore_auction")} <ArrowRight className="w-4 h-4 ml-2" />
@@ -73,7 +73,7 @@ export default function Home() {
               className="p-6 rounded-lg border border-stone-200 bg-white"
               data-testid={`home-value-${i}`}
             >
-              <v.Icon className="w-7 h-7 text-[#2F4F4F]" />
+              <v.Icon className="w-7 h-7 text-[#1B2D5C]" />
               <h3 className="font-display text-xl mt-4">{v.title}</h3>
               <p className="text-stone-600 text-sm mt-2 leading-relaxed">{v.body}</p>
             </div>
@@ -103,7 +103,7 @@ export default function Home() {
 
       {/* CTA */}
       <section className="max-w-5xl mx-auto px-6 lg:px-10">
-        <div className="rounded-lg bg-[#2F4F4F] text-white p-10 md:p-14 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="rounded-lg bg-[#1B2D5C] text-white p-10 md:p-14 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
             <div className="text-xs uppercase tracking-[0.3em] opacity-80 mb-2">
               Loja: Dili

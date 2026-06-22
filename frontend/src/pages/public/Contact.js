@@ -38,13 +38,13 @@ export default function Contact() {
         </p>
         <div className="mt-8 space-y-4 text-sm">
           <div className="flex items-center gap-3 text-stone-700">
-            <MapPin className="w-4 h-4 text-[#2F4F4F]" /> Dili, Timor-Leste
+            <MapPin className="w-4 h-4 text-[#1B2D5C]" /> Caicoli, Dili, Timor-Leste
           </div>
           <div className="flex items-center gap-3 text-stone-700">
-            <Mail className="w-4 h-4 text-[#2F4F4F]" /> contact@fatinpenhores.tl
+            <Mail className="w-4 h-4 text-[#1B2D5C]" /> fatinpenhores@gmail.com
           </div>
           <div className="flex items-center gap-3 text-stone-700">
-            <Phone className="w-4 h-4 text-[#2F4F4F]" /> +670 7700 0000
+            <Phone className="w-4 h-4 text-[#1B2D5C]" /> +670 78372678
           </div>
         </div>
       </div>
@@ -93,7 +93,7 @@ export default function Contact() {
         <Button
           type="submit"
           disabled={sending}
-          className="w-full bg-[#2F4F4F] hover:bg-[#1D3333]"
+          className="w-full bg-[#1B2D5C] hover:bg-[#0F1B3A]"
           data-testid="contact-submit"
         >
           {sending ? "…" : t("send_message")}

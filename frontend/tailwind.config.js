@@ -18,8 +18,8 @@ module.exports = {
       },
       colors: {
         forest: {
-          DEFAULT: '#2F4F4F',
-          dark: '#1D3333',
+          DEFAULT: '#1B2D5C',
+          dark: '#0F1B3A',
         },
         terracotta: {
           DEFAULT: '#C17767',

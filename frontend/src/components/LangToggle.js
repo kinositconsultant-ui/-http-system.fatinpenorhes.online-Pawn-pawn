@@ -12,7 +12,7 @@ export default function LangToggle() {
         onClick={() => setLang("en")}
         data-testid="lang-en"
         className={`px-3 py-1 rounded-full transition ${
-          lang === "en" ? "bg-[#2F4F4F] text-white" : "text-stone-600"
+          lang === "en" ? "bg-[#1B2D5C] text-white" : "text-stone-600"
         }`}
       >
         EN
@@ -22,7 +22,7 @@ export default function LangToggle() {
         onClick={() => setLang("tet")}
         data-testid="lang-tet"
         className={`px-3 py-1 rounded-full transition ${
-          lang === "tet" ? "bg-[#2F4F4F] text-white" : "text-stone-600"
+          lang === "tet" ? "bg-[#1B2D5C] text-white" : "text-stone-600"
         }`}
       >
         TET

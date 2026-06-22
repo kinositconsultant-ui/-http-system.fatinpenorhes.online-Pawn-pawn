@@ -37,8 +37,8 @@ export default function Warehouse() {
             data-testid={`warehouse-filter-${f.k}`}
             className={`px-4 py-2 rounded-full text-sm border transition ${
               filter === f.k
-                ? "bg-[#2F4F4F] border-[#2F4F4F] text-white"
-                : "bg-white border-stone-200 text-stone-700 hover:border-[#2F4F4F]"
+                ? "bg-[#1B2D5C] border-[#1B2D5C] text-white"
+                : "bg-white border-stone-200 text-stone-700 hover:border-[#1B2D5C]"
             }`}
           >
             {f.Icon ? <f.Icon className="inline w-3.5 h-3.5 mr-1 -mt-0.5" /> : null}

@@ -212,7 +212,7 @@ function ItemTable({ kind }) {
         >
           <DialogTrigger asChild>
             <Button
-              className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+              className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
               data-testid={`item-new-${kind}`}
             >
               <Plus className="w-4 h-4 mr-1" /> {t("new")} {t(kind)}
@@ -266,7 +266,7 @@ function ItemTable({ kind }) {
               </Button>
               <Button
                 onClick={submit}
-                className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+                className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
                 data-testid={`item-${kind}-save`}
               >
                 {t("save")}
@@ -330,7 +330,7 @@ function ItemTable({ kind }) {
                     <button
                       onClick={() => edit(r)}
                       data-testid={`item-${kind}-edit-${r.id}`}
-                      className="p-1 hover:text-[#2F4F4F]"
+                      className="p-1 hover:text-[#1B2D5C]"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>

@@ -25,16 +25,27 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#FAFAF9]">
-      <div className="hidden lg:block relative overflow-hidden">
-        <img
-          alt=""
-          src="https://images.unsplash.com/photo-1591325408953-ef9298125f96?crop=entropy&cs=srgb&fm=jpg&q=85"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-[#2F4F4F]/70" />
+      <div className="hidden lg:block relative overflow-hidden bg-[#0F1B3A]">
+        <div className="absolute inset-0 opacity-25">
+          <img
+            alt=""
+            src="https://images.unsplash.com/photo-1591325408953-ef9298125f96?crop=entropy&cs=srgb&fm=jpg&q=85"
+            className="w-full h-full object-cover"
+          />
+        </div>
         <div className="relative h-full p-12 flex flex-col justify-between text-white">
-          <Link to="/" data-testid="login-brand" className="font-display text-3xl font-semibold">
-            Fatin Penhores
+          <Link to="/" data-testid="login-brand" className="flex items-center gap-4">
+            <img
+              src="/brand/logo.jpg"
+              alt=""
+              className="w-16 h-16 rounded-md bg-white object-contain p-1"
+            />
+            <div>
+              <div className="font-display text-2xl font-semibold">Fatin Penhores</div>
+              <div className="text-[10px] uppercase tracking-[0.3em] opacity-80">
+                Unipessoal, Lda
+              </div>
+            </div>
           </Link>
           <div>
             <div className="text-xs uppercase tracking-[0.3em] opacity-80 mb-3">
@@ -43,6 +54,11 @@ export default function Login() {
             <h2 className="font-display text-4xl leading-tight">
               {t("hero_title")}
             </h2>
+            <div className="mt-10 text-xs opacity-70 leading-relaxed">
+              FATIN PENHORES UNIPESSOAL, LDA<br />
+              Caicoli, Dili, Timor-Leste · Tel: 78372678<br />
+              fatinpenhores@gmail.com
+            </div>
           </div>
         </div>
       </div>
@@ -94,7 +110,7 @@ export default function Login() {
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#2F4F4F] hover:bg-[#1D3333]"
+            className="w-full bg-[#1B2D5C] hover:bg-[#0F1B3A]"
             data-testid="login-submit"
           >
             {submitting ? "…" : t("sign_in")}

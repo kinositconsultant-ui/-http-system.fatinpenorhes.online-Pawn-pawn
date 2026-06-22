@@ -1,5 +1,7 @@
-"""PDF generation — Fatin Penhores contracts and receipts (Tetum articles + sample format)."""
+"""PDF generation — Fatin Penhores (logo + header/footer + Tetum articles)."""
 from io import BytesIO
+from pathlib import Path
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -10,44 +12,49 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    Image as RLImage,
     KeepTogether,
 )
+
+
+# === Brand colors derived from the logo ===
+NAVY = colors.HexColor("#1B2D5C")
+NAVY_DARK = colors.HexColor("#0F1B3A")
+SILVER = colors.HexColor("#B8B8B8")
+INK = colors.HexColor("#0F172A")
+MUTED = colors.HexColor("#475569")
+RULE = colors.HexColor("#E2E8F0")
+
+COMPANY_NAME = "FATIN PENHORES UNIPESSOAL, LDA"
+COMPANY_ADDR = "Caicoli, Dili, Timor-Leste"
+COMPANY_TEL = "Tel: 78372678"
+COMPANY_EMAIL = "Email: fatinpenhores@gmail.com"
+COMPANY_FOOTER = "© 2026 Fatin Penhores. All Rights Reserved."
+
+LOGO_PATH = Path(__file__).parent / "assets" / "logo.jpg"
 
 
 def _styles():
     base = getSampleStyleSheet()
     return {
-        "Brand": ParagraphStyle(
-            "BrandX", parent=base["Title"], fontName="Helvetica-Bold",
-            fontSize=18, textColor=colors.HexColor("#2F4F4F"), spaceAfter=2,
-        ),
-        "Sub": ParagraphStyle(
-            "SubX", parent=base["Normal"], fontSize=9,
-            textColor=colors.HexColor("#57534E"), spaceAfter=2,
-        ),
-        "DocTitle": ParagraphStyle(
-            "DocTitle", parent=base["Title"], fontName="Helvetica-Bold",
-            fontSize=15, alignment=1, textColor=colors.HexColor("#1C1917"),
-            spaceBefore=12, spaceAfter=10,
-        ),
-        "Article": ParagraphStyle(
-            "Article", parent=base["Heading3"], fontName="Helvetica-Bold",
-            fontSize=10, textColor=colors.HexColor("#2F4F4F"),
-            spaceBefore=10, spaceAfter=4,
-        ),
-        "Body": ParagraphStyle(
-            "BodyX", parent=base["Normal"], fontSize=9.5,
-            textColor=colors.HexColor("#1C1917"), leading=13,
-            spaceAfter=4,
-        ),
-        "Small": ParagraphStyle(
-            "Sml", parent=base["Normal"], fontSize=8,
-            textColor=colors.HexColor("#57534E"),
-        ),
-        "Center": ParagraphStyle(
-            "Center", parent=base["Normal"], fontSize=9, alignment=1,
-            textColor=colors.HexColor("#1C1917"),
-        ),
+        "Brand": ParagraphStyle("BrandX", parent=base["Title"], fontName="Helvetica-Bold",
+                                fontSize=15, textColor=NAVY, spaceAfter=2, leading=18),
+        "Sub": ParagraphStyle("SubX", parent=base["Normal"], fontSize=8.5,
+                              textColor=MUTED, spaceAfter=2, leading=11),
+        "DocTitle": ParagraphStyle("DocTitle", parent=base["Title"], fontName="Helvetica-Bold",
+                                   fontSize=14, alignment=1, textColor=INK,
+                                   spaceBefore=8, spaceAfter=10),
+        "Article": ParagraphStyle("Article", parent=base["Heading3"], fontName="Helvetica-Bold",
+                                  fontSize=10, textColor=NAVY,
+                                  spaceBefore=10, spaceAfter=4),
+        "Body": ParagraphStyle("BodyX", parent=base["Normal"], fontSize=9.5,
+                               textColor=INK, leading=13, spaceAfter=4),
+        "Small": ParagraphStyle("Sml", parent=base["Normal"], fontSize=8,
+                                textColor=MUTED),
+        "Center": ParagraphStyle("Center", parent=base["Normal"], fontSize=9, alignment=1,
+                                 textColor=INK),
+        "FooterText": ParagraphStyle("Ft", parent=base["Normal"], fontSize=7.5,
+                                     textColor=MUTED, alignment=1),
     }
 
 
@@ -55,8 +62,64 @@ def _money(v):
     return f"USD ${float(v or 0):,.2f}"
 
 
-def _header_table(s, contract: dict, client: dict, total_due: float):
-    """Top summary box matching sample layout."""
+def _logo_flowable(width_cm=2.4):
+    if LOGO_PATH.exists():
+        try:
+            img = RLImage(str(LOGO_PATH))
+            ratio = img.imageWidth / max(img.imageHeight, 1)
+            w = width_cm * cm
+            img.drawWidth = w
+            img.drawHeight = w / ratio if ratio else w
+            return img
+        except Exception:
+            return None
+    return None
+
+
+def _branded_header(s):
+    """Logo + company info table, with a navy underline."""
+    logo = _logo_flowable() or Paragraph("<b>FP</b>", s["Brand"])
+    company = [
+        Paragraph(COMPANY_NAME, s["Brand"]),
+        Paragraph(COMPANY_ADDR, s["Small"]),
+        Paragraph(f"{COMPANY_TEL}  ·  {COMPANY_EMAIL}", s["Small"]),
+    ]
+    t = Table([[logo, company]], colWidths=[3.2 * cm, 13.6 * cm])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (0, 0), (-1, -1), 1.0, NAVY),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return t
+
+
+def _on_page(canvas, doc):
+    """Canvas hook: draws a thin navy bar on left edge + footer line + footer text."""
+    width, height = doc.pagesize
+    canvas.saveState()
+    # Left brand accent (thin navy bar)
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, 0, 6, height, fill=1, stroke=0)
+    # Silver thin accent
+    canvas.setFillColor(SILVER)
+    canvas.rect(6, 0, 2, height, fill=1, stroke=0)
+    # Footer rule
+    canvas.setStrokeColor(NAVY)
+    canvas.setLineWidth(0.6)
+    canvas.line(1.8 * cm, 1.2 * cm, width - 1.8 * cm, 1.2 * cm)
+    # Footer text
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(MUTED)
+    canvas.drawCentredString(width / 2, 0.9 * cm, COMPANY_FOOTER)
+    canvas.drawString(1.8 * cm, 0.55 * cm, f"{COMPANY_NAME} · {COMPANY_ADDR}")
+    canvas.drawRightString(width - 1.8 * cm, 0.55 * cm, f"{COMPANY_TEL} · {COMPANY_EMAIL}")
+    # Page number
+    canvas.drawRightString(width - 1.8 * cm, 0.9 * cm, f"Page {doc.page}")
+    canvas.restoreState()
+
+
+def _header_box(s, contract: dict, client: dict, total_due: float):
     money = _money
     item_kind = contract.get("item_type", "").lower()
     type_label_map = {"car": "VEHICLE - CAR", "motorcycle": "VEHICLE - MOTORCYCLE", "electronic": "ELECTRONIC"}
@@ -77,11 +140,11 @@ def _header_table(s, contract: dict, client: dict, total_due: float):
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
         ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
-        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#57534E")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F4")),
-        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D6D3D1")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("TEXTCOLOR", (2, 0), (2, -1), MUTED),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+        ("BOX", (0, 0), (-1, -1), 0.5, NAVY),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, RULE),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -119,6 +182,7 @@ def _item_table(s, item_kind: str, item: dict, loan: float):
             ["Kondisaun:", item.get("condition") or "—"],
         ]
     rows += [
+        ["Fatin:", item.get("location") or "—"],
         ["Valor Merkadu:", money(item.get("market_value", 0))],
         ["Loan Amount:", money(loan)],
     ]
@@ -126,8 +190,8 @@ def _item_table(s, item_kind: str, item: dict, loan: float):
     t.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, RULE),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -142,7 +206,7 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=1.8 * cm, rightMargin=1.8 * cm,
-        topMargin=1.4 * cm, bottomMargin=1.4 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.6 * cm,
     )
 
     loan = float(contract.get("loan_amount", 0) or 0)
@@ -154,50 +218,34 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     end = contract.get("due_date", "")
 
     story = []
-    # Header band
-    header_tbl = Table([[
-        Paragraph("FATIN PENHOR", s["Brand"]),
-        Paragraph("Phone: +670 XXX XXXX<br/>Email: info@fatinpenhores.tl<br/>Dili, Timor-Leste", s["Small"]),
-    ]], colWidths=[10 * cm, 7 * cm])
-    header_tbl.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.HexColor("#2F4F4F")),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(header_tbl)
+    story.append(_branded_header(s))
     story.append(Paragraph("Pawn Management System · Pawn Agreement Contract", s["Sub"]))
     story.append(Paragraph("KONTRATU PENHOR", s["DocTitle"]))
-
-    # Summary box
-    story.append(_header_table(s, contract, client, total_due))
+    story.append(_header_box(s, contract, client, total_due))
     story.append(Spacer(1, 0.3 * cm))
 
-    # Articles (Tetum)
     story.append(_article(s, "Artigu 1º — Objetu Kontratu", [
         "Kredor fó empréstimu osan ba kliente. Atu garante pagamentu dívida, kliente entrega sasán hanesan garantia penhor."
     ]))
-
     story.append(_article(s, "Artigu 2º — Montante Empréstimu ho Interese", [
         f"Montante empréstimu mak: USD ${loan:,.2f}.",
         f"Taxa interese: {rate:.2f}% kada fulan.",
         f"Prazu kontratu: {start} to'o {end}.",
         f"Total selu inklui interese mak: USD ${total_due:,.2f}.",
     ]))
-
     story.append(_article(s, "Artigu 3º — Interese", [
         f"Kliente konkorda selu interese ho taxa: {rate:.2f}% kada fulan. Interese sei kalkula durante tempu empréstimu.",
         "Maski kliente selu loan iha loron seluk depois data hahu, taxa interese minimu ida sei aplika.",
     ]))
-
     story.append(_article(s, "Artigu 4º — Prazu Kontratu", [
         f"Prazu kontratu hahu husi {start} to'o {end}.",
         "Prazu maximu ida ne'e mak fulan rua (2). Aluga ka ekstensaun bele halo se parte rua konkorda.",
     ]))
 
-    # Item details
     item_label_map = {"car": "Karreta", "motorcycle": "Motorizada", "electronic": "Eletróniku"}
-    story.append(Paragraph(f"Artigu 5º — Deskrisaun Detalhado Sasán Penhor ({item_label_map.get(item_kind, item_kind)})", s["Article"]))
+    story.append(Paragraph(
+        f"Artigu 5º — Deskrisaun Detalhado Sasán Penhor ({item_label_map.get(item_kind, item_kind)})",
+        s["Article"]))
     story.append(_item_table(s, item_kind, item, loan))
 
     story.append(_article(s, "Artigu 6º — Responsabilidade Legal Kliente", [
@@ -230,7 +278,6 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
         "Parte rua deklara katak lee ona kontratu, komprende kondisaun hotu no konkorda voluntariamente.",
     ]))
 
-    # Custom T&C from settings (if any), appended
     tnc_en = (sett.get("terms_and_conditions_en") or "").strip()
     if tnc_en:
         story.append(Paragraph("Additional Terms (English)", s["Article"]))
@@ -239,7 +286,6 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
                 story.append(Paragraph(line.strip(), s["Body"]))
 
     story.append(Spacer(1, 0.8 * cm))
-
     sign = Table(
         [
             ["_______________________", "_______________________", "_______________________"],
@@ -251,12 +297,12 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     sign.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 8.5),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#57534E")),
+        ("TEXTCOLOR", (0, 1), (-1, -1), MUTED),
         ("TOPPADDING", (0, 1), (-1, 1), 2),
     ]))
     story.append(sign)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
 
 
@@ -266,10 +312,10 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=2 * cm, rightMargin=2 * cm,
-        topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.6 * cm,
     )
     story = []
-    story.append(Paragraph("FATIN PENHOR", s["Brand"]))
+    story.append(_branded_header(s))
     story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
     story.append(Spacer(1, 0.3 * cm))
 
@@ -284,11 +330,11 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
         ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9.5),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
-        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#57534E")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F5F4")),
-        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D6D3D1")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("TEXTCOLOR", (2, 0), (2, -1), MUTED),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+        ("BOX", (0, 0), (-1, -1), 0.5, NAVY),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, RULE),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
     ]))
@@ -310,8 +356,8 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     box2.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534E")),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E7E5E4")),
+        ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, RULE),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
     ]))
@@ -326,16 +372,69 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     sign.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#57534E")),
+        ("TEXTCOLOR", (0, 1), (-1, 1), MUTED),
         ("TOPPADDING", (0, 1), (-1, 1), 2),
     ]))
     story.append(sign)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
 
 
-# Default bilingual T&C (kept for back-compat; new PDF embeds Tetum articles directly)
+def build_report_pdf(report_type: str, data: dict) -> bytes:
+    """Branded report PDF used by /api/reports/v2/{type}/export?format=pdf."""
+    from reportlab.lib.pagesizes import landscape
+    s = _styles()
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=landscape(A4),
+        leftMargin=1.2 * cm, rightMargin=1.2 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.6 * cm,
+    )
+    story = [
+        _branded_header(s),
+        Paragraph(f"{report_type.replace('-', ' ').title()} Report", s["DocTitle"]),
+    ]
+    kpi_pairs = [(k.replace("_", " ").title(), str(v))
+                 for k, v in (data.get("kpis") or {}).items() if not isinstance(v, dict)]
+    if kpi_pairs:
+        kpi_tbl = Table([list(pair) for pair in kpi_pairs], colWidths=[5 * cm, 5 * cm])
+        kpi_tbl.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+            ("BOX", (0, 0), (-1, -1), 0.25, NAVY),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, RULE),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(kpi_tbl)
+        story.append(Spacer(1, 0.4 * cm))
+    columns = data.get("columns", [])
+    rows = data.get("rows", [])[:300]
+    if columns:
+        tbl_data = [[c.replace("_", " ").title() for c in columns]]
+        for r in rows:
+            tbl_data.append([str(r.get(c, "") or "") for c in columns])
+        tbl = Table(tbl_data, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
+            ("FONT", (0, 1), (-1, -1), "Helvetica", 7.5),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.2, RULE),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(tbl)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+# Keep default bilingual T&C (used by Settings UI)
 DEFAULT_TNC_EN = """1. The Client pledges the item described above as security for the loan amount stated.
 2. Maximum contract term is 2 months from the contract date.
 3. The Client may repay the loan in full, in part, or pay interest-only at any time within the term.

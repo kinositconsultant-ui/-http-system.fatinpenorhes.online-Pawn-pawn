@@ -139,7 +139,7 @@ export default function Clients() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="bg-[#2F4F4F] hover:bg-[#1D3333]" data-testid="client-new-btn">
+              <Button className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="client-new-btn">
                 <Plus className="w-4 h-4 mr-1" /> {t("new")}
               </Button>
             </DialogTrigger>
@@ -202,7 +202,7 @@ export default function Clients() {
                 <Button variant="outline" onClick={() => setOpen(false)} data-testid="client-cancel">
                   {t("cancel")}
                 </Button>
-                <Button onClick={submit} className="bg-[#2F4F4F] hover:bg-[#1D3333]" data-testid="client-save">
+                <Button onClick={submit} className="bg-[#1B2D5C] hover:bg-[#0F1B3A]" data-testid="client-save">
                   {t("save")}
                 </Button>
               </DialogFooter>
@@ -249,10 +249,10 @@ export default function Clients() {
                 <Td>{r.municipality}</Td>
                 <Td right>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => openDetail(r)} data-testid={`client-view-${r.id}`} className="p-1 hover:text-[#2F4F4F]" title={t("view_details")}>
+                    <button onClick={() => openDetail(r)} data-testid={`client-view-${r.id}`} className="p-1 hover:text-[#1B2D5C]" title={t("view_details")}>
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button onClick={() => edit(r)} data-testid={`client-edit-${r.id}`} className="p-1 hover:text-[#2F4F4F]">
+                    <button onClick={() => edit(r)} data-testid={`client-edit-${r.id}`} className="p-1 hover:text-[#1B2D5C]">
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button onClick={() => remove(r.id)} data-testid={`client-delete-${r.id}`} className="p-1 hover:text-[#993333]">
@@ -375,7 +375,7 @@ export default function Clients() {
                               href={`${API_BASE}/payments/${p.id}/pdf`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[#2F4F4F] hover:underline"
+                              className="inline-flex items-center gap-1 text-[#1B2D5C] hover:underline"
                             >
                               <FileText className="w-3.5 h-3.5" /> PDF
                             </a>

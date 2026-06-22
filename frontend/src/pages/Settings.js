@@ -179,7 +179,7 @@ export default function Settings() {
         <Button
           onClick={save}
           disabled={saving}
-          className="bg-[#2F4F4F] hover:bg-[#1D3333]"
+          className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
           data-testid="settings-save"
         >
           <Save className="w-4 h-4 mr-2" /> {saving ? "…" : t("save")}
