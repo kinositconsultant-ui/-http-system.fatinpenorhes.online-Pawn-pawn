@@ -305,6 +305,7 @@ export default function Contracts() {
               <Th>{t("contract_date")}</Th>
               <Th>{t("due_date")}</Th>
               <Th right>{t("remaining_balance")}</Th>
+              <Th right>{t("penalty")}</Th>
               <Th>{t("status")}</Th>
               <Th right>{t("actions")}</Th>
             </tr>
@@ -325,6 +326,9 @@ export default function Contracts() {
                 <Td>{r.contract_date}</Td>
                 <Td>{r.due_date}</Td>
                 <Td right>${Number(r.remaining_balance ?? 0).toLocaleString()}</Td>
+                <Td right className={Number(r.penalty || 0) > 0 ? "text-[#993333] font-medium" : "text-stone-400"} >
+                  ${Number(r.penalty || 0).toLocaleString()}
+                </Td>
                 <Td>
                   <StatusBadge status={r.status} />
                 </Td>

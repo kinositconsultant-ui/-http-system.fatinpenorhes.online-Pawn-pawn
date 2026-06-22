@@ -985,7 +985,7 @@ async def public_auction_items():
             "model": item.get("model", ""),
             "description": item.get("description", ""),
             "photo_url": item.get("photo_url", ""),
-            "year": item.get("year"),
+            "manufacture_year": item.get("manufacture_year"),
             "category": item.get("category"),
         })
     return out

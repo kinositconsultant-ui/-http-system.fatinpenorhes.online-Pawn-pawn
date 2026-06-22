@@ -74,7 +74,7 @@ export default function AuctionPublic() {
                     </div>
                   </div>
                   <div className="text-xs text-stone-500">
-                    {r.year ? `Y. ${r.year}` : r.category || ""}
+                    {r.manufacture_year ? `Y. ${r.manufacture_year}` : r.category || ""}
                   </div>
                 </div>
               </div>
