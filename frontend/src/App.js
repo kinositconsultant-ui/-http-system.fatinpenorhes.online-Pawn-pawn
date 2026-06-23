@@ -14,6 +14,9 @@ import AuctionPublic from "@/pages/public/AuctionPublic";
 import Warehouse from "@/pages/public/Warehouse";
 import About from "@/pages/public/About";
 import Contact from "@/pages/public/Contact";
+import Services from "@/pages/public/Services";
+import Simulasaun from "@/pages/public/Simulasaun";
+import FAQ from "@/pages/public/FAQ";
 
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -38,9 +41,12 @@ function App() {
               {/* Public site */}
               <Route element={<PublicLayout />}>
                 <Route path="/" element={<Home />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/services" element={<Services />} />
                 <Route path="/auction" element={<AuctionPublic />} />
                 <Route path="/warehouse" element={<Warehouse />} />
-                <Route path="/about" element={<About />} />
+                <Route path="/simulasaun" element={<Simulasaun />} />
+                <Route path="/faq" element={<FAQ />} />
                 <Route path="/contact" element={<Contact />} />
               </Route>
 
