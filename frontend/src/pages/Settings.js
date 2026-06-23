@@ -25,7 +25,7 @@ export default function Settings() {
     setSaving(true);
     try {
       const payload = { ...s };
-      ["interest_rate_car", "interest_rate_motorcycle", "interest_rate_electronic", "reminder_days_before"].forEach(
+      ["interest_rate_car", "interest_rate_motorcycle", "interest_rate_electronic", "interest_rate_pezadu", "reminder_days_before"].forEach(
         (k) => (payload[k] = Number(payload[k]))
       );
       const { data } = await api.put("/settings", payload);
@@ -59,7 +59,7 @@ export default function Settings() {
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
         <h2 className="font-display text-xl">{t("interest_defaults")}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Field label={`${t("car")} %`}>
             <Input
               type="number"
@@ -82,6 +82,14 @@ export default function Settings() {
               value={s.interest_rate_electronic}
               onChange={(e) => onChange("interest_rate_electronic", e.target.value)}
               data-testid="settings-rate-electronic"
+            />
+          </Field>
+          <Field label={`${t("pezadu")} %`}>
+            <Input
+              type="number"
+              value={s.interest_rate_pezadu ?? 10}
+              onChange={(e) => onChange("interest_rate_pezadu", e.target.value)}
+              data-testid="settings-rate-pezadu"
             />
           </Field>
         </div>

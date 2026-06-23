@@ -19,14 +19,24 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "../components/ui/dialog";
-import { Plus, Trash2, Pencil, Car, Bike, Cpu } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
+
+const PEZADU_CATEGORIES = ["forklift", "tractor", "loader", "heavy_duty_truck"];
 
 const KIND_META = {
   car: { Icon: Car, fields: vehicleFields },
   motorcycle: { Icon: Bike, fields: vehicleFields },
   electronic: { Icon: Cpu, fields: electronicFields },
+  pezadu: { Icon: Truck, fields: pezaduFields },
 };
 
 function vehicleFields(t) {
@@ -62,6 +72,32 @@ function electronicFields(t) {
   ];
 }
 
+function pezaduFields(t) {
+  return [
+    {
+      k: "category",
+      label: t("category"),
+      required: true,
+      select: true,
+      options: PEZADU_CATEGORIES.map((c) => ({ value: c, label: t(c) })),
+    },
+    { k: "brand", label: t("brand"), required: true },
+    { k: "model", label: t("model"), required: true },
+    { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
+    { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
+    { k: "color", label: t("color") },
+    { k: "plate", label: t("plate") },
+    { k: "chassis", label: t("chassis") },
+    { k: "serial", label: t("serial") },
+    { k: "operating_hours", label: t("operating_hours"), type: "number" },
+    { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
+    { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
+    { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
+    { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
+    { k: "description", label: t("description"), full: true, textarea: true },
+  ];
+}
+
 function emptyFor(kind) {
   if (kind === "electronic") {
     return {
@@ -71,6 +107,25 @@ function emptyFor(kind) {
       description: "",
       serial: "",
       condition: "",
+      manufacture_year: "",
+      market_value: 0,
+      location: "",
+      photo_url: "",
+      document_url: "",
+    };
+  }
+  if (kind === "pezadu") {
+    return {
+      category: "",
+      brand: "",
+      model: "",
+      description: "",
+      plate: "",
+      chassis: "",
+      serial: "",
+      fuel_percent: 0,
+      color: "",
+      operating_hours: "",
       manufacture_year: "",
       market_value: 0,
       location: "",
@@ -137,6 +192,14 @@ export default function Items() {
             <Cpu className="w-4 h-4 mr-2" />
             {t("electronic")}
           </TabsTrigger>
+          <TabsTrigger
+            value="pezadu"
+            data-testid="items-tab-pezadu"
+            className="data-[state=active]:bg-[#B8860B] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#B8860B] px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            <Truck className="w-4 h-4 mr-2" />
+            {t("pezadu")}
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="car">
           <ItemTable kind="car" />
@@ -146,6 +209,9 @@ export default function Items() {
         </TabsContent>
         <TabsContent value="electronic">
           <ItemTable kind="electronic" />
+        </TabsContent>
+        <TabsContent value="pezadu">
+          <ItemTable kind="pezadu" />
         </TabsContent>
       </Tabs>
     </div>
@@ -157,6 +223,7 @@ const KIND_THEME = {
   car: { bar: "bg-[#1B2D5C]", soft: "bg-[#1B2D5C]/5", border: "border-[#1B2D5C]/20", text: "text-[#1B2D5C]", label: "Car" },
   motorcycle: { bar: "bg-[#C17767]", soft: "bg-[#C17767]/5", border: "border-[#C17767]/20", text: "text-[#C17767]", label: "Motorcycle" },
   electronic: { bar: "bg-[#4C7F62]", soft: "bg-[#4C7F62]/5", border: "border-[#4C7F62]/20", text: "text-[#4C7F62]", label: "Electronic" },
+  pezadu: { bar: "bg-[#B8860B]", soft: "bg-[#B8860B]/5", border: "border-[#B8860B]/20", text: "text-[#B8860B]", label: "Pezadu" },
 };
 
 function ItemTable({ kind }) {
@@ -285,6 +352,22 @@ function ItemTable({ kind }) {
                       onChange={(e) => onChange(f.k, e.target.value)}
                       data-testid={`item-${kind}-${f.k}`}
                     />
+                  ) : f.select ? (
+                    <Select
+                      value={form[f.k] || ""}
+                      onValueChange={(v) => onChange(f.k, v)}
+                    >
+                      <SelectTrigger data-testid={`item-${kind}-${f.k}`}>
+                        <SelectValue placeholder={t("select") || "Select"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {f.options.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <Input
                       type={f.type || "text"}
@@ -344,6 +427,8 @@ function ItemTable({ kind }) {
                     <td key={f.k} className="px-3 py-2.5 whitespace-nowrap text-stone-800">
                       {f.k === "market_value" && r[f.k] != null
                         ? `$${Number(r[f.k]).toLocaleString()}`
+                        : f.select && r[f.k]
+                        ? f.options.find((o) => o.value === r[f.k])?.label || r[f.k]
                         : r[f.k] ?? "—"}
                     </td>
                   ))}

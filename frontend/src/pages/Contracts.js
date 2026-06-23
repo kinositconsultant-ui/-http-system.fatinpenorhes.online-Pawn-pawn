@@ -33,33 +33,35 @@ const blank = {
   notes: "",
 };
 
-const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15 };
+const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15, pezadu: 10 };
 
 export default function Contracts() {
   const { t } = useLang();
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
-  const [itemsByKind, setItemsByKind] = useState({ car: [], motorcycle: [], electronic: [] });
+  const [itemsByKind, setItemsByKind] = useState({ car: [], motorcycle: [], electronic: [], pezadu: [] });
   const [defaults, setDefaults] = useState(DEFAULT_RATE_FALLBACK);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
 
   const load = async () => {
-    const [c, cl, cars, mc, el, s] = await Promise.all([
+    const [c, cl, cars, mc, el, pz, s] = await Promise.all([
       api.get("/contracts"),
       api.get("/clients"),
       api.get("/items/car"),
       api.get("/items/motorcycle"),
       api.get("/items/electronic"),
+      api.get("/items/pezadu"),
       api.get("/settings"),
     ]);
     setRows(c.data);
     setClients(cl.data);
-    setItemsByKind({ car: cars.data, motorcycle: mc.data, electronic: el.data });
+    setItemsByKind({ car: cars.data, motorcycle: mc.data, electronic: el.data, pezadu: pz.data });
     setDefaults({
       car: s.data.interest_rate_car ?? 10,
       motorcycle: s.data.interest_rate_motorcycle ?? 15,
       electronic: s.data.interest_rate_electronic ?? 15,
+      pezadu: s.data.interest_rate_pezadu ?? 10,
     });
     // align default if dialog is closed (will be applied when opening)
   };
@@ -223,6 +225,7 @@ export default function Contracts() {
                       <SelectItem value="car">{t("car")}</SelectItem>
                       <SelectItem value="motorcycle">{t("motorcycle")}</SelectItem>
                       <SelectItem value="electronic">{t("electronic")}</SelectItem>
+                      <SelectItem value="pezadu">{t("pezadu")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select

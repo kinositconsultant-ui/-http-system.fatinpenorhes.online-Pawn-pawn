@@ -186,6 +186,7 @@ export default function Reports() {
                 <SelectItem value="car">{t("car")}</SelectItem>
                 <SelectItem value="motorcycle">{t("motorcycle")}</SelectItem>
                 <SelectItem value="electronic">{t("electronic")}</SelectItem>
+                <SelectItem value="pezadu">{t("pezadu")}</SelectItem>
               </SelectContent>
             </Select>
           </FilterField>

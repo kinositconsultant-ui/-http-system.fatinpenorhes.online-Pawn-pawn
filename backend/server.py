@@ -304,8 +304,11 @@ async def delete_client(cid: str, _: dict = Depends(require_admin)):
 # =====================================================================
 # Items — separate collections for car / motorcycle / electronic
 # =====================================================================
-ITEM_KINDS = {"car", "motorcycle", "electronic"}
-COLLECTION_MAP = {"car": "cars", "motorcycle": "motorcycles", "electronic": "electronics"}
+ITEM_KINDS = {"car", "motorcycle", "electronic", "pezadu"}
+COLLECTION_MAP = {"car": "cars", "motorcycle": "motorcycles", "electronic": "electronics", "pezadu": "pezadus"}
+
+
+PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
 
 
 class CarIn(BaseModel):
@@ -352,8 +355,31 @@ class ElectronicIn(BaseModel):
     document_url: str = ""
 
 
+class PezaduIn(BaseModel):
+    category: str  # forklift / tractor / loader / heavy_duty_truck
+    brand: str
+    model: str
+    description: str = ""
+    plate: str = ""
+    chassis: str = ""
+    serial: str = ""
+    fuel_percent: int = 0
+    color: str = ""
+    operating_hours: Optional[int] = None
+    manufacture_year: Optional[int] = None
+    market_value: float = 0.0
+    location: str = ""
+    photo_url: str = ""
+    document_url: str = ""
+
+
 def _item_model(kind: str):
-    return {"car": CarIn, "motorcycle": MotorcycleIn, "electronic": ElectronicIn}[kind]
+    return {
+        "car": CarIn,
+        "motorcycle": MotorcycleIn,
+        "electronic": ElectronicIn,
+        "pezadu": PezaduIn,
+    }[kind]
 
 
 @api.get("/items/{kind}")
@@ -432,6 +458,7 @@ DEFAULT_SETTINGS = {
     "interest_rate_car": 10,
     "interest_rate_motorcycle": 15,
     "interest_rate_electronic": 15,
+    "interest_rate_pezadu": 10,
     "terms_and_conditions_en": DEFAULT_TNC_EN,
     "terms_and_conditions_tet": DEFAULT_TNC_TET,
     "whatsapp_template_en": "due_date_reminder",
@@ -456,6 +483,7 @@ class SettingsIn(BaseModel):
     interest_rate_car: int = 10
     interest_rate_motorcycle: int = 15
     interest_rate_electronic: int = 15
+    interest_rate_pezadu: int = 10
     terms_and_conditions_en: str = ""
     terms_and_conditions_tet: str = ""
     whatsapp_template_en: str = ""
@@ -490,7 +518,7 @@ async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)
 class ContractIn(BaseModel):
     client_id: str
     item_id: str
-    item_type: Literal["car", "motorcycle", "electronic"]
+    item_type: Literal["car", "motorcycle", "electronic", "pezadu"]
     loan_amount: float
     interest_rate: Optional[Literal[10, 15]] = None  # derived from settings by item_type when omitted
     contract_date: str  # YYYY-MM-DD
@@ -631,6 +659,7 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
             "car": sett.get("interest_rate_car", 10),
             "motorcycle": sett.get("interest_rate_motorcycle", 15),
             "electronic": sett.get("interest_rate_electronic", 15),
+            "pezadu": sett.get("interest_rate_pezadu", 10),
         }
         doc["interest_rate"] = defaults[payload.item_type]
     doc["id"] = new_id()
@@ -1283,6 +1312,7 @@ async def _report_inventory(filters: dict) -> dict:
         "car": sum(1 for r in out_rows if r["kind"] == "car"),
         "motorcycle": sum(1 for r in out_rows if r["kind"] == "motorcycle"),
         "electronic": sum(1 for r in out_rows if r["kind"] == "electronic"),
+        "pezadu": sum(1 for r in out_rows if r["kind"] == "pezadu"),
     }
     return {
         "kpis": {
@@ -1921,7 +1951,7 @@ async def dashboard_trends(_: dict = Depends(get_current_user)):
         for v in by_month.values()
     ]
     # Overdue counts grouped by status snapshot per item type
-    by_type = {"car": 0, "motorcycle": 0, "electronic": 0}
+    by_type = {"car": 0, "motorcycle": 0, "electronic": 0, "pezadu": 0}
     today_iso = _today_iso()
     for c in contracts:
         if c.get("status") in ("redeemed", "sold"):

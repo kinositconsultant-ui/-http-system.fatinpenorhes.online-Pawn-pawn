@@ -202,6 +202,16 @@ const dict = {
     all_categories: "All Categories",
     invoice_register: "Invoice Register",
     finance_summary: "Finance Summary",
+    // Pezadu (heavy equipment)
+    pezadu: "Heavy Equipment",
+    pezadus: "Heavy Equipment",
+    forklift: "Forklift",
+    tractor: "Tractor",
+    loader: "Loader",
+    heavy_duty_truck: "Heavy Duty Truck",
+    serial: "Serial No.",
+    operating_hours: "Operating Hours",
+    select: "Select",
   },
   tet: {
     tagline: "Kaza Penhór no Leilaun ne'ebé Fiar",
@@ -393,6 +403,16 @@ const dict = {
     all_categories: "Kategoría Hotu",
     invoice_register: "Rejistu Resibu",
     finance_summary: "Sumáriu Finanseiru",
+    // Pezadu (ekipamentu tonel)
+    pezadu: "Pezadu",
+    pezadus: "Pezadu",
+    forklift: "Forklift",
+    tractor: "Traktór",
+    loader: "Loader",
+    heavy_duty_truck: "Kamiaun Pezadu",
+    serial: "Nú Série",
+    operating_hours: "Oras Operasaun",
+    select: "Hili",
   },
 };
 
