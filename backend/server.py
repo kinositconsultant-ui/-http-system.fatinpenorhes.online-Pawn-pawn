@@ -496,20 +496,40 @@ class SettingsIn(BaseModel):
 @api.get("/settings")
 async def settings_get(_: dict = Depends(get_current_user)):
     s = await get_settings_doc()
-    # do not return token to non-admins
+    # Mask the encrypted token before returning to the client; never expose plaintext
+    from encryption import mask_token, is_configured as _is_configured
+    enc = s.get("whatsapp_token", "")
+    s["whatsapp_token"] = ""
+    s["whatsapp_token_masked"] = mask_token(enc)
+    s["whatsapp_connected"] = _is_configured(enc) and bool(s.get("whatsapp_phone_id"))
     return s
 
 
 @api.put("/settings")
 async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)):
+    from encryption import encrypt_token
     update = payload.model_dump()
+    # Token handling: empty string = preserve existing, masked placeholder = preserve, otherwise re-encrypt
+    new_token = (update.get("whatsapp_token") or "").strip()
+    if new_token and "•" not in new_token:
+        update["whatsapp_token"] = encrypt_token(new_token)
+    else:
+        update.pop("whatsapp_token", None)
     await db.settings.update_one(
         {"id": "singleton"},
         {"$set": update},
         upsert=True,
     )
-    await write_audit(admin, "update", "settings", "singleton", update)
-    return await get_settings_doc()
+    await write_audit(admin, "update", "settings", "singleton", {k: ("***" if k == "whatsapp_token" else v) for k, v in update.items()})
+    return await settings_get(_=admin)
+
+
+async def _decrypted_settings() -> dict:
+    """Internal: return settings with whatsapp_token decrypted, for backend use only."""
+    from encryption import decrypt_token
+    s = await get_settings_doc()
+    s["whatsapp_token"] = decrypt_token(s.get("whatsapp_token", ""))
+    return s
 
 
 # =====================================================================
@@ -2083,7 +2103,7 @@ async def whatsapp_send(payload: WhatsAppSendIn, user: dict = Depends(get_curren
     if not c:
         raise HTTPException(status_code=404, detail="Contract not found")
     c = await _recompute_contract_status(c)
-    settings = await get_settings_doc()
+    settings = await _decrypted_settings()
     result = await _send_reminder_for_contract(c, payload.language, settings, user)
     await write_audit(user, "whatsapp_send", "contract", c["id"], {"result_status": result.get("status")})
     return result
@@ -2092,7 +2112,7 @@ async def whatsapp_send(payload: WhatsAppSendIn, user: dict = Depends(get_curren
 @api.post("/whatsapp/reminders/run")
 async def whatsapp_reminders_run(language: str = Query("en"), user: dict = Depends(require_not_cashier)):
     """Send reminders to all contracts due in N days or overdue (not yet redeemed/auctioned)."""
-    settings = await get_settings_doc()
+    settings = await _decrypted_settings()
     days_before = int(settings.get("reminder_days_before", 3))
     today = date.today()
     target_due = (today + timedelta(days=days_before)).isoformat()
@@ -2109,6 +2129,42 @@ async def whatsapp_reminders_run(language: str = Query("en"), user: dict = Depen
             r = await _send_reminder_for_contract(c, language, settings, user)
             sent.append({"contract_number": c.get("contract_number"), "result": r.get("status")})
     return {"count": len(sent), "sent": sent}
+
+
+class WhatsAppTestIn(BaseModel):
+    to_phone: str
+    body: str = ""
+
+
+@api.post("/whatsapp/test")
+async def whatsapp_test(payload: WhatsAppTestIn, admin: dict = Depends(require_admin)):
+    """Send a free-form text WhatsApp message to verify Meta API credentials.
+
+    NOTE: Meta only allows free-form text inside the 24-hour service window.
+    For a brand-new conversation, you must send a template message first.
+    """
+    from whatsapp import send_text
+    settings = await _decrypted_settings()
+    if not (settings.get("whatsapp_token") and settings.get("whatsapp_phone_id")):
+        raise HTTPException(status_code=400, detail="WhatsApp not configured. Save Phone Number ID and Access Token first.")
+    body = payload.body.strip() or "✅ Test message from Fatin Penhores — Meta WhatsApp Cloud API is connected."
+    result = await send_text(payload.to_phone, body, settings)
+    await db.whatsapp_log.insert_one({
+        "contract_id": None,
+        "to": result.get("to"),
+        "template": "(text test)",
+        "language": "en",
+        "parameters": [body[:200]],
+        "status": result.get("status"),
+        "meta_message_id": result.get("meta_message_id"),
+        "error": result.get("error"),
+        "raw": result,
+        "created_at": utcnow_iso(),
+    })
+    await write_audit(admin, "whatsapp_test", "settings", "whatsapp", {"to": result.get("to"), "status": result.get("status")})
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result)
+    return result
 
 
 @api.get("/whatsapp/logs")
