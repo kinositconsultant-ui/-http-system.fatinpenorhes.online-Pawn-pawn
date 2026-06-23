@@ -484,6 +484,7 @@ class SettingsIn(BaseModel):
     interest_rate_motorcycle: int = 15
     interest_rate_electronic: int = 15
     interest_rate_pezadu: int = 10
+    warehouse_password: str = ""
     terms_and_conditions_en: str = ""
     terms_and_conditions_tet: str = ""
     whatsapp_template_en: str = ""
@@ -502,12 +503,16 @@ async def settings_get(_: dict = Depends(get_current_user)):
     s["whatsapp_token"] = ""
     s["whatsapp_token_masked"] = mask_token(enc)
     s["whatsapp_connected"] = _is_configured(enc) and bool(s.get("whatsapp_phone_id"))
+    # Warehouse lock status — do not expose the hash
+    s["warehouse_locked"] = bool(s.pop("warehouse_password_hash", None))
+    s["warehouse_password"] = ""
     return s
 
 
 @api.put("/settings")
 async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)):
     from encryption import encrypt_token
+    from auth import hash_password
     update = payload.model_dump()
     # Token handling: empty string = preserve existing, masked placeholder = preserve, otherwise re-encrypt
     new_token = (update.get("whatsapp_token") or "").strip()
@@ -515,12 +520,16 @@ async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)
         update["whatsapp_token"] = encrypt_token(new_token)
     else:
         update.pop("whatsapp_token", None)
+    # Warehouse password: empty = preserve existing, otherwise hash
+    new_pwd = (update.pop("warehouse_password", "") or "").strip()
+    if new_pwd:
+        update["warehouse_password_hash"] = hash_password(new_pwd)
     await db.settings.update_one(
         {"id": "singleton"},
         {"$set": update},
         upsert=True,
     )
-    await write_audit(admin, "update", "settings", "singleton", {k: ("***" if k == "whatsapp_token" else v) for k, v in update.items()})
+    await write_audit(admin, "update", "settings", "singleton", {k: ("***" if k in ("whatsapp_token", "warehouse_password_hash") else v) for k, v in update.items()})
     return await settings_get(_=admin)
 
 
@@ -1613,8 +1622,14 @@ async def public_auction_items():
 
 
 @api.get("/public/warehouse")
-async def public_warehouse():
-    """Items currently held (pawned but still in stock) — shown to public as inventory teaser."""
+async def public_warehouse(unlock_token: str = Query(...)):
+    """Items currently held — gated by warehouse password.
+
+    Frontend exchanges the user-entered password for a short-lived token via
+    /api/public/warehouse-unlock; that token must be passed here.
+    """
+    if not _warehouse_token_valid(unlock_token):
+        raise HTTPException(status_code=401, detail="Warehouse is locked")
     out = []
     for kind, coll in COLLECTION_MAP.items():
         items = await db[coll].find(
@@ -1630,6 +1645,53 @@ async def public_warehouse():
                 "photo_url": it.get("photo_url", ""),
             })
     return out
+
+
+class WarehouseUnlockIn(BaseModel):
+    password: str
+
+
+@api.post("/public/warehouse-unlock")
+async def public_warehouse_unlock(payload: WarehouseUnlockIn):
+    s = await get_settings_doc()
+    hashed = s.get("warehouse_password_hash", "")
+    if not hashed:
+        # Not configured → leave open for backwards compat; admins should set one
+        return {"ok": True, "token": _issue_warehouse_token(), "configured": False}
+    from auth import verify_password
+    if not verify_password(payload.password, hashed):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    return {"ok": True, "token": _issue_warehouse_token(), "configured": True}
+
+
+@api.get("/public/warehouse-status")
+async def public_warehouse_status():
+    s = await get_settings_doc()
+    return {"locked": bool(s.get("warehouse_password_hash"))}
+
+
+def _issue_warehouse_token() -> str:
+    """Sign a short-lived JWT (24h) for warehouse access."""
+    import jwt
+    from datetime import datetime, timezone, timedelta
+    from auth import get_jwt_secret, JWT_ALGORITHM
+    payload = {
+        "scope": "warehouse",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=24),
+    }
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def _warehouse_token_valid(tok: str) -> bool:
+    if not tok:
+        return False
+    try:
+        from auth import decode_token
+        data = decode_token(tok)
+        return data.get("scope") == "warehouse"
+    except Exception:  # noqa: BLE001
+        return False
+
 
 
 class ContactIn(BaseModel):

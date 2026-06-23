@@ -31,6 +31,7 @@ export default function Settings() {
       // strip server-only flags
       delete payload.whatsapp_token_masked;
       delete payload.whatsapp_connected;
+      delete payload.warehouse_locked;
       ["interest_rate_car", "interest_rate_motorcycle", "interest_rate_electronic", "interest_rate_pezadu", "reminder_days_before"].forEach(
         (k) => (payload[k] = Number(payload[k]))
       );
@@ -143,6 +144,37 @@ export default function Settings() {
               value={s.terms_and_conditions_tet}
               onChange={(e) => onChange("terms_and_conditions_tet", e.target.value)}
               data-testid="settings-tnc-tet"
+            />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="font-display text-xl">Public Warehouse Access</h2>
+          {s.warehouse_locked ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+              🔒 Locked — password required
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              🔓 Open to public
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-stone-600">
+          When set, visitors must enter this password before they can view the public Warehouse page.
+          Leave empty to keep current value. Share the password only with people you trust.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label={s.warehouse_locked ? "New warehouse password (leave empty to keep current)" : "Set warehouse password"}>
+            <Input
+              type="password"
+              value={s.warehouse_password || ""}
+              onChange={(e) => onChange("warehouse_password", e.target.value)}
+              data-testid="settings-warehouse-password"
+              placeholder={s.warehouse_locked ? "•••••••• (already set)" : "Choose a password"}
+              autoComplete="new-password"
             />
           </Field>
         </div>
