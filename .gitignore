@@ -98,3 +98,11 @@ credentials.json
 *.key
 .credentials
 frontend/node_modules/.cache/default-development/21.pack
+
+# Migration backup artifacts (NEVER commit — contains client PII)
+backups/
+/app/backups/
+*.zip
+mongodb-backup-*
+uploads-backup-*
+env-template.txt
