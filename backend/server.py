@@ -2256,6 +2256,22 @@ async def list_backups(_: dict = Depends(require_admin)):
     return items
 
 
+@api.post("/admin/backups/generate")
+async def generate_backup(admin: dict = Depends(require_admin)):
+    """Run the backup script and return the resulting file list."""
+    import subprocess
+    import os
+    env = os.environ.copy()
+    proc = subprocess.run(
+        ["python3", "/app/scripts/build_backup.py"],
+        capture_output=True, text=True, env=env, cwd="/app", timeout=300,
+    )
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail={"stderr": proc.stderr[-2000:], "stdout": proc.stdout[-2000:]})
+    await write_audit(admin, "backup", "system", "all", {"stdout_tail": proc.stdout[-500:]})
+    return await list_backups(_=admin)  # type: ignore[arg-type]
+
+
 @api.get("/admin/backups/{name}")
 async def download_backup(name: str, _: dict = Depends(require_admin)):
     """Stream a backup artifact for download. Admin-only."""

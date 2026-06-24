@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Card } from "../components/ui/card";
 import { toast } from "sonner";
-import { Save, Send } from "lucide-react";
+import { Save, Send, Download, Database, RefreshCw } from "lucide-react";
 
 export default function Settings() {
   const { t } = useLang();
@@ -17,9 +17,12 @@ export default function Settings() {
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("");
   const [testing, setTesting] = useState(false);
+  const [backups, setBackups] = useState([]);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     api.get("/settings").then((r) => setS(r.data));
+    api.get("/admin/backups").then((r) => setBackups(r.data)).catch(() => {});
   }, []);
 
   const onChange = (k, v) => setS((cur) => ({ ...cur, [k]: v }));
@@ -79,6 +82,38 @@ export default function Settings() {
     }
     setTesting(false);
   };
+
+  const generateBackup = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await api.post("/admin/backups/generate");
+      setBackups(data);
+      toast.success("Fresh backup generated");
+    } catch (e) {
+      toast.error(typeof e.response?.data?.detail === "string"
+        ? e.response.data.detail
+        : "Backup failed — check backend logs");
+    }
+    setGenerating(false);
+  };
+
+  const fmtSize = (b) => {
+    if (b > 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+    if (b > 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${b} B`;
+  };
+  const fmtAge = (iso) => {
+    const ms = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min} min ago`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h} h ago`;
+    return `${Math.floor(h / 24)} days ago`;
+  };
+  const latestBackupAt = backups.length
+    ? backups.reduce((latest, b) => (b.modified > latest ? b.modified : latest), backups[0].modified)
+    : null;
 
   if (!s) return <div className="text-stone-500">Loading…</div>;
 
@@ -298,6 +333,102 @@ export default function Settings() {
               <Send className="w-4 h-4 mr-1" /> {testing ? "Sending…" : "Send Test"}
             </Button>
           </div>
+        </div>
+      </Card>
+
+      {/* Backups & Migration */}
+      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Database className="w-5 h-5 text-[#1B2D5C]" />
+            <h2 className="font-display text-xl">Backups &amp; Migration</h2>
+            {latestBackupAt && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                Last backup: {fmtAge(latestBackupAt)}
+              </span>
+            )}
+          </div>
+          <Button
+            onClick={generateBackup}
+            disabled={generating}
+            className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2"
+            data-testid="settings-generate-backup"
+          >
+            <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
+            {generating ? "Generating…" : "Generate Fresh Backup"}
+          </Button>
+        </div>
+        <p className="text-sm text-stone-600">
+          Generate a complete snapshot of your database, uploaded files (item photos, client documents),
+          and a sanitized <code className="text-xs bg-stone-100 px-1 rounded">.env</code> template.
+          Download the artifacts before migrating to your own server and keep them in a safe place
+          (encrypted folder or password-protected cloud storage).
+        </p>
+
+        {backups.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
+            No backups yet — click <strong>Generate Fresh Backup</strong> above to create your first snapshot.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-stone-200 overflow-hidden">
+            <table className="min-w-full text-sm" data-testid="backups-table">
+              <thead className="bg-stone-50 text-left">
+                <tr>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">File</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Size</th>
+                  <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Created</th>
+                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((b) => {
+                  const isZip = b.name.endsWith(".zip");
+                  const description = b.name.startsWith("mongodb")
+                    ? "Database dump (clients, contracts, payments, items, settings, …)"
+                    : b.name.startsWith("uploads")
+                    ? "Uploaded photos & client documents (with MANIFEST.json)"
+                    : b.name === "env-template.txt"
+                    ? "Production .env template — placeholders only"
+                    : b.name === "collections.txt"
+                    ? "List of all collections with document counts"
+                    : b.name === "README.md"
+                    ? "Restore instructions for your server"
+                    : "";
+                  return (
+                    <tr key={b.name} className="border-t border-stone-100 hover:bg-stone-50/50" data-testid={`backup-row-${b.name}`}>
+                      <td className="px-3 py-3">
+                        <div className="font-medium text-[#1B2D5C] flex items-center gap-2">
+                          {isZip ? "📦" : b.name.endsWith(".md") ? "📖" : "📄"} {b.name}
+                        </div>
+                        {description && (
+                          <div className="text-xs text-stone-500 mt-0.5">{description}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap text-stone-700">{fmtSize(b.size)}</td>
+                      <td className="px-3 py-3 whitespace-nowrap text-stone-500">{fmtAge(b.modified)}</td>
+                      <td className="px-3 py-3 text-right">
+                        <a
+                          href={pdfUrl(`/admin/backups/${encodeURIComponent(b.name)}`)}
+                          data-testid={`backup-download-${b.name}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#1B2D5C] text-white text-xs font-semibold hover:bg-[#0F1B3A] transition-colors whitespace-nowrap"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Download
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="text-xs uppercase tracking-wider font-semibold text-amber-800 mb-1">⚠️ Security reminder</div>
+          <p className="text-xs text-amber-800">
+            The MongoDB dump contains every client&apos;s personal data (BI/passport numbers, phone, address).
+            Treat these files as <strong>confidential</strong> — store them encrypted, never commit to GitHub.
+          </p>
         </div>
       </Card>
 
