@@ -2272,6 +2272,16 @@ async def generate_backup(admin: dict = Depends(require_admin)):
     return await list_backups(_=admin)  # type: ignore[arg-type]
 
 
+@api.get("/admin/backups/schedule")
+async def backup_schedule(_: dict = Depends(require_admin)):
+    """Return APScheduler status for the daily backup job."""
+    try:
+        from scheduler import next_run_info
+        return next_run_info()
+    except Exception as e:  # noqa: BLE001
+        return {"running": False, "error": str(e)}
+
+
 @api.get("/admin/backups/{name}")
 async def download_backup(name: str, _: dict = Depends(require_admin)):
     """Stream a backup artifact for download. Admin-only."""
@@ -2377,7 +2387,19 @@ async def on_startup():
         )
         logger.info(f"Updated admin password for: {admin_email}")
 
+    # Daily scheduled tasks (backup + prune)
+    try:
+        from scheduler import start_scheduler
+        start_scheduler()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Scheduler did not start: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    try:
+        from scheduler import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception:  # noqa: BLE001
+        pass
     client.close()

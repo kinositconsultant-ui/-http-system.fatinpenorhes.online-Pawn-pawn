@@ -19,10 +19,12 @@ export default function Settings() {
   const [testing, setTesting] = useState(false);
   const [backups, setBackups] = useState([]);
   const [generating, setGenerating] = useState(false);
+  const [schedule, setSchedule] = useState(null);
 
   useEffect(() => {
     api.get("/settings").then((r) => setS(r.data));
     api.get("/admin/backups").then((r) => setBackups(r.data)).catch(() => {});
+    api.get("/admin/backups/schedule").then((r) => setSchedule(r.data)).catch(() => {});
   }, []);
 
   const onChange = (k, v) => setS((cur) => ({ ...cur, [k]: v }));
@@ -364,6 +366,23 @@ export default function Settings() {
           Download the artifacts before migrating to your own server and keep them in a safe place
           (encrypted folder or password-protected cloud storage).
         </p>
+
+        {schedule?.running && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between flex-wrap gap-2 text-sm" data-testid="backup-schedule-info">
+            <div className="flex items-center gap-2 text-emerald-800">
+              <span className="text-emerald-600">●</span>
+              <span>
+                <strong>Auto-backup enabled.</strong> Runs daily at <strong>02:00 UTC</strong> and keeps the
+                last <strong>{schedule.retention}</strong> snapshots.
+              </span>
+            </div>
+            {schedule.next_run_at && (
+              <span className="text-emerald-700 text-xs">
+                Next run: {new Date(schedule.next_run_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+        )}
 
         {backups.length === 0 ? (
           <div className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">
