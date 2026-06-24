@@ -2235,6 +2235,53 @@ async def whatsapp_logs(_: dict = Depends(get_current_user)):
 
 
 # =====================================================================
+# Admin: backup downloads
+# =====================================================================
+@api.get("/admin/backups")
+async def list_backups(_: dict = Depends(require_admin)):
+    """List all backup artifacts in /app/backups/."""
+    import os
+    folder = "/app/backups"
+    if not os.path.isdir(folder):
+        return []
+    items = []
+    for name in sorted(os.listdir(folder)):
+        p = os.path.join(folder, name)
+        if os.path.isfile(p):
+            items.append({
+                "name": name,
+                "size": os.path.getsize(p),
+                "modified": datetime.fromtimestamp(os.path.getmtime(p), tz=timezone.utc).isoformat(),
+            })
+    return items
+
+
+@api.get("/admin/backups/{name}")
+async def download_backup(name: str, _: dict = Depends(require_admin)):
+    """Stream a backup artifact for download. Admin-only."""
+    import os
+    import re
+    if not re.match(r"^[\w.\-]+$", name):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = os.path.join("/app/backups", name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    media = "application/zip" if name.endswith(".zip") else "text/plain; charset=utf-8"
+    def _iter():
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+    return StreamingResponse(
+        _iter(),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+# =====================================================================
 # Audit log
 # =====================================================================
 @api.get("/audit-log")
