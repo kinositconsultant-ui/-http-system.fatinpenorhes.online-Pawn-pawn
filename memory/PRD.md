@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 8)
+**Last updated:** 2026-02 (Iteration 9)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -61,7 +61,20 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Frontend**: "Summary PDF" button in Finance header, "Export PDF" buttons on Capital Sources & Expenses tabs, category-filter dropdown in Expenses tab, new "Invoices" tab listing all invoices with per-row PDF buttons + bulk export. Auctions page shows an invoice download link on sold rows.
 - **EN/TET i18n** keys added for invoice/finance terms.
 
+## Implemented (Iter 9 — 2026-02)
+- **Pezadu (Heavy Equipment) category** — backend `pezadus` collection + frontend tab with subcategories Forklift / Tractor / Loader / Heavy Duty Truck. Default interest rate configurable in Settings.
+- **WhatsApp Meta API — real integration** with **Fernet encryption** (`/app/backend/encryption.py`) for token at rest. Settings UI shows masked token preview + connected badge. `POST /api/whatsapp/test` validates creds against Meta Graph API.
+- **Public Warehouse password gate** — admin sets `warehouse_password` in Settings; visitors must unlock via `POST /api/public/warehouse-unlock` to view `/public/warehouse`. Status endpoint reports locked/unlocked.
+- **Automated daily backups** — `apscheduler` background job at 02:00 UTC, keeps last 7 snapshots in `/app/backups`. Settings UI lists existing backups, lets admin manually trigger `/admin/backups/generate` and `/admin/backups/generate-project` (full source-code zip), and download with path-traversal protection.
+- **Public website redesign** — navy header + yellow active links + Services, Simulasaun, FAQ pages.
+- **UI polish** — color-coded Item tabs (Cars/Motos/Electronics/Pezadu), compact non-wrapping tables across Contracts/Clients/Payments/Auctions, shortened CT-2026-N contract display, universal red PDF download buttons.
+- **Bugfix**: backups subprocess now uses `sys.executable` (was bare `python3` → resolved to system python without `motor` → 500). Verified zips generate and download correctly.
+
 ## Test Coverage (cumulative)
+- Backend: **190/190 PASS** (141 prior + 49 new iter9 regression tests).
+- Frontend spot-check: login → dashboard → items (4 tabs incl. Heavy Equipment) → contracts (CT-2026 short numbers + red PDF buttons) → settings (WhatsApp + Backups + Warehouse password) → finance (KPIs + charts + 3 tabs) → public Warehouse password gate.
+
+## Test Coverage (Iter 8)
 - Backend: **141/141 PASS** (118 prior + 23 new iter8 finance/invoice PDF tests).
 
 ## Implemented (Iter 6 — 2026-02)
@@ -98,18 +111,25 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Frontend: 100% — all 6 report tabs, filters, KPI cards (20 across tabs), export links, and item-car-location field verified.
 
 ## Prioritized Backlog
-### P1 — Suggested next
-- Real Meta WhatsApp creds + daily scheduled reminders.
-- Email reminders via Resend (needs key).
-- Performance: stop recomputing every contract status inside report GET — move to a background job.
-- Cache report snapshots for last finished month.
-- Toast/banner on Reports load error.
+### P1 — Stability / Architecture
+- **Refactor `server.py`** (now ~2422 lines) into per-domain routers: auth, clients, items, contracts, payments, auctions, invoices, reports, finance, settings, whatsapp, backups, public.
+- Daily scheduled WhatsApp reminders (creds wired; cron job pending).
+- Performance: move contract status recompute out of report GET into a background job.
 
-### P2
-- Split `server.py` (~1700 lines) into routers.
-- Audit log on item update/delete.
-- Calendar component on date pickers.
-- Dedicated cashier UI shell.
+### P2 — UI Polish
+- Color-coded tabs on Reports page (match Items/Finance).
+- Shorten Receipt (RC-2026-N) and Invoice (INV-2026-N) numbers in tables.
+- Photo thumbnails (40×40) in admin Items table for quick scanning.
+- Auction Public page with colored cards + password gate (like Warehouse).
+- Pezadu category filter in Reports → Inventory.
+- Recharts ResponsiveContainer width(-1) warning on Dashboard/Finance — wrap charts with `min-h-[300px]`.
+
+### P3 — Enhancements
+- Home page hero redesign (full Tetum match: hero copy, category mosaic, 4-step process, testimonials).
+- Audit log viewer UI (who changed what & when).
+- Email reminders via Resend (needs key).
+- Tighten backend Pezadu category validation with `Literal[...]` enum.
+- Hard-fail Settings PUT when `WHATSAPP_ENCRYPTION_KEY` missing (avoid silent plaintext storage).
 
 ## Credentials
 - Admin: `admin@fatinpenhores.tl` / `admin123` (see `/app/memory/test_credentials.md`).
