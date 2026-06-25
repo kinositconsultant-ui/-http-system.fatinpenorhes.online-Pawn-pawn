@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 9 mega-regression (post-iter8) complete. NEW test_iter9_regression.py: 49/49 PASS covering Auth (login/me/logout/unauth), Dashboard (summary+trends KPIs), Clients CRUD+persistence, Items (Car/Motorcycle/Electronic + full Pezadu CRUD across all 4 subcategories forklift/tractor/loader/heavy_duty_truck), Contracts (create/list/PDF), Payments (partial w/ receipt+PDF), Auctions, Finance (summary keys, capital sources, expenses, summary PDF), Reports v2 (active-contracts/payments/overdue/auction/inventory/financial/treasury loads + xlsx/pdf exports for 3 types), Settings WhatsApp (dummy token saved, response is masked '••••' not plaintext, whatsapp_connected=true), /api/whatsapp/test responds with structured 400 detail when Meta fails (does NOT crash), Settings Warehouse password (set, /public/warehouse-status reports locked, unlock with correct pw returns token, wrong pw 401, valid token unlocks /public/warehouse), Backups (list/schedule/generate/download w/ zip validation/full-project/path-traversal blocked), Unauth (clients/contracts/payments/auctions/dashboard/admin-backups/finance all 401 without cookie). Frontend Playwright spot-check on REACT_APP_BACKEND_URL: admin login -> dashboard, /items shows 4 tabs (Car/Motorcycle/Electronic/Heavy Equipment — 'Pezadu' rendered as 'Heavy Equipment' in EN), /contracts shows CT-2026-NNN shortened numbers with red PDF action buttons in actions column, /settings shows Default Interest Rates incl. HEAVY EQUIPMENT %, 'Public Warehouse Access' section w/ 'Locked — password required' badge + WhatsApp Configuration card, /finance shows KPI cards + Cash Flow chart + Capital/Expenses/Invoices tabs, public Warehouse page shows clean password gate w/ navy header + yellow active 'WAREHOUSE' link.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/backups/generate (+ /generate-project)", "issue": "Was using bare 'python3' which resolves to /usr/bin/python3 in subprocess (no motor installed) -> returned 500 ModuleNotFoundError. FIXED in this iteration: server.py now uses sys.executable so the venv's python (with motor) is invoked. Verified working: zip is created and listed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard + Finance charts", "issues": ["Recharts ResponsiveContainer still logs width(-1)/height(-1) warning on first paint (carry-over from iter6/7/8). Cosmetic."]},
+      {"screen": "Finance dashboard", "issues": ["Cash on Hand renders as $-118,762.00 (negative). Display itself is correct; consider 'Net Cash (deficit)' badge when negative. Pre-existing."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter9_regression.py",
+    "/app/test_reports/pytest/iter9_regression.xml"
+  ],
+  "action_items": [
+    "RESOLVED inline: /api/admin/backups/generate{,-project} now use sys.executable instead of 'python3' so they resolve to the FastAPI venv's interpreter (motor is available). Please keep this pattern for any future subprocess calls.",
+    "OPTIONAL: server.py is ~2422 lines — still growing. Split into routers (auth/clients/items/contracts/payments/auctions/invoices/reports/finance/settings/whatsapp/backups/public) before adding more features.",
+    "OPTIONAL: Recharts ResponsiveContainer width(-1) warnings on Dashboard + Finance — wrap charts in a div w/ min-h-[300px] or pass explicit height to silence.",
+    "OPTIONAL: Reports v2 valid types are active-contracts/payments/overdue/auction/inventory/financial/treasury (NOT 'contracts'/'redemptions'/'auctions'). If the UI exposes a dropdown, ensure it sends these slugs.",
+    "OPTIONAL: /api/finance/summary key names don't fully match what the review request implied — actual keys: cash_on_hand, capital_received/repaid/outstanding, loans_disbursed, client_payments, auction_sales, expenses_total/period, interest_received, total_penalty, gross_profit, net_profit, expenses_by_category, total_invoices, total_invoiced. Dashboard cards on /finance correctly map to these."
+  ],
+  "critical_code_review_comments": [
+    "FIXED THIS ITER: subprocess.run(['python3', script]) in /api/admin/backups/generate{,-project} resolved to /usr/bin/python3 (no motor) and 500'd. Replaced with sys.executable to invoke the FastAPI venv. Generalize this rule for any future script execution.",
+    "WhatsApp token storage: encryption.py falls back to PLAINTEXT (logs warning only) when WHATSAPP_ENCRYPTION_KEY is not set. Verified mask_token() obfuscates UI display; however, if the env key is unset, db.settings stores plaintext token. Recommend hard-failing /api/settings PUT when WHATSAPP_ENCRYPTION_KEY missing (or refusing to save token), to avoid silent plaintext storage in production.",
+    "Settings GET sets s['whatsapp_token']='' before responding (good), but also strips warehouse_password_hash via s.pop(...,None) AFTER reading — works, but reads from a dict that came from get_settings_doc() which merges DEFAULT_SETTINGS first. If DB doc somehow had whatsapp_token_masked from a prior bug, GET would echo it; not currently the case but worth a small assertion.",
+    "Public warehouse: /public/warehouse-unlock returns {ok:true, token, configured:false} when no warehouse_password_hash is set — i.e., if admin clears the password, anyone can unlock. The /public/warehouse-status correctly returns locked:false in that case. Document this behavior so admins know clearing the password = public access.",
+    "Auth: /auth/login response body returns the user object at TOP LEVEL (id/email/name/role) not under 'user' key — make sure frontend hooks read both shapes if they were previously expecting {user:{...}}.",
+    "server.py route 2275 path is /admin/backups/generate-project (not /full-project as the original review request stated). UI label says 'Full Project Backup'; backend path uses 'generate-project'. Both work, but unify naming if exposing in docs.",
+    "Pezadu PezaduIn schema does NOT validate category against {forklift, tractor, loader, heavy_duty_truck} — it accepts any string. The UI may constrain via dropdown, but backend should add a Literal[...] guard so future API consumers can't inject arbitrary categories.",
+    "Backup zip download endpoint streams /app/backups/{name} with regex validation ^[\\w.\\-]+$ — good, blocks path traversal (verified)."
+  ],
+  "updated_files": [
+    "/app/backend/server.py — subprocess.run([sys.executable, ...]) in /admin/backups/generate and /admin/backups/generate-project (was 'python3' -> 500 ModuleNotFoundError: motor)",
+    "/app/backend/tests/test_iter9_regression.py — NEW (49 tests across 13 classes)"
+  ],
+  "success_rate": {"backend": "100% (49/49)", "frontend": "100% — login, dashboard, items (4 tabs incl. Heavy Equipment), contracts (CT-2026 short numbers + red PDF buttons), settings (WhatsApp + Backups + Warehouse password sections), finance (KPIs+charts+3 tabs), public Warehouse password gate"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123; Warehouse password: visitor42 (set via PUT /api/settings).",
+  "seed_data_creation": "Per-run: TEST_iter9 client (BI), TEST_iter9 Komatsu forklift + temp tractor/loader/heavy_duty_truck subcategory items (deleted in same test), TEST_iter9 John Deere 6120 tractor used for contract, contract CTR-YYYY-NNNN ($5000 loan @10% pezadu), partial payment $500 RCP-YYYY-NNNN. Fixtures auto-cleanup the client + items + contract on session teardown. WhatsApp token written as 'EAAGTEST_iter9_DUMMY_TOKEN_abc123XYZ' encrypted (still in DB — harmless dummy). Warehouse password set to 'visitor42' (matches /app/memory/test_credentials.md).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter9 covers the post-iter8 mega-regression: Pezadu category, WhatsApp+Fernet encryption, Backups, public Warehouse password gate. Key gotchas: (1) Backups subprocess MUST use sys.executable (NOT 'python3') — patched. (2) Auth /api/auth/login returns user fields at TOP LEVEL, not under 'user'. (3) Reports v2 valid types: active-contracts/payments/overdue/auction/inventory/financial/treasury. (4) Reports v2 export format param: xlsx/csv/pdf (NOT 'excel'). (5) Finance summary keys: cash_on_hand, loans_disbursed, client_payments, expenses_total, etc. (6) Pezadu subcategories accepted: forklift/tractor/loader/heavy_duty_truck (backend doesn't enforce — open enum). (7) Public warehouse flow: POST /api/public/warehouse-unlock {password} -> {token}; GET /api/public/warehouse?unlock_token=... (8) WhatsApp token in GET /api/settings always blank; whatsapp_token_masked holds 'EAAG••••3XYZ' style preview; whatsapp_connected boolean. (9) Empty whatsapp_token in PUT preserves existing — to fully clear, would need direct DB op. (10) Backup download requires admin cookie; filename must match ^[\\w.\\-]+$ — traversal blocked.",
+  "rca of the issue": "Backup subprocess 500: server.py at /admin/backups/generate{,-project} invoked subprocess.run(['python3', script]). In the uvicorn process environment, 'python3' resolved via PATH to /usr/bin/python3 (system python, no motor installed) instead of the FastAPI venv at /root/.venv/bin/python3. The build scripts import motor.motor_asyncio at top level and raised ModuleNotFoundError. Fix: replace 'python3' with sys.executable, which is always the interpreter currently running uvicorn (= the venv python with all backend deps). Re-ran tests: both endpoints now return 200 and produce valid zips, validated via zipfile.ZipFile.namelist()."
+}

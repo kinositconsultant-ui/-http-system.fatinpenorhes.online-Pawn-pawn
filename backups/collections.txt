@@ -1,12 +1,12 @@
-# Collections in test_database  (snapshot: 20260624-1339 UTC)
-# Total: 18 collections, 1430 documents
+# Collections in test_database  (snapshot: 20260625-1049 UTC)
+# Total: 18 collections, 1472 documents
 
 auctions                              7 documents
-audit_log                           737 documents
+audit_log                           772 documents
 cars                                126 documents
-clients                             138 documents
+clients                             139 documents
 contact_messages                     10 documents
-contracts                           112 documents
+contracts                           113 documents
 electronics                          19 documents
 expenses                              9 documents
 files                                10 documents
@@ -14,8 +14,8 @@ funding_repayments                    0 documents
 funding_sources                       2 documents
 invoices                              3 documents
 motorcycles                          15 documents
-payments                             51 documents
-pezadus                               1 documents
+payments                             52 documents
+pezadus                               2 documents
 settings                              1 documents
 users                                39 documents
-whatsapp_log                        150 documents
+whatsapp_log                        153 documents

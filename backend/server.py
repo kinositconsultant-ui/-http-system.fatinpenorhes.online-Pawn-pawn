@@ -2260,15 +2260,33 @@ async def list_backups(_: dict = Depends(require_admin)):
 async def generate_backup(admin: dict = Depends(require_admin)):
     """Run the backup script and return the resulting file list."""
     import subprocess
+    import sys
     import os
     env = os.environ.copy()
     proc = subprocess.run(
-        ["python3", "/app/scripts/build_backup.py"],
+        [sys.executable, "/app/scripts/build_backup.py"],
         capture_output=True, text=True, env=env, cwd="/app", timeout=300,
     )
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail={"stderr": proc.stderr[-2000:], "stdout": proc.stdout[-2000:]})
     await write_audit(admin, "backup", "system", "all", {"stdout_tail": proc.stdout[-500:]})
+    return await list_backups(_=admin)  # type: ignore[arg-type]
+
+
+@api.post("/admin/backups/generate-project")
+async def generate_project_backup(admin: dict = Depends(require_admin)):
+    """Build the complete deployment zip (backend + frontend + Mongo + docs)."""
+    import subprocess
+    import sys
+    import os
+    env = os.environ.copy()
+    proc = subprocess.run(
+        [sys.executable, "/app/scripts/build_full_project_backup.py"],
+        capture_output=True, text=True, env=env, cwd="/app", timeout=300,
+    )
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail={"stderr": proc.stderr[-2000:], "stdout": proc.stdout[-2000:]})
+    await write_audit(admin, "backup_project", "system", "all", {"stdout_tail": proc.stdout[-500:]})
     return await list_backups(_=admin)  # type: ignore[arg-type]
 
 
