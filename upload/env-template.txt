@@ -1,0 +1,17 @@
+# .env template for Fatin Penhores production deployment
+# Generated: 20260624-1339 UTC
+# Replace each placeholder with the matching value from /app/backend/.env on Emergent.
+# CRITICAL: keep WHATSAPP_ENCRYPTION_KEY identical, or you lose access to the saved WhatsApp token.
+
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=fatin_penhores
+CORS_ORIGINS=<copy from Emergent .env>
+JWT_SECRET=<COPY-FROM-EMERGENT-OR-GENERATE-NEW>
+ADMIN_EMAIL=admin@fatinpenhores.tl
+ADMIN_PASSWORD=<set-your-admin-password>
+EMERGENT_LLM_KEY=<NOT-NEEDED-IF-NOT-USING-LLM>  # or your own OpenAI key
+APP_NAME=<copy from Emergent .env>
+WHATSAPP_TOKEN=<copy from Emergent .env>
+WHATSAPP_PHONE_ID=<copy from Emergent .env>
+WHATSAPP_API_VERSION=v22.0
+WHATSAPP_ENCRYPTION_KEY=<COPY-FROM-EMERGENT-OR-LOSE-SAVED-TOKEN>

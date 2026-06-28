@@ -48,6 +48,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
 app = FastAPI(title="Fatin Penhores Pawn System")
+from fastapi.responses import RedirectResponse
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -2063,24 +2068,37 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
     ext = (file.filename or "bin").split(".")[-1].lower()
     app_name = os.environ.get("APP_NAME", "fatin-penhores")
     path = f"{app_name}/uploads/{user['id']}/{new_id()}.{ext}"
-    try:
-        result = objstore.put_object(path, data, file.content_type or "application/octet-stream")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Storage error: {e}")
-    record = {
-        "id": new_id(),
-        "storage_path": result["path"],
-        "original_filename": file.filename,
-        "content_type": file.content_type,
-        "size": result.get("size", len(data)),
-        "is_deleted": False,
-        "uploaded_by": user["id"],
-        "created_at": utcnow_iso(),
+    from pathlib import Path
+
+    upload_root = Path("/home/fp/private/pawn_django/upload/files")
+    upload_root.mkdir(parents=True, exist_ok=True)
+
+    full_path = upload_root / path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(full_path, "wb") as f:
+        f.write(data)
+
+    result = {
+        "path": path,
+        "size": len(data)
     }
+    record = {
+    "id": new_id(),
+    "storage_path": result["path"],
+    "original_filename": file.filename,
+    "content_type": file.content_type,
+    "size": result.get("size", len(data)),
+    "uploaded_by": user["id"],
+    "created_at": utcnow_iso(),
+    "is_deleted": False,
+    }
+
     await db.files.insert_one(record)
     record.pop("_id", None)
-    # Frontend-friendly download URL (relative path)
+
     record["url"] = f"/api/files/{result['path']}"
+
     return record
 
 
@@ -2101,12 +2119,20 @@ async def download_file(path: str, request: Request, auth: Optional[str] = Query
     record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
-    try:
-        data, content_type = objstore.get_object(path)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Storage error: {e}")
-    return Response(content=data, media_type=record.get("content_type") or content_type)
+    from pathlib import Path
+    from fastapi.responses import FileResponse
 
+    upload_root = Path("/home/fp/private/pawn_django/upload/files")
+    full_path = upload_root / path
+
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(
+        full_path,
+        media_type=record.get("content_type") or "application/octet-stream",
+        filename=record.get("original_filename")
+    )
 
 @api.delete("/files/{file_id}")
 async def delete_file(file_id: str, _: dict = Depends(require_admin)):
@@ -2360,11 +2386,11 @@ async def on_startup():
 
     # Initialize object storage (best-effort)
     try:
-        objstore.init_storage()
+        pass
+        # objstore.init_storage()
     except Exception as e:
-        logger.warning(f"Object storage not initialized: {e}")
-
-    # Seed settings
+            logger.warning(f"Object storage not initialized: {e}")
+            # Seed settings
     await get_settings_doc()
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@fatinpenhores.tl").lower()
