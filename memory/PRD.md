@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 9)
+**Last updated:** 2026-02 (Iteration 10)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -70,7 +70,24 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **UI polish** — color-coded Item tabs (Cars/Motos/Electronics/Pezadu), compact non-wrapping tables across Contracts/Clients/Payments/Auctions, shortened CT-2026-N contract display, universal red PDF download buttons.
 - **Bugfix**: backups subprocess now uses `sys.executable` (was bare `python3` → resolved to system python without `motor` → 500). Verified zips generate and download correctly.
 
+## Implemented (Iter 10 — 2026-02)
+- **Item name + machine_number** — Car / Motorcycle / Pezadu all gained `name` (e.g., "Toyota Hilux 2026 Black") and `machine_number` (engine no., distinct from chassis). Visible in forms + tables.
+- **Pre-Auction workflow** — Contracts 1-10 days overdue are tolerated and listed in a Pre-Auction amber card. Contracts > 10 days overdue auto-transition to `auction_ready` status. New computed fields on every contract response: `days_overdue` (int), `penalty_paid`, `penalty_full`.
+- **Overdue Payments** — New Payments tab + dedicated dialog with 3 modes:
+  - `overdue_full` → covers Penalty → Interest → Principal (full close-out; status → `redeemed`)
+  - `overdue_interest_pen` → covers Penalty → Interest (principal stays open)
+  - `overdue_penalty_only` → records only the 10% penalty payment (so the cash is captured in the books)
+- **Client Payment Summary** — Inside Client View Details modal, a 5-card grid (Total Paid / Full / Partial / Interest / Penalty) totals across ALL contracts.
+- **Finance — Capital Sources rate/term selectors** — Rate dropdown 2-10%, Term dropdown 6-12 months, live interest preview (`principal × rate × term-factor`).
+- **Finance — Loan Calculator tab** — Standalone simulator with rate (2-10%), term (6-12), monthly/yearly period. Live total interest, total repayment, monthly payment, 12-month schedule.
+- **Auction Sold split** — `AuctionSoldIn.interest_fee` optional. When provided, `cash_portion = sold_price − interest_fee`. When omitted, auto-computed from contract's outstanding interest + penalty. `interest_fee` flows to `net_profit` in `/finance/summary`; `sold_price + tax` flows to `cash_on_hand`. **Buyer invoice PDF intentionally shows only Subtotal/Tax/Total — no interest line.** Internal accounting stored as `_internal_interest_fee` / `_internal_cash_portion` on the invoice doc.
+- **Bugfix (testing agent)**: `PezaduIn` model was missing `name` + `machine_number` (Pydantic v2 'ignore' silently dropped them on POST). Added both with empty defaults.
+
 ## Test Coverage (cumulative)
+- Backend: **205/205 PASS** (190 prior + 15 new iter10).
+- Frontend spot-check: items name+machine_number on all 3 vehicle tabs · contracts Pre-Auction card · payments overdue tab + 3-mode dialog · client payment summary cards · finance capital rate/term dropdowns + interest preview · loan calculator full grid.
+
+## Test Coverage (Iter 9)
 - Backend: **190/190 PASS** (141 prior + 49 new iter9 regression tests).
 - Frontend spot-check: login → dashboard → items (4 tabs incl. Heavy Equipment) → contracts (CT-2026 short numbers + red PDF buttons) → settings (WhatsApp + Backups + Warehouse password) → finance (KPIs + charts + 3 tabs) → public Warehouse password gate.
 
