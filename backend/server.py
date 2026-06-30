@@ -2284,37 +2284,20 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
 
 
 @api.get("/files/{path:path}")
-async def download_file(path: str, request: Request, auth: Optional[str] = Query(None)):
-    # Allow either cookie auth (default) or ?auth=<access_token> query param for <img> tags
-    if auth and not request.cookies.get("access_token"):
-        # Inject token into request cookies for dependency
-        request.scope.setdefault("headers", [])
-        request._cookies = {"access_token": auth, **request.cookies}  # type: ignore
-    # Verify user via cookie/header
-    token = request.cookies.get("access_token") or auth
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(token)
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Invalid token type")
-    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
-    if not record:
-        raise HTTPException(status_code=404, detail="File not found")
+async def download_file(path: str):
     from pathlib import Path
+    from fastapi import HTTPException
     from fastapi.responses import FileResponse
 
     upload_root = Path("/home/fp/private/pawn_django/upload/files")
     full_path = upload_root / path
 
     if not full_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on server")
+        raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(
-        full_path,
-        media_type=record.get("content_type") or "application/octet-stream",
-        filename=record.get("original_filename")
-    )
-
+    return FileResponse(full_path)
+       
+    
 @api.delete("/files/{file_id}")
 async def delete_file(file_id: str, _: dict = Depends(require_admin)):
     await db.files.update_one({"id": file_id}, {"$set": {"is_deleted": True}})
