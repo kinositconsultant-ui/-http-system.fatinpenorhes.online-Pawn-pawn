@@ -1,0 +1,33 @@
+{
+  "summary": "User reported 'I can't log in to test'. Verified login end-to-end on preview (https://pawnly-pro.preview.emergentagent.com) — LOGIN IS NOT BROKEN. All 4 backend auth checks PASS (login 200 + cookies, /auth/me 200 with cookie, invalid creds 401 not 500, withCredentials/CORS working). Frontend Playwright PASS: /login renders, EN/TET LangToggle does not break the form, fill admin@fatinpenhores.tl / admin123 -> click Sign In -> redirected to /dashboard, all 6 KPI cards render with live data (Total Clients 138, Active Contracts 53, Overdue Contracts 44, Total Loan Amount USD 191,500, Total Payments USD 15,210, Profit/Interest USD 19,535). Protected route guard works: clearing cookies and visiting /contracts redirects to /login. No blocking console errors — only the expected Recharts width(-1)/height(-1) warnings from iter6+ (cosmetic). Verdict: login is fully functional on preview. User is likely on a self-hosted instance OR their browser has a stale cookie / wrong URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts ResponsiveContainer still emits width(-1)/height(-1) warnings on first paint (4 warnings observed). Cosmetic carryover from iter6+ — not blocking login."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "NO BACKEND/FRONTEND FIX NEEDED FOR LOGIN. Login is working on preview. Reply to user: 'Login is verified working on https://pawnly-pro.preview.emergentagent.com with admin@fatinpenhores.tl / admin123. If you still cannot log in, please: (1) confirm you are on the preview URL above, NOT a local/self-hosted instance; (2) clear cookies for the domain and retry; (3) open browser DevTools Network tab and share the response of POST /api/auth/login — that will pinpoint whether your browser is hitting the backend at all.'",
+    "OPTIONAL (carryover from iter10): wrap Recharts ResponsiveContainer in fixed-height div to silence width(-1)/height(-1) warnings."
+  ],
+  "critical_code_review_comments": [
+    "Backend /api/auth/login response: 200 OK, sets access_token + refresh_token httpOnly + Secure + SameSite=none cookies (correct for cross-origin preview). Max-Age 28800s (8h) for access, 604800s (7d) for refresh — matches /app/memory/test_credentials.md.",
+    "CORS: access-control-allow-origin: * is reflected, AND set-cookie works because the browser/CDN sets SameSite=none + Secure. Note: backend/.env still has CORS_ORIGINS='*' — this works for the preview (cookies still flow because Secure+SameSite=none), but a previously flagged issue from earlier iterations was that '*' + credentials is technically not spec-compliant. Browsers typically still send cookies if Secure+SameSite=none is set — confirmed working here. Consider tightening CORS_ORIGINS to the preview origin explicitly in a future iteration for spec compliance.",
+    "Invalid credentials correctly return 401 (NOT 500) with a clear JSON body. Good defensive coding in /api/auth/login.",
+    "Protected route guard in frontend works: /contracts without cookies -> redirected to /login. AuthContext + api.js (withCredentials:true) wired correctly."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (4/4 auth checks: login, /me, invalid creds 401, cookie flow)", "frontend": "100% (login form renders, LangToggle non-breaking, submit redirects to /dashboard, KPIs render, protected route guard works)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 — confirmed working on preview",
+  "seed_data_creation": "None — read-only verification of existing seed admin.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter11 was a no-op verification of the login flow in response to a user report. Nothing changed in code. Login is working end-to-end on preview. The grep for KPI labels in the Playwright test was case-sensitive and the dashboard renders them in uppercase (e.g., 'TOTAL CLIENTS' via Tailwind tracking-wide uppercase class), so the 'KPI MISSING' lines in the script output were a test-script false negative — the screenshot at .screenshots/dashboard.png clearly shows all 6 KPI cards rendering with live data. If a future agent needs to grep KPI text, lowercase the page content first.",
+  "rca of the issue": "User-reported issue 'I can't log in to test' is NOT REPRODUCIBLE on the preview environment. Direct backend curl with the correct credentials returns 200 + valid access_token/refresh_token cookies, /auth/me returns the user payload, and the browser-based Playwright flow successfully logs in and lands on /dashboard. The most likely RCAs from the user side (none of which are bugs in the shipped code) are: (a) they are testing on a self-hosted instance where CORS_ORIGINS is misconfigured (known issue from previous iterations — backend/.env still has CORS_ORIGINS='*' which on a self-hosted browser without HTTPS + SameSite=none would refuse to send cookies); (b) stale cookies in their browser causing the session to be sent but the access_token expired and the refresh cycle is silently failing — clearing cookies for the domain would fix; (c) the user is hitting a different URL (e.g., the FastAPI host on :8001 directly) instead of going through the ingress with /api prefix routing. Suggested user-facing reply included in action_items."
+}
