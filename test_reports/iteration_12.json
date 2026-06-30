@@ -1,0 +1,32 @@
+{
+  "summary": "Iter12 verifies Items table layout fix (Items.js tableHide flags + tightened padding). RESULT: ALL CHECKS PASS. Backend iter10 regression re-ran 15/15 PASS in 4.92s. Frontend Playwright at 1920x800: (1) Car table shows exactly 9 columns ['ITEM NAME','BRAND','MODEL','MARKET VALUE','PLATE','MACHINE NO.','LOCATION','STATUS','ACTIONS'] — manufacture_year/color/chassis/fuel_percent correctly hidden from table. tableW=1214px == contW=1214px (zero horizontal overflow). Edit button right-edge at x=1655px (well within 1920 viewport). (2) Motorcycle table identical 9-col layout, no overflow, edit btn in viewport. (3) Electronic table UNCHANGED — 10 columns including manufacture_year, no tableHide flags applied (per spec). (4) Pezadu table shows exactly 9 columns ['ITEM NAME','CATEGORY','BRAND','MODEL','MARKET VALUE','MACHINE NO.','LOCATION','STATUS','ACTIONS'] — manufacture_year/color/plate/chassis/serial/operating_hours/fuel_percent all correctly hidden. No overflow, edit btn at x=1655. (5) FORM COMPLETENESS: opened 'New Car' dialog — all 11 expected fields present (incl. hidden-in-table: manufacture_year, color, chassis, fuel_percent). 'New Motorcycle' — all 11 fields present. 'New Heavy Equipment' (pezadu) — all 14 fields present (incl. hidden: manufacture_year, color, plate, chassis, serial, operating_hours, fuel_percent). (6) ROUND-TRIP: created Car 'RegressionTest Hilux 2026 <ts>' with brand=Toyota, model=Hilux, manufacture_year=2026, market_value=15000, color=Red, machine_number=ENG-RT-<ts>, chassis=CH-RT-<ts>. Row appeared in table with visible Item Name, Brand=Toyota, Model=Hilux, Market Value=$15,000, Machine No.=ENG-RT-<ts>. Clicked Edit — dialog correctly populated ALL fields including the table-hidden ones (manufacture_year=2026, color=Red, chassis=CH-RT-<ts>, fuel_percent=0 default). Cleanup: test row deleted post-verification (count 127->126).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts ResponsiveContainer width(-1)/height(-1) warnings persist (cosmetic carryover from iter6+, not related to this iter)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_regression.py",
+    "/app/test_reports/pytest/iter12_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Items.js (~497 lines) is well-organized. The tableHide flag pattern is clean — single source of truth (the field array) and the same .filter((f) => !f.full && !f.tableHide) is reused 3 places (header, body, colSpan for empty state). Good.",
+    "Padding reduction px-3 py-2.5 -> px-2 py-2 + font-size text-sm -> text-[13px] + max-w-[180px] truncate is balanced — table now fits in the available 1214px container at 1920 viewport with no overflow.",
+    "Truncation works on long Item Names (e.g., 'RegressionTest Hilux 2026 1782815305' shows '...' visually). title attribute is NOT added to the truncated cell — consider adding title={r[f.k]} to the <td> so users can hover to see the full value (small UX win).",
+    "Empty-state colSpan correctly uses the same filtered length + 2 (status + actions). Consistent.",
+    "Electronic kind correctly left untouched (no tableHide flags) — matches the spec intent.",
+    "Carryover from iter10: Pezadu emptyFor() still doesn't initialize 'name' or 'machine_number' to '' (controlled inputs handle this fine but symmetry would be nicer). Non-blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15 iter10 regression)", "frontend": "100% (all 6 review_request bullets verified: car/motorcycle/electronic/pezadu table layout, form completeness on all 3 vehicle/heavy kinds, full round-trip create+edit)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "Created 1 TEST_ car ('RegressionTest Hilux 2026 <ts>') and deleted it via UI delete button after edit-dialog round-trip verification. No persistent test pollution.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter12 fix was pure UI/layout in /app/frontend/src/pages/Items.js. Field array now has tableHide:true for: car/motorcycle [manufacture_year, color, chassis, fuel_percent]; pezadu [manufacture_year, color, plate, chassis, serial, operating_hours, fuel_percent]. Electronic intentionally unchanged. Header/body/empty-colSpan all use .filter((f) => !f.full && !f.tableHide). Form dialog still renders the FULL field array (no tableHide filter in dialog render), so hidden-in-table fields remain editable. Backend untouched. Iter10 regression still 15/15 PASS. RegressionTest seed was deleted post-test. Items page testids stable: items-table-{kind}, item-new-{kind}, item-{kind}-edit-{id}, item-{kind}-delete-{id}, item-{kind}-{fieldname}.",
+  "rca of the issue": "Not applicable — this iter was a verification of an already-applied UI layout fix. The original problem (table overflow + clipped action buttons) was resolved by introducing tableHide flags on less-critical fields. Verification confirms: (a) tables now fit 100% of container at 1920x800 (1214px == 1214px), (b) edit/delete buttons are fully in viewport with right-edge at x=1655 (265px margin to 1920px right edge), (c) all hidden-in-table fields remain in the form dialog and round-trip correctly through backend persistence."
+}

@@ -44,13 +44,13 @@ function vehicleFields(t) {
     { k: "name", label: t("item_name"), required: true, placeholder: "Toyota Hilux 2020 Black" },
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
-    { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
+    { k: "manufacture_year", label: t("manufacture_year"), type: "number", tableHide: true },
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
-    { k: "color", label: t("color") },
+    { k: "color", label: t("color"), tableHide: true },
     { k: "plate", label: t("plate") },
     { k: "machine_number", label: t("machine_number") },
-    { k: "chassis", label: t("chassis") },
-    { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
+    { k: "chassis", label: t("chassis"), tableHide: true },
+    { k: "fuel_percent", label: t("fuel_percent"), type: "number", tableHide: true },
     { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
@@ -86,15 +86,15 @@ function pezaduFields(t) {
     },
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
-    { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
+    { k: "manufacture_year", label: t("manufacture_year"), type: "number", tableHide: true },
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
-    { k: "color", label: t("color") },
-    { k: "plate", label: t("plate") },
+    { k: "color", label: t("color"), tableHide: true },
+    { k: "plate", label: t("plate"), tableHide: true },
     { k: "machine_number", label: t("machine_number") },
-    { k: "chassis", label: t("chassis") },
-    { k: "serial", label: t("serial") },
-    { k: "operating_hours", label: t("operating_hours"), type: "number" },
-    { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
+    { k: "chassis", label: t("chassis"), tableHide: true },
+    { k: "serial", label: t("serial"), tableHide: true },
+    { k: "operating_hours", label: t("operating_hours"), type: "number", tableHide: true },
+    { k: "fuel_percent", label: t("fuel_percent"), type: "number", tableHide: true },
     { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
@@ -401,23 +401,23 @@ function ItemTable({ kind }) {
       </div>
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto shadow-sm">
-        <table className="min-w-full text-sm" data-testid={`items-table-${kind}`}>
+        <table className="min-w-full text-[13px]" data-testid={`items-table-${kind}`}>
           <thead className={`${theme.soft} text-left border-b ${theme.border}`}>
             <tr>
               {fields
-                .filter((f) => !f.full)
+                .filter((f) => !f.full && !f.tableHide)
                 .map((f) => (
                   <th
                     key={f.k}
-                    className="px-3 py-3 text-[10px] uppercase tracking-wider text-stone-600 font-semibold whitespace-nowrap"
+                    className="px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-600 font-semibold whitespace-nowrap"
                   >
                     {f.label}
                   </th>
                 ))}
-              <th className="px-3 py-3 text-[10px] uppercase tracking-wider text-stone-600 font-semibold whitespace-nowrap">
+              <th className="px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-600 font-semibold whitespace-nowrap">
                 {t("status")}
               </th>
-              <th className="px-3 py-3 text-[10px] uppercase tracking-wider text-stone-600 font-semibold text-right whitespace-nowrap">
+              <th className="px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-600 font-semibold text-right whitespace-nowrap">
                 {t("actions")}
               </th>
             </tr>
@@ -426,9 +426,9 @@ function ItemTable({ kind }) {
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
                 {fields
-                  .filter((f) => !f.full)
+                  .filter((f) => !f.full && !f.tableHide)
                   .map((f) => (
-                    <td key={f.k} className="px-3 py-2.5 whitespace-nowrap text-stone-800">
+                    <td key={f.k} className="px-2 py-2 whitespace-nowrap text-stone-800 max-w-[180px] truncate">
                       {f.k === "market_value" && r[f.k] != null
                         ? `$${Number(r[f.k]).toLocaleString()}`
                         : f.select && r[f.k]
@@ -436,9 +436,9 @@ function ItemTable({ kind }) {
                         : r[f.k] ?? "—"}
                     </td>
                   ))}
-                <td className="px-3 py-2.5 whitespace-nowrap">
+                <td className="px-2 py-2 whitespace-nowrap">
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full border ${
+                    className={`text-[11px] px-1.5 py-0.5 rounded-full border ${
                       r.status === "in_stock"
                         ? "bg-stone-100 text-stone-700 border-stone-200"
                         : r.status === "pawned"
@@ -455,8 +455,8 @@ function ItemTable({ kind }) {
                     {r.status || "in_stock"}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-right">
-                  <div className="flex justify-end gap-1.5">
+                <td className="px-2 py-2 text-right">
+                  <div className="flex justify-end gap-1">
                     <button
                       onClick={() => edit(r)}
                       data-testid={`item-${kind}-edit-${r.id}`}
@@ -480,7 +480,7 @@ function ItemTable({ kind }) {
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={fields.filter((f) => !f.full).length + 2}
+                  colSpan={fields.filter((f) => !f.full && !f.tableHide).length + 2}
                   className="p-10 text-center text-stone-500"
                 >
                   <KindIcon className="w-8 h-8 mx-auto mb-2 text-stone-300" />
