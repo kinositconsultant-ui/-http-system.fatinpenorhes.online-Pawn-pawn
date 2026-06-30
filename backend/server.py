@@ -75,6 +75,31 @@ class UserOut(BaseModel):
     email: EmailStr
     name: str
     role: str
+    allowed_modules: List[str] = []
+
+
+# Module catalog — canonical list of modules a user can be granted access to.
+# Keep in sync with frontend AdminLayout sidebar links and the MODULE_ROUTES map below.
+ALL_MODULES = [
+    "dashboard",
+    "clients",
+    "items",
+    "contracts",
+    "payments",
+    "auctions",
+    "reports",
+    "finance",
+    "users",
+    "settings",
+    "audit_log",
+]
+
+# Default module sets per role (admin always gets everything).
+ROLE_DEFAULT_MODULES = {
+    "admin": ALL_MODULES,
+    "staff": ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports"],
+    "cashier": ["dashboard", "payments"],
+}
 
 
 async def get_current_user(request: Request) -> dict:
@@ -98,6 +123,19 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     return user
+
+
+def require_module(module: str):
+    """Block API access if the user's `allowed_modules` doesn't include this module.
+    Admins are always granted full access. Non-admins must have the module explicitly listed."""
+    async def _dep(user: dict = Depends(get_current_user)) -> dict:
+        if user.get("role") == "admin":
+            return user
+        allowed = user.get("allowed_modules") or ROLE_DEFAULT_MODULES.get(user.get("role"), [])
+        if module not in allowed:
+            raise HTTPException(status_code=403, detail=f"You don't have access to the {module} module")
+        return user
+    return _dep
 
 
 def require_roles(*allowed: str):
@@ -135,7 +173,13 @@ async def auth_login(payload: LoginIn, response: Response):
     access = create_access_token(user["id"], user["email"], user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
-    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+        "allowed_modules": user.get("allowed_modules", []),
+    }
 
 
 @api.post("/auth/logout")
@@ -178,6 +222,14 @@ class UserCreateIn(BaseModel):
     password: str
     name: str
     role: Literal["admin", "staff", "cashier"] = "staff"
+    allowed_modules: Optional[List[str]] = None  # if None, falls back to ROLE_DEFAULT_MODULES[role]
+
+
+class UserUpdateIn(BaseModel):
+    name: Optional[str] = None
+    role: Optional[Literal["admin", "staff", "cashier"]] = None
+    allowed_modules: Optional[List[str]] = None
+    password: Optional[str] = None
 
 
 @api.get("/users")
@@ -191,11 +243,17 @@ async def create_user(payload: UserCreateIn, _: dict = Depends(require_admin)):
     email = payload.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Email already exists")
+    # Resolve modules: explicit > role default. Validate against ALL_MODULES.
+    modules = payload.allowed_modules if payload.allowed_modules is not None else ROLE_DEFAULT_MODULES.get(payload.role, [])
+    modules = [m for m in modules if m in ALL_MODULES]
+    if payload.role == "admin":
+        modules = list(ALL_MODULES)  # admin always full
     doc = {
         "id": new_id(),
         "email": email,
         "name": payload.name,
         "role": payload.role,
+        "allowed_modules": modules,
         "password_hash": hash_password(payload.password),
         "created_at": utcnow_iso(),
     }
@@ -203,6 +261,37 @@ async def create_user(payload: UserCreateIn, _: dict = Depends(require_admin)):
     doc.pop("password_hash")
     doc.pop("_id", None)
     return doc
+
+
+@api.patch("/users/{user_id}")
+async def update_user(user_id: str, payload: UserUpdateIn, admin: dict = Depends(require_admin)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates: dict = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.role is not None:
+        updates["role"] = payload.role
+    if payload.allowed_modules is not None:
+        modules = [m for m in payload.allowed_modules if m in ALL_MODULES]
+        updates["allowed_modules"] = modules
+    # If role is being set to admin (now), force full module access.
+    final_role = payload.role if payload.role is not None else user.get("role")
+    if final_role == "admin":
+        updates["allowed_modules"] = list(ALL_MODULES)
+    if payload.password:
+        updates["password_hash"] = hash_password(payload.password)
+    if updates:
+        await db.users.update_one({"id": user_id}, {"$set": updates})
+    out = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return out
+
+
+@api.get("/users/modules")
+async def list_user_modules(_: dict = Depends(require_admin)):
+    """Catalog endpoint for the frontend user form — list of valid modules + per-role defaults."""
+    return {"modules": ALL_MODULES, "role_defaults": ROLE_DEFAULT_MODULES}
 
 
 @api.delete("/users/{user_id}")
@@ -233,7 +322,7 @@ class ClientIn(BaseModel):
 
 
 @api.get("/clients")
-async def list_clients(_: dict = Depends(get_current_user)):
+async def list_clients(_: dict = Depends(require_module("clients"))):
     items = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
 
@@ -389,7 +478,7 @@ def _item_model(kind: str):
 
 
 @api.get("/items/{kind}")
-async def list_items(kind: str, _: dict = Depends(get_current_user)):
+async def list_items(kind: str, _: dict = Depends(require_module("items"))):
     if kind not in ITEM_KINDS:
         raise HTTPException(status_code=400, detail="Invalid item kind")
     coll = db[COLLECTION_MAP[kind]]
@@ -689,7 +778,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
 
 
 @api.get("/contracts")
-async def list_contracts(_: dict = Depends(get_current_user)):
+async def list_contracts(_: dict = Depends(require_module("contracts"))):
     contracts = await db.contracts.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     out = []
     for c in contracts:
@@ -851,7 +940,7 @@ async def _generate_receipt_number() -> str:
 
 
 @api.get("/payments")
-async def list_payments(contract_id: Optional[str] = None, _: dict = Depends(get_current_user)):
+async def list_payments(contract_id: Optional[str] = None, _: dict = Depends(require_module("payments"))):
     q = {"contract_id": contract_id} if contract_id else {}
     items = await db.payments.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
@@ -924,7 +1013,7 @@ class AuctionSoldIn(BaseModel):
 
 
 @api.get("/auctions")
-async def list_auctions(_: dict = Depends(get_current_user)):
+async def list_auctions(_: dict = Depends(require_module("auctions"))):
     items = await db.auctions.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
 
@@ -1142,7 +1231,7 @@ async def delete_auction(aid: str, _: dict = Depends(require_admin)):
 # Dashboard
 # =====================================================================
 @api.get("/dashboard/summary")
-async def dashboard_summary(_: dict = Depends(get_current_user)):
+async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
     clients_count = await db.clients.count_documents({})
@@ -1521,7 +1610,7 @@ async def reports_v2(
     year: Optional[int] = Query(None, ge=2000, le=2100),
     category: Optional[str] = Query(None),
     sub_category: Optional[str] = Query(None),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_module("reports")),
 ):
     builder = REPORT_BUILDERS.get(report_type)
     if not builder:
@@ -1935,7 +2024,7 @@ async def delete_expense(eid: str, _: dict = Depends(require_admin)):
 async def finance_summary(
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None, ge=2000, le=2100),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_module("finance")),
 ):
     # Capital sources
     sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
@@ -2463,6 +2552,13 @@ async def on_startup():
     # Seed settings
     await get_settings_doc()
 
+    # Backfill allowed_modules on existing users that don't have it yet (iter11)
+    async for u in db.users.find({"allowed_modules": {"$exists": False}}, {"_id": 0, "id": 1, "role": 1}):
+        defaults = ROLE_DEFAULT_MODULES.get(u.get("role"), [])
+        if u.get("role") == "admin":
+            defaults = list(ALL_MODULES)
+        await db.users.update_one({"id": u["id"]}, {"$set": {"allowed_modules": defaults}})
+
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@fatinpenhores.tl").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
@@ -2472,6 +2568,7 @@ async def on_startup():
             "email": admin_email,
             "name": "Administrator",
             "role": "admin",
+            "allowed_modules": list(ALL_MODULES),
             "password_hash": hash_password(admin_password),
             "created_at": utcnow_iso(),
         })
@@ -2479,7 +2576,7 @@ async def on_startup():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one(
             {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
+            {"$set": {"password_hash": hash_password(admin_password), "allowed_modules": list(ALL_MODULES)}},
         )
         logger.info(f"Updated admin password for: {admin_email}")
 
