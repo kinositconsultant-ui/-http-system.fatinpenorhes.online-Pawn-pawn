@@ -27,6 +27,7 @@ import {
 } from "../components/ui/select";
 import { Plus, FileDown, AlertTriangle, Coins, Banknote } from "lucide-react";
 import { toast } from "sonner";
+import { shortContract, shortReceipt } from "../lib/docNumbers";
 
 const blank = {
   contract_id: "",
@@ -74,7 +75,7 @@ export default function Payments() {
 
   const contractLabel = (id) => {
     const c = contracts.find((x) => x.id === id);
-    return c ? `${c.contract_number}` : id;
+    return c ? shortContract(c.contract_number) : id;
   };
   const selectedContract = contracts.find((c) => c.id === form.contract_id);
   const overdueContracts = useMemo(
@@ -412,7 +413,7 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
-              <Td className="font-medium whitespace-nowrap">{r.receipt_number}</Td>
+              <Td className="font-medium whitespace-nowrap" title={r.receipt_number}>{shortReceipt(r.receipt_number)}</Td>
               <Td className="whitespace-nowrap">{contractLabel(r.contract_id)}</Td>
               <Td className="whitespace-nowrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${typeBadge(r.type)}`}>

@@ -13,6 +13,7 @@ import {
 } from "../components/ui/dialog";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
+import { shortInvoice } from "../lib/docNumbers";
 
 export default function Auctions() {
   const { t } = useLang();
@@ -120,7 +121,7 @@ export default function Auctions() {
                         className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md bg-[#DC2626] text-white text-xs font-medium hover:bg-[#B91C1C] transition-colors whitespace-nowrap"
                         title={r.invoice_number}
                       >
-                        <FileText className="w-3 h-3" /> {r.invoice_number || t("invoice")}
+                        <FileText className="w-3 h-3" /> {shortInvoice(r.invoice_number) || t("invoice")}
                       </a>
                     )}
                   </div>

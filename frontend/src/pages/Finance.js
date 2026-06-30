@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
+import { shortInvoice } from "../lib/docNumbers";
 import {
   Dialog,
   DialogContent,
@@ -625,7 +626,7 @@ function InvoicesSection({ invoices, t }) {
           <tbody>
             {invoices.map((inv) => (
               <tr key={inv.id} className="border-t border-stone-100" data-testid={`invoice-row-${inv.id}`}>
-                <td className="px-4 py-3 font-medium">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-medium" title={inv.invoice_number}>{shortInvoice(inv.invoice_number)}</td>
                 <td className="px-4 py-3">{inv.date}</td>
                 <td className="px-4 py-3">{inv.buyer_name || "—"}</td>
                 <td className="px-4 py-3 text-stone-600">{inv.contract_number || "—"}</td>

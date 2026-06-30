@@ -23,6 +23,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Plus, Trash2, Pencil, Eye, FileText } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
+import { shortContract, shortReceipt } from "../lib/docNumbers";
 
 const blank = {
   full_name: "",
@@ -409,8 +410,8 @@ export default function Clients() {
                     <tbody>
                       {viewPayments.map((p) => (
                         <tr key={p.id} className="border-t border-stone-100">
-                          <Td className="font-medium">{p.receipt_number}</Td>
-                          <Td>{p.contract_number}</Td>
+                          <Td className="font-medium" title={p.receipt_number}>{shortReceipt(p.receipt_number)}</Td>
+                          <Td title={p.contract_number}>{shortContract(p.contract_number)}</Td>
                           <Td>{p.type.replace("_", " ")}</Td>
                           <Td right>${Number(p.amount).toLocaleString()}</Td>
                           <Td>{p.date}</Td>

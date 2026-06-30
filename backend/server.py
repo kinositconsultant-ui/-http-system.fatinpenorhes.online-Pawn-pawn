@@ -1759,7 +1759,13 @@ async def reports(report_type: str, _: dict = Depends(get_current_user)):
 # Public endpoints
 # =====================================================================
 @api.get("/public/auction-items")
-async def public_auction_items():
+async def public_auction_items(unlock_token: Optional[str] = Query(None)):
+    """Public auction listing — gated by the same visitor password as the Warehouse.
+    A token is required ONLY if a password has been configured by the admin."""
+    s = await get_settings_doc()
+    if s.get("warehouse_password_hash"):
+        if not unlock_token or not _warehouse_token_valid(unlock_token):
+            raise HTTPException(status_code=401, detail="Auction listing is locked")
     items = await db.auctions.find({"status": "listed"}, {"_id": 0}).sort("created_at", -1).to_list(500)
     out = []
     for a in items:
@@ -1770,12 +1776,20 @@ async def public_auction_items():
             "starting_price": a.get("starting_price", 0),
             "brand": item.get("brand", ""),
             "model": item.get("model", ""),
+            "name": item.get("name", ""),
             "description": item.get("description", ""),
             "photo_url": item.get("photo_url", ""),
             "manufacture_year": item.get("manufacture_year"),
             "category": item.get("category"),
         })
     return out
+
+
+@api.get("/public/auction-status")
+async def public_auction_status():
+    """Same lock state as the warehouse — public pages share one visitor password."""
+    s = await get_settings_doc()
+    return {"locked": bool(s.get("warehouse_password_hash"))}
 
 
 @api.get("/public/warehouse")

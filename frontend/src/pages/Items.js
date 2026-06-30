@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck } from "lucide-react";
+import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 
@@ -404,6 +404,9 @@ function ItemTable({ kind }) {
         <table className="min-w-full text-[13px]" data-testid={`items-table-${kind}`}>
           <thead className={`${theme.soft} text-left border-b ${theme.border}`}>
             <tr>
+              <th className="px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-600 font-semibold whitespace-nowrap w-12">
+                {t("photo") || "Photo"}
+              </th>
               {fields
                 .filter((f) => !f.full && !f.tableHide)
                 .map((f) => (
@@ -425,6 +428,32 @@ function ItemTable({ kind }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                <td className="px-2 py-1.5 w-12">
+                  {r.photo_url ? (
+                    <a
+                      href={r.photo_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-testid={`item-${kind}-thumb-${r.id}`}
+                      className="block w-10 h-10 rounded-md overflow-hidden border border-stone-200 hover:ring-2 hover:ring-[#1B2D5C]/30 transition"
+                      title="Open full image"
+                    >
+                      <img
+                        src={r.photo_url}
+                        alt={r.name || r.brand || "item"}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    </a>
+                  ) : (
+                    <div className={`w-10 h-10 rounded-md border border-dashed border-stone-300 ${theme.soft} flex items-center justify-center`}>
+                      <ImageIcon className="w-4 h-4 text-stone-400" />
+                    </div>
+                  )}
+                </td>
                 {fields
                   .filter((f) => !f.full && !f.tableHide)
                   .map((f) => (
@@ -480,7 +509,7 @@ function ItemTable({ kind }) {
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={fields.filter((f) => !f.full && !f.tableHide).length + 2}
+                  colSpan={fields.filter((f) => !f.full && !f.tableHide).length + 3}
                   className="p-10 text-center text-stone-500"
                 >
                   <KindIcon className="w-8 h-8 mx-auto mb-2 text-stone-300" />
