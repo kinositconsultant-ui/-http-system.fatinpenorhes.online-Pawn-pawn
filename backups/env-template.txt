@@ -1,5 +1,5 @@
 # .env template for Fatin Penhores production deployment
-# Generated: 20260624-1339 UTC
+# Generated: 20260630-0857 UTC
 # Replace each placeholder with the matching value from /app/backend/.env on Emergent.
 # CRITICAL: keep WHATSAPP_ENCRYPTION_KEY identical, or you lose access to the saved WhatsApp token.
 

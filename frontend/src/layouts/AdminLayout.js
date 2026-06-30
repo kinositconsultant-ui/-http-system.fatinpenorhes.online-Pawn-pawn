@@ -17,17 +17,17 @@ import {
 } from "lucide-react";
 
 const links = [
-  { to: "/dashboard", key: "dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
-  { to: "/clients", key: "clients", icon: Users, testid: "nav-clients" },
-  { to: "/items", key: "items", icon: Package, testid: "nav-items" },
-  { to: "/contracts", key: "contracts", icon: FileText, testid: "nav-contracts" },
-  { to: "/payments", key: "payments", icon: Wallet, testid: "nav-payments" },
-  { to: "/auctions", key: "auctions", icon: Gavel, testid: "nav-auctions" },
-  { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports" },
-  { to: "/finance", key: "finance", icon: Wallet, testid: "nav-finance", adminOnly: true },
-  { to: "/users", key: "users", icon: UserCog, testid: "nav-users", adminOnly: true },
-  { to: "/settings", key: "settings", icon: SettingsIcon, testid: "nav-settings", adminOnly: true },
-  { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", adminOnly: true },
+  { to: "/dashboard", key: "dashboard", icon: LayoutDashboard, testid: "nav-dashboard", module: "dashboard" },
+  { to: "/clients", key: "clients", icon: Users, testid: "nav-clients", module: "clients" },
+  { to: "/items", key: "items", icon: Package, testid: "nav-items", module: "items" },
+  { to: "/contracts", key: "contracts", icon: FileText, testid: "nav-contracts", module: "contracts" },
+  { to: "/payments", key: "payments", icon: Wallet, testid: "nav-payments", module: "payments" },
+  { to: "/auctions", key: "auctions", icon: Gavel, testid: "nav-auctions", module: "auctions" },
+  { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports", module: "reports" },
+  { to: "/finance", key: "finance", icon: Wallet, testid: "nav-finance", module: "finance", adminOnly: true },
+  { to: "/users", key: "users", icon: UserCog, testid: "nav-users", module: "users", adminOnly: true },
+  { to: "/settings", key: "settings", icon: SettingsIcon, testid: "nav-settings", module: "settings", adminOnly: true },
+  { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", module: "audit_log", adminOnly: true },
 ];
 
 export default function AdminLayout() {
@@ -66,6 +66,9 @@ export default function AdminLayout() {
         <nav className="space-y-2 flex-1">
           {links.map((l) => {
             if (l.adminOnly && user?.role !== "admin") return null;
+            // Module-level visibility: admin sees everything; others must have the module in allowed_modules
+            const allowed = user?.role === "admin" || (user?.allowed_modules || []).includes(l.module);
+            if (!allowed) return null;
             const Icon = l.icon;
             return (
               <NavLink

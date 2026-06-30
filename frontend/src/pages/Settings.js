@@ -99,6 +99,20 @@ export default function Settings() {
     setGenerating(false);
   };
 
+  const generateProject = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await api.post("/admin/backups/generate-project");
+      setBackups(data);
+      toast.success("Full project zip generated — ready to download");
+    } catch (e) {
+      toast.error(typeof e.response?.data?.detail === "string"
+        ? e.response.data.detail
+        : "Project zip failed — check backend logs");
+    }
+    setGenerating(false);
+  };
+
   const fmtSize = (b) => {
     if (b > 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
     if (b > 1024) return `${(b / 1024).toFixed(1)} KB`;
@@ -350,15 +364,27 @@ export default function Settings() {
               </span>
             )}
           </div>
-          <Button
-            onClick={generateBackup}
-            disabled={generating}
-            className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2"
-            data-testid="settings-generate-backup"
-          >
-            <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
-            {generating ? "Generating…" : "Generate Fresh Backup"}
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={generateBackup}
+              disabled={generating}
+              className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2"
+              data-testid="settings-generate-backup"
+            >
+              <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
+              {generating ? "Generating…" : "Fresh Data Backup"}
+            </Button>
+            <Button
+              onClick={generateProject}
+              disabled={generating}
+              variant="outline"
+              className="border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white gap-2"
+              data-testid="settings-generate-project"
+            >
+              <Database className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
+              {generating ? "Building…" : "Build Full Deployment Zip"}
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-stone-600">
           Generate a complete snapshot of your database, uploaded files (item photos, client documents),
@@ -406,6 +432,8 @@ export default function Settings() {
                     ? "Database dump (clients, contracts, payments, items, settings, …)"
                     : b.name.startsWith("uploads")
                     ? "Uploaded photos & client documents (with MANIFEST.json)"
+                    : b.name === "FatinPenhores_Full_Project_Backup.zip"
+                    ? "🎁 COMPLETE deployment package — backend + frontend + MongoDB dump + .env templates + DEPLOYMENT.md"
                     : b.name === "env-template.txt"
                     ? "Production .env template — placeholders only"
                     : b.name === "collections.txt"

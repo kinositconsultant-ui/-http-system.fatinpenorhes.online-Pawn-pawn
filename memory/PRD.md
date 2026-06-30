@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 8)
+**Last updated:** 2026-02 (Iteration 14)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -61,7 +61,54 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Frontend**: "Summary PDF" button in Finance header, "Export PDF" buttons on Capital Sources & Expenses tabs, category-filter dropdown in Expenses tab, new "Invoices" tab listing all invoices with per-row PDF buttons + bulk export. Auctions page shows an invoice download link on sold rows.
 - **EN/TET i18n** keys added for invoice/finance terms.
 
+## Implemented (Iter 9 — 2026-02)
+- **Pezadu (Heavy Equipment) category** — backend `pezadus` collection + frontend tab with subcategories Forklift / Tractor / Loader / Heavy Duty Truck. Default interest rate configurable in Settings.
+- **WhatsApp Meta API — real integration** with **Fernet encryption** (`/app/backend/encryption.py`) for token at rest. Settings UI shows masked token preview + connected badge. `POST /api/whatsapp/test` validates creds against Meta Graph API.
+- **Public Warehouse password gate** — admin sets `warehouse_password` in Settings; visitors must unlock via `POST /api/public/warehouse-unlock` to view `/public/warehouse`. Status endpoint reports locked/unlocked.
+- **Automated daily backups** — `apscheduler` background job at 02:00 UTC, keeps last 7 snapshots in `/app/backups`. Settings UI lists existing backups, lets admin manually trigger `/admin/backups/generate` and `/admin/backups/generate-project` (full source-code zip), and download with path-traversal protection.
+- **Public website redesign** — navy header + yellow active links + Services, Simulasaun, FAQ pages.
+- **UI polish** — color-coded Item tabs (Cars/Motos/Electronics/Pezadu), compact non-wrapping tables across Contracts/Clients/Payments/Auctions, shortened CT-2026-N contract display, universal red PDF download buttons.
+- **Bugfix**: backups subprocess now uses `sys.executable` (was bare `python3` → resolved to system python without `motor` → 500). Verified zips generate and download correctly.
+
+## Implemented (Iter 10 — 2026-02)
+- **Item name + machine_number** — Car / Motorcycle / Pezadu all gained `name` (e.g., "Toyota Hilux 2026 Black") and `machine_number` (engine no., distinct from chassis). Visible in forms + tables.
+- **Pre-Auction workflow** — Contracts 1-10 days overdue are tolerated and listed in a Pre-Auction amber card. Contracts > 10 days overdue auto-transition to `auction_ready` status. New computed fields on every contract response: `days_overdue` (int), `penalty_paid`, `penalty_full`.
+- **Overdue Payments** — New Payments tab + dedicated dialog with 3 modes:
+  - `overdue_full` → covers Penalty → Interest → Principal (full close-out; status → `redeemed`)
+  - `overdue_interest_pen` → covers Penalty → Interest (principal stays open)
+  - `overdue_penalty_only` → records only the 10% penalty payment (so the cash is captured in the books)
+- **Client Payment Summary** — Inside Client View Details modal, a 5-card grid (Total Paid / Full / Partial / Interest / Penalty) totals across ALL contracts.
+- **Finance — Capital Sources rate/term selectors** — Rate dropdown 2-10%, Term dropdown 6-12 months, live interest preview (`principal × rate × term-factor`).
+- **Finance — Loan Calculator tab** — Standalone simulator with rate (2-10%), term (6-12), monthly/yearly period. Live total interest, total repayment, monthly payment, 12-month schedule.
+- **Auction Sold split** — `AuctionSoldIn.interest_fee` optional. When provided, `cash_portion = sold_price − interest_fee`. When omitted, auto-computed from contract's outstanding interest + penalty. `interest_fee` flows to `net_profit` in `/finance/summary`; `sold_price + tax` flows to `cash_on_hand`. **Buyer invoice PDF intentionally shows only Subtotal/Tax/Total — no interest line.** Internal accounting stored as `_internal_interest_fee` / `_internal_cash_portion` on the invoice doc.
+- **Bugfix (testing agent)**: `PezaduIn` model was missing `name` + `machine_number` (Pydantic v2 'ignore' silently dropped them on POST). Added both with empty defaults.
+
+## Implemented (Iter 13 — 2026-02)
+- **Per-user Module Access (RBAC v2)** — admin can now tick which modules each user can access when creating/editing them.
+  - Backend: `UserOut` / `auth/me` / `auth/login` all expose `allowed_modules: List[str]`. New constants `ALL_MODULES` (11 modules) + `ROLE_DEFAULT_MODULES` ({admin: all, staff: 7, cashier: dashboard+payments}). New `require_module(name)` dependency factory; applied to list endpoints for clients, items, contracts, payments, auctions, dashboard, finance, reports/v2. Admin role always bypasses (returns immediately). New GET `/api/users/modules` catalog endpoint (admin-only). PATCH `/api/users/{id}` supports `allowed_modules`. POST creating an admin auto-locks to `ALL_MODULES`. Bad module names are silently filtered out.
+  - **Migration**: on boot, every existing user document without `allowed_modules` is backfilled with the role default (admin → all 11, staff → 7, cashier → [dashboard, payments]).
+  - Frontend Users page (full rewrite): Module Access checkbox grid (11 items, 3 columns) + 4 preset buttons (Staff preset / Cashier preset / All / None). Role dropdown — selecting admin auto-locks all 11 checkboxes and disables them + the preset buttons. Edit dialog (PATCH) pre-fills email (disabled), name, role, current modules. Users list table now shows a Modules column with badge pills per user (admins show "All modules").
+  - Frontend Sidebar (`AdminLayout`): nav items are filtered by `user.allowed_modules`. A cashier with only `[dashboard, payments]` sees only those 2 nav links. Admin always sees all 11.
+
+## Implemented (Iter 14 — 2026-02) — P2 polish batch
+- **Color-coded Reports tabs** — each of the 7 tabs has a distinct accent color when active (navy / green / terracotta / amber / violet / teal / sage) plus a tinted background when inactive.
+- **Shortened document numbers everywhere** — `RCP-2026-0042 → RC-2026-42`, `INV-2026-0015 → INV-2026-15`, `CTR-2026-0112 → CT-2026-112`. Helper: `/app/frontend/src/lib/docNumbers.js`. Full number preserved in `title` attr for hover. Applied across Payments, Clients (payment history modal), Finance Invoices tab, Auctions invoice badge.
+- **Photo thumbnails in Items table** — new leftmost "Photo" column (40×40). Renders clickable thumbnail that opens full image in new tab, or dashed placeholder square when no `photo_url`.
+- **Public Auction page with password gate** (`/auction`) — locked orange card requires the visitor password. **Shares the existing `warehouse_password`** so one visitor pass unlocks both `/warehouse` and `/auction` (token via `sessionStorage['fp_warehouse_token']`). Backend `/api/public/auction-items` enforces 401 without `unlock_token` when password is set. New `/api/public/auction-status` endpoint. Frontend: colored category chips (navy/terracotta/green/amber), filter row, "Lock" re-lock button.
+- **Client-side route guard** — new `ModuleGuard` wraps every admin route. When a non-admin user navigates to a forbidden module they see (a) a red 403 "Access denied" panel with module name + Back to Dashboard button, (b) a sonner toast.error, (c) auto-redirect to `/dashboard` after 2.5s. Admins always bypass.
+- **Pezadu filter in Reports → Inventory** — verified pre-existing.
+
 ## Test Coverage (cumulative)
+- Backend: **290/290 PASS** (244 prior + 7 new iter14 auction-gate + 24 iter13 regression + 15 iter10 regression rerun).
+- Frontend Playwright iter14: **14/14 PASS** (all bullets in the spec: reports colors, RC/CT/INV short numbers + hover full, photo column, pezadu filter, auction gate + unlock + colored grid + filters + lock-again, sessionStorage sharing, ModuleGuard on 9 forbidden routes for cashier + admin bypass on all routes).
+
+## Test Coverage (Iter 10-13)
+- Iter13 (module access RBAC v2): 24+15 PASS.
+- Iter12 (items table layout): 15+6 PASS.
+- Iter10 (6 new features): 15 PASS.
+- Frontend spot-check: login → dashboard → items (4 tabs incl. Heavy Equipment) → contracts (CT-2026 short numbers + red PDF buttons) → settings (WhatsApp + Backups + Warehouse password) → finance (KPIs + charts + 3 tabs) → public Warehouse password gate.
+
+## Test Coverage (Iter 8)
 - Backend: **141/141 PASS** (118 prior + 23 new iter8 finance/invoice PDF tests).
 
 ## Implemented (Iter 6 — 2026-02)
@@ -98,18 +145,25 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Frontend: 100% — all 6 report tabs, filters, KPI cards (20 across tabs), export links, and item-car-location field verified.
 
 ## Prioritized Backlog
-### P1 — Suggested next
-- Real Meta WhatsApp creds + daily scheduled reminders.
-- Email reminders via Resend (needs key).
-- Performance: stop recomputing every contract status inside report GET — move to a background job.
-- Cache report snapshots for last finished month.
-- Toast/banner on Reports load error.
+### P1 — Stability / Architecture
+- **Refactor `server.py`** (now ~2422 lines) into per-domain routers: auth, clients, items, contracts, payments, auctions, invoices, reports, finance, settings, whatsapp, backups, public.
+- Daily scheduled WhatsApp reminders (creds wired; cron job pending).
+- Performance: move contract status recompute out of report GET into a background job.
 
-### P2
-- Split `server.py` (~1700 lines) into routers.
-- Audit log on item update/delete.
-- Calendar component on date pickers.
-- Dedicated cashier UI shell.
+### P2 — UI Polish
+- Color-coded tabs on Reports page (match Items/Finance).
+- Shorten Receipt (RC-2026-N) and Invoice (INV-2026-N) numbers in tables.
+- Photo thumbnails (40×40) in admin Items table for quick scanning.
+- Auction Public page with colored cards + password gate (like Warehouse).
+- Pezadu category filter in Reports → Inventory.
+- Recharts ResponsiveContainer width(-1) warning on Dashboard/Finance — wrap charts with `min-h-[300px]`.
+
+### P3 — Enhancements
+- Home page hero redesign (full Tetum match: hero copy, category mosaic, 4-step process, testimonials).
+- Audit log viewer UI (who changed what & when).
+- Email reminders via Resend (needs key).
+- Tighten backend Pezadu category validation with `Literal[...]` enum.
+- Hard-fail Settings PUT when `WHATSAPP_ENCRYPTION_KEY` missing (avoid silent plaintext storage).
 
 ## Credentials
 - Admin: `admin@fatinpenhores.tl` / `admin123` (see `/app/memory/test_credentials.md`).

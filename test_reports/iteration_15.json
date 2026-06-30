@@ -1,0 +1,29 @@
+{
+  "summary": "Re-verification of Contracts table overflow fix (iter15 second attempt). The fix is now WORKING in all 4 target scenarios: 1366x768 EN, 1366x768 TET, 1920x900 EN, 1920x900 TET. Headers wrap onto 2 lines in TET at 1366 instead of forcing column widths. Item Td truncation is active. Action buttons are all visible and clickable. Pre-auction card and other tables (payments, auctions, clients) are non-regressed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Items page",
+        "issues": ["Items page does not expose a data-testid='items-table' (only one <table> rendered). Not part of this fix but flagged for future-test consistency with other listing pages."]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix VERIFIED: Th (Contracts.js line 560-570) no longer applies whitespace-nowrap and now uses leading-tight — long Tetum headers like 'MONTANTE EMPRÉSTIMU' and 'DATA KONTRATU → DATA LIMITE' wrap onto 2 lines, keeping table width within wrapper.",
+    "Fix VERIFIED: Item Td (line 398) has `truncate` on the td; measured scrollWidth (e.g., 177, 164, 190, 193) > offsetWidth (160) confirms truncation is now actively constraining the cell.",
+    "Consider also adding data-testid='items-table' to the Items page table for parity with other listing pages."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (8/8 scenarios pass)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing data (113 contracts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Measurements at 1366x768: EN -> wrapperScrollW=1044, clientW=1044, overflow=false, lastDeleteBtn right=1325 (visible). TET -> identical (wrapperScrollW=1044=clientW=1044), lastDeleteBtn right=1325 (visible). 1920x900: EN/TET -> 1214=1214, lastDeleteBtn right=1687 (visible). Header height at 1366 TET = 45.5px vs body row = 52.5px (ratio 0.87, ~2-line header). At 1920 thead = 33px (single line), confirming TET headers DO wrap at 1366 specifically as designed. Item cell offsetWidth=160px enforced (scrollWidth 164-193 > offsetWidth=160 confirms truncate active). Pre-auction-card @ 1366 TET: scrollW=clientW=1044, overflow=false. Payments/Auctions/Clients tables: overflow=false at 1366 EN. Action buttons tested: PDF (113), reactivate (41), move-to-auction (95, fired 8 API calls + 'Moved to auction' toast), whatsapp (94) — all visible and clickable.",
+  "rca of the issue": "RESOLVED. Root cause from prev iteration: Th had `whitespace-nowrap` and Item Td lacked `truncate` on the td. Both fixes applied and verified: (a) Th class string is `px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold leading-tight` (no whitespace-nowrap) — confirmed by inspecting the rendered DOM and observing 2-line header wrap at narrow widths; (b) Item Td has `max-w-[160px] truncate` — confirmed by td scrollWidth exceeding offsetWidth while content remains visually clipped."
+}

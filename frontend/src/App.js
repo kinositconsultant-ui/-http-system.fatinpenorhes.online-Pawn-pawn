@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { LangProvider } from "@/context/LangContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ModuleGuard from "@/components/ModuleGuard";
 
 import PublicLayout from "@/layouts/PublicLayout";
 import AdminLayout from "@/layouts/AdminLayout";
@@ -61,17 +62,17 @@ function App() {
                   </ProtectedRoute>
                 }
               >
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/clients" element={<Clients />} />
-                <Route path="/items" element={<Items />} />
-                <Route path="/contracts" element={<Contracts />} />
-                <Route path="/payments" element={<Payments />} />
-                <Route path="/auctions" element={<Auctions />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/finance" element={<Finance />} />
-                <Route path="/users" element={<Users />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/audit-log" element={<AuditLog />} />
+                <Route path="/dashboard" element={<ModuleGuard module="dashboard" label="Dashboard"><Dashboard /></ModuleGuard>} />
+                <Route path="/clients" element={<ModuleGuard module="clients" label="Clients"><Clients /></ModuleGuard>} />
+                <Route path="/items" element={<ModuleGuard module="items" label="Pawn Items"><Items /></ModuleGuard>} />
+                <Route path="/contracts" element={<ModuleGuard module="contracts" label="Contracts"><Contracts /></ModuleGuard>} />
+                <Route path="/payments" element={<ModuleGuard module="payments" label="Payments"><Payments /></ModuleGuard>} />
+                <Route path="/auctions" element={<ModuleGuard module="auctions" label="Auctions"><Auctions /></ModuleGuard>} />
+                <Route path="/reports" element={<ModuleGuard module="reports" label="Reports"><Reports /></ModuleGuard>} />
+                <Route path="/finance" element={<ModuleGuard module="finance" label="Finance"><Finance /></ModuleGuard>} />
+                <Route path="/users" element={<ModuleGuard module="users" label="Users"><Users /></ModuleGuard>} />
+                <Route path="/settings" element={<ModuleGuard module="settings" label="Settings"><Settings /></ModuleGuard>} />
+                <Route path="/audit-log" element={<ModuleGuard module="audit_log" label="Audit Log"><AuditLog /></ModuleGuard>} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

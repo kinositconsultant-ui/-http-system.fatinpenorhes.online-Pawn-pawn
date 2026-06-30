@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
+import { shortInvoice } from "../lib/docNumbers";
 import {
   Dialog,
   DialogContent,
@@ -181,6 +182,13 @@ export default function Finance() {
           >
             <Receipt className="w-4 h-4 mr-2" /> {t("invoices")}
           </TabsTrigger>
+          <TabsTrigger
+            value="calculator"
+            data-testid="finance-tab-calculator"
+            className="data-[state=active]:bg-[#8F9779] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#8F9779] px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            <TrendingUp className="w-4 h-4 mr-2" /> {t("loan_calculator")}
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="capital">
           <CapitalSection sources={sources} reload={load} t={t} />
@@ -190,6 +198,9 @@ export default function Finance() {
         </TabsContent>
         <TabsContent value="invoices">
           <InvoicesSection invoices={invoices} t={t} />
+        </TabsContent>
+        <TabsContent value="calculator">
+          <LoanCalculatorSection t={t} />
         </TabsContent>
       </Tabs>
     </div>
@@ -212,10 +223,14 @@ function Kpi({ label, value, Icon, tone = "text-stone-900", testid }) {
 
 /* ---------- Capital Sources ---------- */
 const blankSource = {
-  name: "", source_type: "bank", principal_amount: "", interest_rate: 0,
-  interest_period: "monthly", start_date: new Date().toISOString().slice(0, 10),
+  name: "", source_type: "bank", principal_amount: "", interest_rate: 5,
+  interest_period: "monthly", term_months: 12,
+  start_date: new Date().toISOString().slice(0, 10),
   due_date: "", notes: "",
 };
+
+const RATE_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const TERM_OPTIONS = [6, 7, 8, 9, 10, 11, 12];
 
 function CapitalSection({ sources, reload, t }) {
   const [open, setOpen] = useState(false);
@@ -292,7 +307,14 @@ function CapitalSection({ sources, reload, t }) {
                 <Input type="number" step="0.01" value={form.principal_amount} onChange={(e) => setForm({ ...form, principal_amount: e.target.value })} data-testid="capital-principal" />
               </FF>
               <FF label="Interest Rate %">
-                <Input type="number" step="0.01" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })} data-testid="capital-rate" />
+                <Select value={String(form.interest_rate)} onValueChange={(v) => setForm({ ...form, interest_rate: Number(v) })}>
+                  <SelectTrigger data-testid="capital-rate"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {RATE_OPTIONS.map((r) => (
+                      <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FF>
               <FF label="Interest Period">
                 <Select value={form.interest_period} onValueChange={(v) => setForm({ ...form, interest_period: v })}>
@@ -303,6 +325,40 @@ function CapitalSection({ sources, reload, t }) {
                     <SelectItem value="none">None</SelectItem>
                   </SelectContent>
                 </Select>
+              </FF>
+              <FF label="Term (months)">
+                <Select value={String(form.term_months)} onValueChange={(v) => {
+                  const months = Number(v);
+                  const start = form.start_date ? new Date(form.start_date) : new Date();
+                  const due = new Date(start);
+                  due.setMonth(due.getMonth() + months);
+                  setForm({ ...form, term_months: months, due_date: due.toISOString().slice(0, 10) });
+                }}>
+                  <SelectTrigger data-testid="capital-term"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TERM_OPTIONS.map((m) => (
+                      <SelectItem key={m} value={String(m)}>{m} months</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FF>
+              {/* Interest calculation preview */}
+              <FF label="Total Interest (preview)" full>
+                <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm flex items-center justify-between" data-testid="capital-interest-preview">
+                  <span className="text-stone-500">
+                    Principal × Rate × Term =
+                  </span>
+                  <span className="font-display text-lg text-[#1B2D5C]">
+                    {(() => {
+                      const p = Number(form.principal_amount || 0);
+                      const r = Number(form.interest_rate || 0) / 100;
+                      const m = Number(form.term_months || 0);
+                      const factor = form.interest_period === "monthly" ? m : (form.interest_period === "yearly" ? m / 12 : 0);
+                      const total = p * r * factor;
+                      return fmt(total);
+                    })()}
+                  </span>
+                </div>
               </FF>
               <FF label="Start Date">
                 <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} data-testid="capital-start" />
@@ -570,7 +626,7 @@ function InvoicesSection({ invoices, t }) {
           <tbody>
             {invoices.map((inv) => (
               <tr key={inv.id} className="border-t border-stone-100" data-testid={`invoice-row-${inv.id}`}>
-                <td className="px-4 py-3 font-medium">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-medium" title={inv.invoice_number}>{shortInvoice(inv.invoice_number)}</td>
                 <td className="px-4 py-3">{inv.date}</td>
                 <td className="px-4 py-3">{inv.buyer_name || "—"}</td>
                 <td className="px-4 py-3 text-stone-600">{inv.contract_number || "—"}</td>
@@ -615,6 +671,114 @@ function FF({ label, full, children }) {
     <div className={full ? "md:col-span-2 space-y-1.5" : "space-y-1.5"}>
       <Label className="text-xs uppercase tracking-wider text-stone-500">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+/* ---------- Loan Calculator ---------- */
+function LoanCalculatorSection({ t }) {
+  const [principal, setPrincipal] = useState(5000);
+  const [rate, setRate] = useState(5);
+  const [months, setMonths] = useState(12);
+  const [period, setPeriod] = useState("monthly");
+
+  const totalInterest = (() => {
+    const p = Number(principal || 0);
+    const r = Number(rate || 0) / 100;
+    const m = Number(months || 0);
+    if (period === "monthly") return p * r * m;
+    if (period === "yearly") return p * r * (m / 12);
+    return 0;
+  })();
+  const totalRepayment = Number(principal || 0) + totalInterest;
+  const monthlyPayment = months > 0 ? totalRepayment / Number(months) : 0;
+
+  const breakdown = [];
+  for (let i = 1; i <= Math.min(Number(months || 0), 12); i++) {
+    const periodInterest = period === "monthly"
+      ? Number(principal || 0) * (Number(rate || 0) / 100)
+      : Number(principal || 0) * (Number(rate || 0) / 100) / 12;
+    breakdown.push({
+      month: i,
+      interest: periodInterest,
+      cumulativeInterest: periodInterest * i,
+    });
+  }
+
+  return (
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Card className="p-6 border border-stone-200 rounded-lg shadow-none">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-[#8F9779]" />
+          <h3 className="font-display text-xl font-semibold">{t("loan_calculator")}</h3>
+        </div>
+        <div className="space-y-4">
+          <FF label="Principal (USD)">
+            <Input type="number" value={principal} onChange={(e) => setPrincipal(e.target.value)} data-testid="calc-principal" />
+          </FF>
+          <FF label="Interest Rate %">
+            <Select value={String(rate)} onValueChange={(v) => setRate(Number(v))}>
+              <SelectTrigger data-testid="calc-rate"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
+                  <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FF>
+          <FF label="Term (months)">
+            <Select value={String(months)} onValueChange={(v) => setMonths(Number(v))}>
+              <SelectTrigger data-testid="calc-months"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[6, 7, 8, 9, 10, 11, 12].map((m) => (
+                  <SelectItem key={m} value={String(m)}>{m} months</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FF>
+          <FF label="Interest Period">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger data-testid="calc-period"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">Monthly (Rate per month)</SelectItem>
+                <SelectItem value="yearly">Yearly (Rate per year)</SelectItem>
+              </SelectContent>
+            </Select>
+          </FF>
+        </div>
+      </Card>
+
+      <Card className="p-6 border border-stone-200 rounded-lg shadow-none bg-gradient-to-br from-[#1B2D5C] to-[#0F1B3A] text-white">
+        <h3 className="font-display text-xl font-semibold mb-4 text-white/95">Result</h3>
+        <div className="space-y-4">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-white/70">Total Interest</div>
+            <div className="font-display text-3xl mt-1" data-testid="calc-total-interest">{fmt(totalInterest)}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-white/70">Total Repayment</div>
+              <div className="font-display text-xl mt-1" data-testid="calc-total-repay">{fmt(totalRepayment)}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider text-white/70">Monthly Payment</div>
+              <div className="font-display text-xl mt-1" data-testid="calc-monthly">{fmt(monthlyPayment)}</div>
+            </div>
+          </div>
+          <div className="pt-3 border-t border-white/20">
+            <div className="text-xs uppercase tracking-wider text-white/70 mb-2">Schedule (first {breakdown.length})</div>
+            <div className="max-h-48 overflow-y-auto text-xs">
+              {breakdown.map((b) => (
+                <div key={b.month} className="flex justify-between py-1 border-b border-white/10">
+                  <span>Month {b.month}</span>
+                  <span>{fmt(b.interest)}</span>
+                  <span className="text-white/70">cum {fmt(b.cumulativeInterest)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

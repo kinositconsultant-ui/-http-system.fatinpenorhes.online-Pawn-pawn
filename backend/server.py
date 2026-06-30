@@ -80,6 +80,31 @@ class UserOut(BaseModel):
     email: EmailStr
     name: str
     role: str
+    allowed_modules: List[str] = []
+
+
+# Module catalog — canonical list of modules a user can be granted access to.
+# Keep in sync with frontend AdminLayout sidebar links and the MODULE_ROUTES map below.
+ALL_MODULES = [
+    "dashboard",
+    "clients",
+    "items",
+    "contracts",
+    "payments",
+    "auctions",
+    "reports",
+    "finance",
+    "users",
+    "settings",
+    "audit_log",
+]
+
+# Default module sets per role (admin always gets everything).
+ROLE_DEFAULT_MODULES = {
+    "admin": ALL_MODULES,
+    "staff": ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports"],
+    "cashier": ["dashboard", "payments"],
+}
 
 
 async def get_current_user(request: Request) -> dict:
@@ -103,6 +128,19 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     return user
+
+
+def require_module(module: str):
+    """Block API access if the user's `allowed_modules` doesn't include this module.
+    Admins are always granted full access. Non-admins must have the module explicitly listed."""
+    async def _dep(user: dict = Depends(get_current_user)) -> dict:
+        if user.get("role") == "admin":
+            return user
+        allowed = user.get("allowed_modules") or ROLE_DEFAULT_MODULES.get(user.get("role"), [])
+        if module not in allowed:
+            raise HTTPException(status_code=403, detail=f"You don't have access to the {module} module")
+        return user
+    return _dep
 
 
 def require_roles(*allowed: str):
@@ -140,7 +178,13 @@ async def auth_login(payload: LoginIn, response: Response):
     access = create_access_token(user["id"], user["email"], user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
-    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": user["role"],
+        "allowed_modules": user.get("allowed_modules", []),
+    }
 
 
 @api.post("/auth/logout")
@@ -183,6 +227,14 @@ class UserCreateIn(BaseModel):
     password: str
     name: str
     role: Literal["admin", "staff", "cashier"] = "staff"
+    allowed_modules: Optional[List[str]] = None  # if None, falls back to ROLE_DEFAULT_MODULES[role]
+
+
+class UserUpdateIn(BaseModel):
+    name: Optional[str] = None
+    role: Optional[Literal["admin", "staff", "cashier"]] = None
+    allowed_modules: Optional[List[str]] = None
+    password: Optional[str] = None
 
 
 @api.get("/users")
@@ -196,11 +248,17 @@ async def create_user(payload: UserCreateIn, _: dict = Depends(require_admin)):
     email = payload.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Email already exists")
+    # Resolve modules: explicit > role default. Validate against ALL_MODULES.
+    modules = payload.allowed_modules if payload.allowed_modules is not None else ROLE_DEFAULT_MODULES.get(payload.role, [])
+    modules = [m for m in modules if m in ALL_MODULES]
+    if payload.role == "admin":
+        modules = list(ALL_MODULES)  # admin always full
     doc = {
         "id": new_id(),
         "email": email,
         "name": payload.name,
         "role": payload.role,
+        "allowed_modules": modules,
         "password_hash": hash_password(payload.password),
         "created_at": utcnow_iso(),
     }
@@ -208,6 +266,37 @@ async def create_user(payload: UserCreateIn, _: dict = Depends(require_admin)):
     doc.pop("password_hash")
     doc.pop("_id", None)
     return doc
+
+
+@api.patch("/users/{user_id}")
+async def update_user(user_id: str, payload: UserUpdateIn, admin: dict = Depends(require_admin)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates: dict = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.role is not None:
+        updates["role"] = payload.role
+    if payload.allowed_modules is not None:
+        modules = [m for m in payload.allowed_modules if m in ALL_MODULES]
+        updates["allowed_modules"] = modules
+    # If role is being set to admin (now), force full module access.
+    final_role = payload.role if payload.role is not None else user.get("role")
+    if final_role == "admin":
+        updates["allowed_modules"] = list(ALL_MODULES)
+    if payload.password:
+        updates["password_hash"] = hash_password(payload.password)
+    if updates:
+        await db.users.update_one({"id": user_id}, {"$set": updates})
+    out = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return out
+
+
+@api.get("/users/modules")
+async def list_user_modules(_: dict = Depends(require_admin)):
+    """Catalog endpoint for the frontend user form — list of valid modules + per-role defaults."""
+    return {"modules": ALL_MODULES, "role_defaults": ROLE_DEFAULT_MODULES}
 
 
 @api.delete("/users/{user_id}")
@@ -238,7 +327,7 @@ class ClientIn(BaseModel):
 
 
 @api.get("/clients")
-async def list_clients(_: dict = Depends(get_current_user)):
+async def list_clients(_: dict = Depends(require_module("clients"))):
     items = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
 
@@ -317,11 +406,13 @@ PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
 
 
 class CarIn(BaseModel):
+    name: str = ""  # human-friendly label e.g. "Toyota Hilux 2020 Black"
     brand: str
     model: str
     description: str = ""
     plate: str = ""
-    chassis: str = ""
+    machine_number: str = ""  # engine/motor number
+    chassis: str = ""         # VIN / frame number
     fuel_percent: int = 0
     color: str = ""
     manufacture_year: Optional[int] = None
@@ -332,10 +423,12 @@ class CarIn(BaseModel):
 
 
 class MotorcycleIn(BaseModel):
+    name: str = ""
     brand: str
     model: str
     description: str = ""
     plate: str = ""
+    machine_number: str = ""
     chassis: str = ""
     fuel_percent: int = 0
     color: str = ""
@@ -361,11 +454,13 @@ class ElectronicIn(BaseModel):
 
 
 class PezaduIn(BaseModel):
+    name: str = ""  # human-friendly label
     category: str  # forklift / tractor / loader / heavy_duty_truck
     brand: str
     model: str
     description: str = ""
     plate: str = ""
+    machine_number: str = ""  # engine/motor number
     chassis: str = ""
     serial: str = ""
     fuel_percent: int = 0
@@ -388,7 +483,7 @@ def _item_model(kind: str):
 
 
 @api.get("/items/{kind}")
-async def list_items(kind: str, _: dict = Depends(get_current_user)):
+async def list_items(kind: str, _: dict = Depends(require_module("items"))):
     if kind not in ITEM_KINDS:
         raise HTTPException(status_code=400, detail="Invalid item kind")
     coll = db[COLLECTION_MAP[kind]]
@@ -587,41 +682,70 @@ async def _recompute_contract_status(contract: dict) -> dict:
     rate = float(contract["interest_rate"])
     interest = round(loan * rate / 100.0, 2)
 
-    # Split payments into interest vs principal
+    # Compute potential penalty first (used by overdue payment types).
+    today = _today_iso()
+    is_overdue = contract.get("due_date", today) < today
+    full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
+
+    # Split payments into interest, principal, and penalty
     interest_paid = 0.0
     principal_paid = 0.0
-    interest_remaining = interest
+    penalty_paid = 0.0
     for p in sorted(payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))):
         amt = float(p.get("amount", 0))
         ptype = p.get("type", "partial")
         if ptype == "interest_only":
             take = min(amt, max(0.0, interest - interest_paid))
             interest_paid += take
-            # any excess flows to principal
             extra = amt - take
             if extra > 0:
                 principal_paid += extra
         elif ptype == "partial":
-            # partial pay reduces principal first per user rule
             principal_paid += amt
         elif ptype == "full":
-            # split: cover interest first, then principal
             take = max(0.0, interest - interest_paid)
             interest_paid += min(amt, take)
             principal_paid += max(0.0, amt - take)
+        elif ptype == "overdue_full":
+            # Cover penalty -> interest -> principal in that order
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            rem = amt - take_pen
+            take_int = min(rem, max(0.0, interest - interest_paid))
+            interest_paid += take_int
+            rem -= take_int
+            principal_paid += max(0.0, rem)
+        elif ptype == "overdue_interest_pen":
+            # Cover penalty first, then interest. Principal stays.
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            rem = amt - take_pen
+            take_int = min(rem, max(0.0, interest - interest_paid))
+            interest_paid += take_int
+        elif ptype == "overdue_penalty_only":
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            penalty_paid += min(amt, pen_remaining)
 
     principal_paid = min(principal_paid, loan)
     interest_paid = min(interest_paid, interest)
+    penalty_paid = min(penalty_paid, full_penalty)
     principal_remaining = round(max(0.0, loan - principal_paid), 2)
     interest_remaining = round(max(0.0, interest - interest_paid), 2)
+    penalty_remaining = round(max(0.0, full_penalty - penalty_paid), 2)
 
-    # Penalty: 10% of original loan if overdue and not fully redeemed (does NOT include interest)
-    today = _today_iso()
-    is_overdue = contract.get("due_date", today) < today
-    redeemed = (principal_remaining + interest_remaining) <= 0.01
-    penalty = 0.0
-    if is_overdue and not redeemed and contract.get("status") != "auction":
-        penalty = round(loan * 0.10, 2)
+    redeemed = (principal_remaining + interest_remaining + penalty_remaining) <= 0.01
+    # Outstanding penalty (still owed) for status display
+    penalty = penalty_remaining
+
+    # Days overdue (0 if not overdue)
+    days_overdue = 0
+    if is_overdue:
+        try:
+            days_overdue = (date.today() - date.fromisoformat(contract["due_date"])).days
+        except Exception:
+            days_overdue = 0
 
     total_due = round(principal_remaining + interest_remaining + penalty, 2)
 
@@ -632,6 +756,8 @@ async def _recompute_contract_status(contract: dict) -> dict:
         status = "sold"
     elif redeemed:
         status = "redeemed"
+    elif is_overdue and days_overdue > 10:
+        status = "auction_ready"
     elif is_overdue:
         status = "overdue"
     else:
@@ -648,13 +774,16 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["interest_remaining"] = interest_remaining
     contract["interest_amount"] = interest
     contract["penalty"] = penalty
+    contract["penalty_paid"] = round(penalty_paid, 2)
+    contract["penalty_full"] = full_penalty
+    contract["days_overdue"] = days_overdue
     contract["total_due"] = total_due
     contract["remaining_balance"] = total_due
     return contract
 
 
 @api.get("/contracts")
-async def list_contracts(_: dict = Depends(get_current_user)):
+async def list_contracts(_: dict = Depends(require_module("contracts"))):
     contracts = await db.contracts.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     out = []
     for c in contracts:
@@ -722,7 +851,7 @@ async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depe
     if not c:
         raise HTTPException(status_code=404, detail="Contract not found")
     c = await _recompute_contract_status(c)
-    if c["status"] not in ("overdue", "active"):
+    if c["status"] not in ("overdue", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only overdue or active contracts can be reactivated")
     try:
         nd = date.fromisoformat(payload.new_due_date)
@@ -788,7 +917,14 @@ async def contract_pdf(cid: str, _: dict = Depends(get_current_user)):
 class PaymentIn(BaseModel):
     contract_id: str
     amount: float
-    type: Literal["full", "partial", "interest_only"]
+    type: Literal[
+        "full",
+        "partial",
+        "interest_only",
+        "overdue_full",          # Loan + Interest + Penalty (full close-out)
+        "overdue_interest_pen",  # Interest + Penalty (contract stays open)
+        "overdue_penalty_only",  # Just clear penalty
+    ]
     date: str  # YYYY-MM-DD
     notes: str = ""
 
@@ -809,7 +945,7 @@ async def _generate_receipt_number() -> str:
 
 
 @api.get("/payments")
-async def list_payments(contract_id: Optional[str] = None, _: dict = Depends(get_current_user)):
+async def list_payments(contract_id: Optional[str] = None, _: dict = Depends(require_module("payments"))):
     q = {"contract_id": contract_id} if contract_id else {}
     items = await db.payments.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
@@ -871,6 +1007,7 @@ class AuctionMoveIn(BaseModel):
 
 class AuctionSoldIn(BaseModel):
     sold_price: float
+    interest_fee: Optional[float] = None  # if None, computed from contract outstanding interest+penalty
     buyer_name: str = ""
     buyer_phone: str = ""
     buyer_email: str = ""
@@ -881,7 +1018,7 @@ class AuctionSoldIn(BaseModel):
 
 
 @api.get("/auctions")
-async def list_auctions(_: dict = Depends(get_current_user)):
+async def list_auctions(_: dict = Depends(require_module("auctions"))):
     items = await db.auctions.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     return items
 
@@ -903,7 +1040,7 @@ async def move_to_auction(payload: AuctionMoveIn, _: dict = Depends(get_current_
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     contract = await _recompute_contract_status(contract)
-    if contract["status"] not in ("overdue", "active"):
+    if contract["status"] not in ("overdue", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only active/overdue contracts can be auctioned")
     doc = {
         "id": new_id(),
@@ -950,9 +1087,26 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         existing = await db.invoices.find_one({"id": a["invoice_id"]}, {"_id": 0})
         if existing:
             return {**a, "invoice": existing}
+
+    # Compute interest_fee — defaults to outstanding interest + penalty on the contract
+    contract = await db.contracts.find_one({"id": a.get("contract_id")}, {"_id": 0}) or {}
+    if contract:
+        contract = await _recompute_contract_status(contract)
+    if payload.interest_fee is None:
+        default_fee = float(contract.get("interest_remaining", 0)) + float(contract.get("penalty", 0))
+        interest_fee = round(default_fee, 2)
+    else:
+        interest_fee = round(float(payload.interest_fee), 2)
+    # Internal split: portion of sold_price counted as interest (profit), rest as cash recovery
+    sold_price = float(payload.sold_price)
+    interest_fee = min(interest_fee, sold_price)  # cannot exceed sold price
+    cash_portion = round(sold_price - interest_fee, 2)
+
     update = {
         "status": "sold",
-        "sold_price": payload.sold_price,
+        "sold_price": sold_price,
+        "interest_fee": interest_fee,        # NEW — separated for finance
+        "cash_portion": cash_portion,        # NEW — sold_price - interest_fee
         "buyer_name": payload.buyer_name,
         "buyer_phone": payload.buyer_phone,
         "buyer_email": payload.buyer_email,
@@ -966,9 +1120,9 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         {"id": a["item_id"]},
         {"$set": {"status": "sold"}},
     )
-    # Auto-create invoice
+    # Auto-create invoice — buyer sees only item + sold_price + tax + total (NO interest line)
     inv_number = await _generate_invoice_number()
-    subtotal = float(payload.sold_price)
+    subtotal = sold_price
     tax = round(subtotal * float(payload.tax_percent or 0) / 100.0, 2)
     invoice = {
         "id": new_id(),
@@ -986,6 +1140,9 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         "tax_percent": float(payload.tax_percent or 0),
         "tax_amount": tax,
         "total": round(subtotal + tax, 2),
+        # Internal-only fields for accounting; NOT shown on buyer invoice PDF
+        "_internal_interest_fee": interest_fee,
+        "_internal_cash_portion": cash_portion,
         "status": "issued",
         "date": date.today().isoformat(),
         "notes": payload.notes,
@@ -994,7 +1151,7 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
     }
     await db.invoices.insert_one(invoice)
     await db.auctions.update_one({"id": aid}, {"$set": {"invoice_id": invoice["id"], "invoice_number": inv_number}})
-    await write_audit(user, "sold_auction", "auction", aid, {"sold_price": payload.sold_price, "invoice_number": inv_number})
+    await write_audit(user, "sold_auction", "auction", aid, {"sold_price": sold_price, "interest_fee": interest_fee, "invoice_number": inv_number})
     invoice.pop("_id", None)
     return {**a, **update, "invoice_id": invoice["id"], "invoice_number": inv_number, "invoice": invoice}
 
@@ -1079,7 +1236,7 @@ async def delete_auction(aid: str, _: dict = Depends(require_admin)):
 # Dashboard
 # =====================================================================
 @api.get("/dashboard/summary")
-async def dashboard_summary(_: dict = Depends(get_current_user)):
+async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
     clients_count = await db.clients.count_documents({})
@@ -1458,7 +1615,7 @@ async def reports_v2(
     year: Optional[int] = Query(None, ge=2000, le=2100),
     category: Optional[str] = Query(None),
     sub_category: Optional[str] = Query(None),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_module("reports")),
 ):
     builder = REPORT_BUILDERS.get(report_type)
     if not builder:
@@ -1607,7 +1764,13 @@ async def reports(report_type: str, _: dict = Depends(get_current_user)):
 # Public endpoints
 # =====================================================================
 @api.get("/public/auction-items")
-async def public_auction_items():
+async def public_auction_items(unlock_token: Optional[str] = Query(None)):
+    """Public auction listing — gated by the same visitor password as the Warehouse.
+    A token is required ONLY if a password has been configured by the admin."""
+    s = await get_settings_doc()
+    if s.get("warehouse_password_hash"):
+        if not unlock_token or not _warehouse_token_valid(unlock_token):
+            raise HTTPException(status_code=401, detail="Auction listing is locked")
     items = await db.auctions.find({"status": "listed"}, {"_id": 0}).sort("created_at", -1).to_list(500)
     out = []
     for a in items:
@@ -1618,12 +1781,20 @@ async def public_auction_items():
             "starting_price": a.get("starting_price", 0),
             "brand": item.get("brand", ""),
             "model": item.get("model", ""),
+            "name": item.get("name", ""),
             "description": item.get("description", ""),
             "photo_url": item.get("photo_url", ""),
             "manufacture_year": item.get("manufacture_year"),
             "category": item.get("category"),
         })
     return out
+
+
+@api.get("/public/auction-status")
+async def public_auction_status():
+    """Same lock state as the warehouse — public pages share one visitor password."""
+    s = await get_settings_doc()
+    return {"locked": bool(s.get("warehouse_password_hash"))}
 
 
 @api.get("/public/warehouse")
@@ -1736,6 +1907,7 @@ class FundingSourceIn(BaseModel):
     principal_amount: float
     interest_rate: float = 0.0
     interest_period: Literal["monthly", "yearly", "none"] = "monthly"
+    term_months: Optional[int] = None
     start_date: str
     due_date: str = ""
     notes: str = ""
@@ -1871,7 +2043,7 @@ async def delete_expense(eid: str, _: dict = Depends(require_admin)):
 async def finance_summary(
     month: Optional[int] = Query(None, ge=1, le=12),
     year: Optional[int] = Query(None, ge=2000, le=2100),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_module("finance")),
 ):
     # Capital sources
     sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
@@ -1887,6 +2059,11 @@ async def finance_summary(
     client_payments = sum(float(p.get("amount", 0) or 0) for p in payments)
     auctions = await db.auctions.find({"status": "sold"}, {"_id": 0}).to_list(5000)
     auction_sales = sum(float(a.get("sold_price", 0) or 0) for a in auctions)
+    # Auction interest profit (separated from cash recovery — counted as profit only)
+    auction_interest_profit = sum(float(a.get("interest_fee", 0) or 0) for a in auctions)
+    # Invoice tax collected on sold auctions
+    invoices_for_tax = await db.invoices.find({}, {"_id": 0}).to_list(5000)
+    auction_tax_collected = sum(float(i.get("tax_amount", 0) or 0) for i in invoices_for_tax)
 
     # Expenses
     expenses = await db.expenses.find({}, {"_id": 0}).to_list(5000)
@@ -1901,16 +2078,18 @@ async def finance_summary(
     by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_category.items()]
 
     # Profit & cash on hand (lifetime)
+    # Cash on Hand includes the auction tax collected from buyers.
     cash_on_hand = (
-        capital_received + client_payments + auction_sales
+        capital_received + client_payments + auction_sales + auction_tax_collected
         - loans_disbursed - expenses_total - capital_repaid
     )
     # Gross profit (interest + penalties earned) — approximate
     for c in contracts:
         await _recompute_contract_status(c)
     interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts)
-    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in contracts)
-    gross_profit = interest_received + total_penalty
+    total_penalty = sum(float(c.get("penalty_paid", 0) or 0) for c in contracts)
+    # Net profit ALSO includes interest portion of auction proceeds (interest_fee)
+    gross_profit = interest_received + total_penalty + auction_interest_profit
     net_profit = gross_profit - expenses_total
 
     # Invoices
@@ -1926,6 +2105,8 @@ async def finance_summary(
         "loans_disbursed": round(loans_disbursed, 2),
         "client_payments": round(client_payments, 2),
         "auction_sales": round(auction_sales, 2),
+        "auction_interest_profit": round(auction_interest_profit, 2),
+        "auction_tax_collected": round(auction_tax_collected, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
         "interest_received": round(interest_received, 2),
@@ -2286,15 +2467,33 @@ async def list_backups(_: dict = Depends(require_admin)):
 async def generate_backup(admin: dict = Depends(require_admin)):
     """Run the backup script and return the resulting file list."""
     import subprocess
+    import sys
     import os
     env = os.environ.copy()
     proc = subprocess.run(
-        ["python3", "/app/scripts/build_backup.py"],
+        [sys.executable, "/app/scripts/build_backup.py"],
         capture_output=True, text=True, env=env, cwd="/app", timeout=300,
     )
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail={"stderr": proc.stderr[-2000:], "stdout": proc.stdout[-2000:]})
     await write_audit(admin, "backup", "system", "all", {"stdout_tail": proc.stdout[-500:]})
+    return await list_backups(_=admin)  # type: ignore[arg-type]
+
+
+@api.post("/admin/backups/generate-project")
+async def generate_project_backup(admin: dict = Depends(require_admin)):
+    """Build the complete deployment zip (backend + frontend + Mongo + docs)."""
+    import subprocess
+    import sys
+    import os
+    env = os.environ.copy()
+    proc = subprocess.run(
+        [sys.executable, "/app/scripts/build_full_project_backup.py"],
+        capture_output=True, text=True, env=env, cwd="/app", timeout=300,
+    )
+    if proc.returncode != 0:
+        raise HTTPException(status_code=500, detail={"stderr": proc.stderr[-2000:], "stdout": proc.stdout[-2000:]})
+    await write_audit(admin, "backup_project", "system", "all", {"stdout_tail": proc.stdout[-500:]})
     return await list_backups(_=admin)  # type: ignore[arg-type]
 
 
@@ -2393,6 +2592,13 @@ async def on_startup():
             # Seed settings
     await get_settings_doc()
 
+    # Backfill allowed_modules on existing users that don't have it yet (iter11)
+    async for u in db.users.find({"allowed_modules": {"$exists": False}}, {"_id": 0, "id": 1, "role": 1}):
+        defaults = ROLE_DEFAULT_MODULES.get(u.get("role"), [])
+        if u.get("role") == "admin":
+            defaults = list(ALL_MODULES)
+        await db.users.update_one({"id": u["id"]}, {"$set": {"allowed_modules": defaults}})
+
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@fatinpenhores.tl").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})
@@ -2402,6 +2608,7 @@ async def on_startup():
             "email": admin_email,
             "name": "Administrator",
             "role": "admin",
+            "allowed_modules": list(ALL_MODULES),
             "password_hash": hash_password(admin_password),
             "created_at": utcnow_iso(),
         })
@@ -2409,7 +2616,7 @@ async def on_startup():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one(
             {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
+            {"$set": {"password_hash": hash_password(admin_password), "allowed_modules": list(ALL_MODULES)}},
         )
         logger.info(f"Updated admin password for: {admin_email}")
 

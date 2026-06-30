@@ -20,21 +20,28 @@ import {
   Filter as FilterIcon,
 } from "lucide-react";
 
-// 6 report tabs from user spec
+// 6 report tabs from user spec — each with a distinct accent color
 const TABS = [
   { key: "active-contracts", labelKey: "active_contract",
+    color: "#1B2D5C", soft: "bg-[#1B2D5C]/10 text-[#1B2D5C]",
     kpis: ["total_contracts", "total_loan", "tax_accumulate", "almost_expired"] },
   { key: "payments", labelKey: "payments",
+    color: "#4C7F62", soft: "bg-[#4C7F62]/10 text-[#4C7F62]",
     kpis: ["total_transactions", "total_payments", "interest_received", "total_penalty"] },
   { key: "overdue", labelKey: "total_overdue",
+    color: "#C17767", soft: "bg-[#C17767]/10 text-[#C17767]",
     kpis: ["total_overdue", "total_outstanding", "total_interest", "near_expired"] },
   { key: "auction", labelKey: "auctions",
+    color: "#B45309", soft: "bg-amber-100 text-amber-800",
     kpis: ["total_auction", "total_amount"] },
   { key: "inventory", labelKey: "inventory",
+    color: "#7C3AED", soft: "bg-violet-100 text-violet-800",
     kpis: ["total_items", "total_amount", "active_items", "overdue_items"] },
   { key: "financial", labelKey: "financial",
+    color: "#0F766E", soft: "bg-teal-100 text-teal-800",
     kpis: ["total_loan", "total_payment", "interest_received", "profit"] },
   { key: "treasury", labelKey: "finance",
+    color: "#8F9779", soft: "bg-[#8F9779]/15 text-[#5C6753]",
     kpis: ["capital_received", "capital_outstanding", "expenses_total", "expense_categories"] },
 ];
 
@@ -120,17 +127,18 @@ export default function Reports() {
         </h1>
       </header>
 
-      {/* Tab navigation — navy pill style from mockup */}
+      {/* Tab navigation — color-coded per category */}
       <div className="flex flex-wrap gap-2 print:hidden" data-testid="report-tabs">
         {TABS.map((tb) => (
           <button
             key={tb.key}
             onClick={() => setTab(tb.key)}
             data-testid={`report-tab-${tb.key}`}
-            className={`px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition ${
+            style={tab === tb.key ? { backgroundColor: tb.color, color: "white" } : undefined}
+            className={`px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition shadow-sm ${
               tab === tb.key
-                ? "bg-[#1B2D5C] text-white shadow"
-                : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                ? "shadow-md"
+                : `${tb.soft} hover:opacity-90`
             }`}
           >
             {t(tb.labelKey)}
