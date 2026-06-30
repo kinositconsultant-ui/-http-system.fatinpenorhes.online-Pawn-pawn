@@ -5,7 +5,13 @@ import { Car, Bike, Cpu, Truck, Lock, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 const TOKEN_KEY = "fp_warehouse_token";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://api.fatinpenorhes.online";
 
+const fileUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  return `${BACKEND_URL}${url}`;
+};
 export default function Warehouse() {
   const { t, lang } = useLang();
   const T = (en, tet) => (lang === "tet" ? tet : en);
@@ -181,7 +187,11 @@ export default function Warehouse() {
             >
               <div className="aspect-square bg-stone-100">
                 {r.photo_url ? (
-                  <img alt="" src={r.photo_url} className="w-full h-full object-cover" />
+                <img
+                alt=""
+                src={`https://api.fatinpenorhes.online/api/files/${r.photo_url}`}
+                className="w-full h-full object-cover"
+                />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-stone-400">
                     {r.kind === "car" ? (
