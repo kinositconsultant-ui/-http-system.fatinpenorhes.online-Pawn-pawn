@@ -395,11 +395,11 @@ export default function Contracts() {
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                 <Td className="font-medium whitespace-nowrap" title={r.contract_number}>{shortContract(r.contract_number)}</Td>
                 <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
-                <Td className="max-w-[160px]">
+                <Td className="max-w-[160px] truncate">
                   <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">
                     {r.item_type}
                   </span>
-                  <span className="truncate align-middle text-xs" title={itemLabel(r.item_type, r.item_id)}>
+                  <span className="align-middle text-xs" title={itemLabel(r.item_type, r.item_id)}>
                     {itemLabel(r.item_type, r.item_id)}
                   </span>
                 </Td>
@@ -560,7 +560,7 @@ function Field({ label, children }) {
 function Th({ children, right }) {
   return (
     <th
-      className={`px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
+      className={`px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold leading-tight ${
         right ? "text-right" : ""
       }`}
     >

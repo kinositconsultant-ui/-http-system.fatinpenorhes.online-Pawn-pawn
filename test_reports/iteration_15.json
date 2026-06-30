@@ -1,44 +1,29 @@
 {
-  "summary": "Frontend-only layout verification of the Contracts table tightening fix. Tested at 1366x768 (EN+TET) and 1920x900 (EN). Other tables (Items/Payments/Auctions/Clients) verified non-regressed. The fix WORKS for English at 1366 and for both languages at 1920, but the original bug PERSISTS in Tetum at 1366: the Actions column still overflows the wrapper, and the rightmost delete button is clipped outside the viewport.",
+  "summary": "Re-verification of Contracts table overflow fix (iter15 second attempt). The fix is now WORKING in all 4 target scenarios: 1366x768 EN, 1366x768 TET, 1920x900 EN, 1920x900 TET. Headers wrap onto 2 lines in TET at 1366 instead of forcing column widths. Item Td truncation is active. Action buttons are all visible and clickable. Pre-auction card and other tables (payments, auctions, clients) are non-regressed.",
   "backend_issues": {"critical": [], "minor": []},
   "frontend_issues": {
-    "ui_bugs": [
-      {
-        "component": "Contracts table (contracts-table) — Tetum @ 1366x768",
-        "issue": "BUG NOT FULLY FIXED. At viewport 1366x768 with TET active, table content width = 1099px but wrapper clientWidth = 1044px (scrollW>clientW => overflow=true). The Actions cell renders with lastCellRight=1388 while viewportW=1366, so the rightmost contract-delete button (x=1356, w=24, right=1380) is clipped (visible:false). Long Tetum headers like 'MONTANTE EMPRÉSTIMU' and 'DATA KONTRATU → DATA LIMITE' (both whitespace-nowrap on Th) expand cell widths beyond the available wrapper. Screenshot of 1366 TET confirms only partial action icons visible at the right edge.",
-        "selector": "[data-testid=\"contracts-table\"] tbody tr td:last-child button[data-testid^=\"contract-delete-\"]",
-        "priority": "HIGH"
-      }
-    ],
+    "ui_bugs": [],
     "integration_issues": [],
     "design_issues": [
       {
-        "screen": "Contracts (Tetum) @ 1366",
-        "issues": [
-          "The long Tetum header strings combined with whitespace-nowrap on Th force a min table width > parent wrapper. Padding/font tightening alone is insufficient — header columns should be allowed to wrap (remove whitespace-nowrap on Th OR abbreviate the i18n strings) so the table fits in 1024-1044px of available space at 1366 viewport (sidebar ~256px + margins).",
-          "Item cell uses max-w-[160px] but lacks the `truncate` Tailwind class on the td (only the inner span has truncate). Inline-block + max-w on a span without overflow:hidden does not actually truncate; long item names can still expand the column. Verify intent vs. iter12 fix."
-        ]
+        "screen": "Items page",
+        "issues": ["Items page does not expose a data-testid='items-table' (only one <table> rendered). Not part of this fix but flagged for future-test consistency with other listing pages."]
       }
     ]
   },
   "test_report_links": [],
-  "action_items": [
-    "Fix Tetum overflow at 1366: remove `whitespace-nowrap` from the Th component (line ~563 in Contracts.js) OR shorten Tetum header keys for 'loan_amount' and 'contract_date_due_date' in the i18n dictionary so the table no longer exceeds the wrapper.",
-    "Consider sticky-right or horizontal scroll on the table wrapper as a defensive measure so action buttons never get clipped silently.",
-    "Optionally add `truncate` class on the Item Td (line 398) to actually enforce max-w-[160px], so unusually long item labels cannot push the Actions column off-screen."
-  ],
+  "action_items": [],
   "critical_code_review_comments": [
-    "Th has `whitespace-nowrap` (line 563) which negates much of the padding/font tightening when long localized strings are used. Either wrap headers or localize shorter labels.",
-    "Td for Item (max-w-[160px]) lacks `truncate` class — the constraint is not actually enforced on the cell.",
-    "Action buttons are 24x24 — at the lower bound of accessibility tap target (recommended 44x44 mobile / 24x24 acceptable desktop). Still clickable via data-testid; verified inViewport at 1920.",
-    "Pre-auction-card (data-testid='pre-auction-card') renders correctly, no overflow at any tested viewport."
+    "Fix VERIFIED: Th (Contracts.js line 560-570) no longer applies whitespace-nowrap and now uses leading-tight — long Tetum headers like 'MONTANTE EMPRÉSTIMU' and 'DATA KONTRATU → DATA LIMITE' wrap onto 2 lines, keeping table width within wrapper.",
+    "Fix VERIFIED: Item Td (line 398) has `truncate` on the td; measured scrollWidth (e.g., 177, 164, 190, 193) > offsetWidth (160) confirms truncation is now actively constraining the cell.",
+    "Consider also adding data-testid='items-table' to the Items page table for parity with other listing pages."
   ],
   "updated_files": [],
-  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "85% (5/6 scenarios pass; Tetum@1366 still fails)"},
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (8/8 scenarios pass)"},
   "test_credentials": "admin@fatinpenhores.tl / admin123 (per /app/memory/test_credentials.md)",
-  "seed_data_creation": "None — used existing 41 pre-auction + remaining contracts.",
-  "retest_needed": true,
-  "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Measurements at 1366x768 TET: tableRight=1388, viewportW=1366, wrapperScrollW=1099 vs clientW=1044. Delete button right=1380 > 1366 (clipped). 1366 EN works fine (tableRight=1343). 1920 EN works fine (overflow=false). Items/Payments/Auctions/Clients all overflow=false (no regression). All 8 Tetum headers verified present. PDF/reactivate/auction/whatsapp/delete testids confirmed wired on the rows.",
-  "rca of the issue": "ROOT CAUSE: The Th component still applies `whitespace-nowrap` to header cells. In Tetum, 'MONTANTE EMPRÉSTIMU' (19 chars) and 'DATA KONTRATU → DATA LIMITE' (27 chars) cannot wrap, forcing those columns to a minimum width equal to the un-wrapped text. The resulting min-content width of the table (1099px) exceeds the wrapper's clientWidth (1044px at 1366 viewport with the 256px sidebar). The padding/font tightening in iter15 reduced overall width but not enough to absorb the longest Tetum strings. MITIGATION: (1) Remove whitespace-nowrap from Th and allow the header to wrap to 2 lines, OR (2) shorten the Tetum translations to fit (e.g., 'MONTANTE' / 'DATA → LIMITE'), OR (3) make the wrapper horizontally scrollable so the cut-off isn't silent. REPRODUCTION: Login as admin → navigate to /contracts → click TET in sidebar → set viewport to 1366x768 → observe rightmost action buttons clipped at the right edge of the wrapper."
+  "seed_data_creation": "None — used existing data (113 contracts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Measurements at 1366x768: EN -> wrapperScrollW=1044, clientW=1044, overflow=false, lastDeleteBtn right=1325 (visible). TET -> identical (wrapperScrollW=1044=clientW=1044), lastDeleteBtn right=1325 (visible). 1920x900: EN/TET -> 1214=1214, lastDeleteBtn right=1687 (visible). Header height at 1366 TET = 45.5px vs body row = 52.5px (ratio 0.87, ~2-line header). At 1920 thead = 33px (single line), confirming TET headers DO wrap at 1366 specifically as designed. Item cell offsetWidth=160px enforced (scrollWidth 164-193 > offsetWidth=160 confirms truncate active). Pre-auction-card @ 1366 TET: scrollW=clientW=1044, overflow=false. Payments/Auctions/Clients tables: overflow=false at 1366 EN. Action buttons tested: PDF (113), reactivate (41), move-to-auction (95, fired 8 API calls + 'Moved to auction' toast), whatsapp (94) — all visible and clickable.",
+  "rca of the issue": "RESOLVED. Root cause from prev iteration: Th had `whitespace-nowrap` and Item Td lacked `truncate` on the td. Both fixes applied and verified: (a) Th class string is `px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold leading-tight` (no whitespace-nowrap) — confirmed by inspecting the rendered DOM and observing 2-line header wrap at narrow widths; (b) Item Td has `max-w-[160px] truncate` — confirmed by td scrollWidth exceeding offsetWidth while content remains visually clipped."
 }
