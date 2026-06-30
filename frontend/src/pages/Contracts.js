@@ -377,7 +377,7 @@ export default function Contracts() {
       )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
-        <table className="min-w-full text-sm" data-testid="contracts-table">
+        <table className="min-w-full text-[13px]" data-testid="contracts-table">
           <thead className="bg-stone-50 text-left">
             <tr>
               <Th>{t("contract_number")}</Th>
@@ -423,7 +423,7 @@ export default function Contracts() {
                   <StatusBadge status={r.status} />
                 </Td>
                 <Td right>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-end gap-0.5">
                     <a
                       href={`${API_BASE}/contracts/${r.id}/pdf`}
                       target="_blank"
@@ -560,7 +560,7 @@ function Field({ label, children }) {
 function Th({ children, right }) {
   return (
     <th
-      className={`px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
+      className={`px-2 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap ${
         right ? "text-right" : ""
       }`}
     >
@@ -571,7 +571,7 @@ function Th({ children, right }) {
 
 function Td({ children, right, className = "" }) {
   return (
-    <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`}>
+    <td className={`px-2 py-2 ${right ? "text-right" : ""} ${className}`}>
       {children}
     </td>
   );
