@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 10)
+**Last updated:** 2026-02 (Iteration 13)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -83,12 +83,21 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Auction Sold split** — `AuctionSoldIn.interest_fee` optional. When provided, `cash_portion = sold_price − interest_fee`. When omitted, auto-computed from contract's outstanding interest + penalty. `interest_fee` flows to `net_profit` in `/finance/summary`; `sold_price + tax` flows to `cash_on_hand`. **Buyer invoice PDF intentionally shows only Subtotal/Tax/Total — no interest line.** Internal accounting stored as `_internal_interest_fee` / `_internal_cash_portion` on the invoice doc.
 - **Bugfix (testing agent)**: `PezaduIn` model was missing `name` + `machine_number` (Pydantic v2 'ignore' silently dropped them on POST). Added both with empty defaults.
 
-## Test Coverage (cumulative)
-- Backend: **205/205 PASS** (190 prior + 15 new iter10).
-- Frontend spot-check: items name+machine_number on all 3 vehicle tabs · contracts Pre-Auction card · payments overdue tab + 3-mode dialog · client payment summary cards · finance capital rate/term dropdowns + interest preview · loan calculator full grid.
+## Implemented (Iter 13 — 2026-02)
+- **Per-user Module Access (RBAC v2)** — admin can now tick which modules each user can access when creating/editing them.
+  - Backend: `UserOut` / `auth/me` / `auth/login` all expose `allowed_modules: List[str]`. New constants `ALL_MODULES` (11 modules) + `ROLE_DEFAULT_MODULES` ({admin: all, staff: 7, cashier: dashboard+payments}). New `require_module(name)` dependency factory; applied to list endpoints for clients, items, contracts, payments, auctions, dashboard, finance, reports/v2. Admin role always bypasses (returns immediately). New GET `/api/users/modules` catalog endpoint (admin-only). PATCH `/api/users/{id}` supports `allowed_modules`. POST creating an admin auto-locks to `ALL_MODULES`. Bad module names are silently filtered out.
+  - **Migration**: on boot, every existing user document without `allowed_modules` is backfilled with the role default (admin → all 11, staff → 7, cashier → [dashboard, payments]).
+  - Frontend Users page (full rewrite): Module Access checkbox grid (11 items, 3 columns) + 4 preset buttons (Staff preset / Cashier preset / All / None). Role dropdown — selecting admin auto-locks all 11 checkboxes and disables them + the preset buttons. Edit dialog (PATCH) pre-fills email (disabled), name, role, current modules. Users list table now shows a Modules column with badge pills per user (admins show "All modules").
+  - Frontend Sidebar (`AdminLayout`): nav items are filtered by `user.allowed_modules`. A cashier with only `[dashboard, payments]` sees only those 2 nav links. Admin always sees all 11.
 
-## Test Coverage (Iter 9)
-- Backend: **190/190 PASS** (141 prior + 49 new iter9 regression tests).
+## Test Coverage (cumulative)
+- Backend: **244/244 PASS** (205 prior + 24 iter13 module access + 15 iter10 regression rerun).
+- Frontend Playwright iter13: **13/13 PASS** (catalog endpoint, role-based defaults, preset buttons, admin lock, edit pre-fill, sidebar visibility for cashier, 403 on manual nav, regression checks).
+
+## Test Coverage (Iter 10-12)
+- Iter12 (items table layout): 15/15 backend + 6/6 frontend PASS.
+- Iter10 (6 new features): 15/15 backend + frontend PASS.
+- Iter9: 190/190 PASS.
 - Frontend spot-check: login → dashboard → items (4 tabs incl. Heavy Equipment) → contracts (CT-2026 short numbers + red PDF buttons) → settings (WhatsApp + Backups + Warehouse password) → finance (KPIs + charts + 3 tabs) → public Warehouse password gate.
 
 ## Test Coverage (Iter 8)
