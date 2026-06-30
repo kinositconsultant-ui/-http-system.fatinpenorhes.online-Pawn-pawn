@@ -312,11 +312,13 @@ PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
 
 
 class CarIn(BaseModel):
+    name: str = ""  # human-friendly label e.g. "Toyota Hilux 2020 Black"
     brand: str
     model: str
     description: str = ""
     plate: str = ""
-    chassis: str = ""
+    machine_number: str = ""  # engine/motor number
+    chassis: str = ""         # VIN / frame number
     fuel_percent: int = 0
     color: str = ""
     manufacture_year: Optional[int] = None
@@ -327,10 +329,12 @@ class CarIn(BaseModel):
 
 
 class MotorcycleIn(BaseModel):
+    name: str = ""
     brand: str
     model: str
     description: str = ""
     plate: str = ""
+    machine_number: str = ""
     chassis: str = ""
     fuel_percent: int = 0
     color: str = ""
@@ -356,11 +360,13 @@ class ElectronicIn(BaseModel):
 
 
 class PezaduIn(BaseModel):
+    name: str = ""  # human-friendly label
     category: str  # forklift / tractor / loader / heavy_duty_truck
     brand: str
     model: str
     description: str = ""
     plate: str = ""
+    machine_number: str = ""  # engine/motor number
     chassis: str = ""
     serial: str = ""
     fuel_percent: int = 0
@@ -582,41 +588,70 @@ async def _recompute_contract_status(contract: dict) -> dict:
     rate = float(contract["interest_rate"])
     interest = round(loan * rate / 100.0, 2)
 
-    # Split payments into interest vs principal
+    # Compute potential penalty first (used by overdue payment types).
+    today = _today_iso()
+    is_overdue = contract.get("due_date", today) < today
+    full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
+
+    # Split payments into interest, principal, and penalty
     interest_paid = 0.0
     principal_paid = 0.0
-    interest_remaining = interest
+    penalty_paid = 0.0
     for p in sorted(payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))):
         amt = float(p.get("amount", 0))
         ptype = p.get("type", "partial")
         if ptype == "interest_only":
             take = min(amt, max(0.0, interest - interest_paid))
             interest_paid += take
-            # any excess flows to principal
             extra = amt - take
             if extra > 0:
                 principal_paid += extra
         elif ptype == "partial":
-            # partial pay reduces principal first per user rule
             principal_paid += amt
         elif ptype == "full":
-            # split: cover interest first, then principal
             take = max(0.0, interest - interest_paid)
             interest_paid += min(amt, take)
             principal_paid += max(0.0, amt - take)
+        elif ptype == "overdue_full":
+            # Cover penalty -> interest -> principal in that order
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            rem = amt - take_pen
+            take_int = min(rem, max(0.0, interest - interest_paid))
+            interest_paid += take_int
+            rem -= take_int
+            principal_paid += max(0.0, rem)
+        elif ptype == "overdue_interest_pen":
+            # Cover penalty first, then interest. Principal stays.
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            rem = amt - take_pen
+            take_int = min(rem, max(0.0, interest - interest_paid))
+            interest_paid += take_int
+        elif ptype == "overdue_penalty_only":
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            penalty_paid += min(amt, pen_remaining)
 
     principal_paid = min(principal_paid, loan)
     interest_paid = min(interest_paid, interest)
+    penalty_paid = min(penalty_paid, full_penalty)
     principal_remaining = round(max(0.0, loan - principal_paid), 2)
     interest_remaining = round(max(0.0, interest - interest_paid), 2)
+    penalty_remaining = round(max(0.0, full_penalty - penalty_paid), 2)
 
-    # Penalty: 10% of original loan if overdue and not fully redeemed (does NOT include interest)
-    today = _today_iso()
-    is_overdue = contract.get("due_date", today) < today
-    redeemed = (principal_remaining + interest_remaining) <= 0.01
-    penalty = 0.0
-    if is_overdue and not redeemed and contract.get("status") != "auction":
-        penalty = round(loan * 0.10, 2)
+    redeemed = (principal_remaining + interest_remaining + penalty_remaining) <= 0.01
+    # Outstanding penalty (still owed) for status display
+    penalty = penalty_remaining
+
+    # Days overdue (0 if not overdue)
+    days_overdue = 0
+    if is_overdue:
+        try:
+            days_overdue = (date.today() - date.fromisoformat(contract["due_date"])).days
+        except Exception:
+            days_overdue = 0
 
     total_due = round(principal_remaining + interest_remaining + penalty, 2)
 
@@ -627,6 +662,8 @@ async def _recompute_contract_status(contract: dict) -> dict:
         status = "sold"
     elif redeemed:
         status = "redeemed"
+    elif is_overdue and days_overdue > 10:
+        status = "auction_ready"
     elif is_overdue:
         status = "overdue"
     else:
@@ -643,6 +680,9 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["interest_remaining"] = interest_remaining
     contract["interest_amount"] = interest
     contract["penalty"] = penalty
+    contract["penalty_paid"] = round(penalty_paid, 2)
+    contract["penalty_full"] = full_penalty
+    contract["days_overdue"] = days_overdue
     contract["total_due"] = total_due
     contract["remaining_balance"] = total_due
     return contract
@@ -717,7 +757,7 @@ async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depe
     if not c:
         raise HTTPException(status_code=404, detail="Contract not found")
     c = await _recompute_contract_status(c)
-    if c["status"] not in ("overdue", "active"):
+    if c["status"] not in ("overdue", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only overdue or active contracts can be reactivated")
     try:
         nd = date.fromisoformat(payload.new_due_date)
@@ -783,7 +823,14 @@ async def contract_pdf(cid: str, _: dict = Depends(get_current_user)):
 class PaymentIn(BaseModel):
     contract_id: str
     amount: float
-    type: Literal["full", "partial", "interest_only"]
+    type: Literal[
+        "full",
+        "partial",
+        "interest_only",
+        "overdue_full",          # Loan + Interest + Penalty (full close-out)
+        "overdue_interest_pen",  # Interest + Penalty (contract stays open)
+        "overdue_penalty_only",  # Just clear penalty
+    ]
     date: str  # YYYY-MM-DD
     notes: str = ""
 
@@ -866,6 +913,7 @@ class AuctionMoveIn(BaseModel):
 
 class AuctionSoldIn(BaseModel):
     sold_price: float
+    interest_fee: Optional[float] = None  # if None, computed from contract outstanding interest+penalty
     buyer_name: str = ""
     buyer_phone: str = ""
     buyer_email: str = ""
@@ -898,7 +946,7 @@ async def move_to_auction(payload: AuctionMoveIn, _: dict = Depends(get_current_
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     contract = await _recompute_contract_status(contract)
-    if contract["status"] not in ("overdue", "active"):
+    if contract["status"] not in ("overdue", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only active/overdue contracts can be auctioned")
     doc = {
         "id": new_id(),
@@ -945,9 +993,26 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         existing = await db.invoices.find_one({"id": a["invoice_id"]}, {"_id": 0})
         if existing:
             return {**a, "invoice": existing}
+
+    # Compute interest_fee — defaults to outstanding interest + penalty on the contract
+    contract = await db.contracts.find_one({"id": a.get("contract_id")}, {"_id": 0}) or {}
+    if contract:
+        contract = await _recompute_contract_status(contract)
+    if payload.interest_fee is None:
+        default_fee = float(contract.get("interest_remaining", 0)) + float(contract.get("penalty", 0))
+        interest_fee = round(default_fee, 2)
+    else:
+        interest_fee = round(float(payload.interest_fee), 2)
+    # Internal split: portion of sold_price counted as interest (profit), rest as cash recovery
+    sold_price = float(payload.sold_price)
+    interest_fee = min(interest_fee, sold_price)  # cannot exceed sold price
+    cash_portion = round(sold_price - interest_fee, 2)
+
     update = {
         "status": "sold",
-        "sold_price": payload.sold_price,
+        "sold_price": sold_price,
+        "interest_fee": interest_fee,        # NEW — separated for finance
+        "cash_portion": cash_portion,        # NEW — sold_price - interest_fee
         "buyer_name": payload.buyer_name,
         "buyer_phone": payload.buyer_phone,
         "buyer_email": payload.buyer_email,
@@ -961,9 +1026,9 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         {"id": a["item_id"]},
         {"$set": {"status": "sold"}},
     )
-    # Auto-create invoice
+    # Auto-create invoice — buyer sees only item + sold_price + tax + total (NO interest line)
     inv_number = await _generate_invoice_number()
-    subtotal = float(payload.sold_price)
+    subtotal = sold_price
     tax = round(subtotal * float(payload.tax_percent or 0) / 100.0, 2)
     invoice = {
         "id": new_id(),
@@ -981,6 +1046,9 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
         "tax_percent": float(payload.tax_percent or 0),
         "tax_amount": tax,
         "total": round(subtotal + tax, 2),
+        # Internal-only fields for accounting; NOT shown on buyer invoice PDF
+        "_internal_interest_fee": interest_fee,
+        "_internal_cash_portion": cash_portion,
         "status": "issued",
         "date": date.today().isoformat(),
         "notes": payload.notes,
@@ -989,7 +1057,7 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
     }
     await db.invoices.insert_one(invoice)
     await db.auctions.update_one({"id": aid}, {"$set": {"invoice_id": invoice["id"], "invoice_number": inv_number}})
-    await write_audit(user, "sold_auction", "auction", aid, {"sold_price": payload.sold_price, "invoice_number": inv_number})
+    await write_audit(user, "sold_auction", "auction", aid, {"sold_price": sold_price, "interest_fee": interest_fee, "invoice_number": inv_number})
     invoice.pop("_id", None)
     return {**a, **update, "invoice_id": invoice["id"], "invoice_number": inv_number, "invoice": invoice}
 
@@ -1731,6 +1799,7 @@ class FundingSourceIn(BaseModel):
     principal_amount: float
     interest_rate: float = 0.0
     interest_period: Literal["monthly", "yearly", "none"] = "monthly"
+    term_months: Optional[int] = None
     start_date: str
     due_date: str = ""
     notes: str = ""
@@ -1882,6 +1951,11 @@ async def finance_summary(
     client_payments = sum(float(p.get("amount", 0) or 0) for p in payments)
     auctions = await db.auctions.find({"status": "sold"}, {"_id": 0}).to_list(5000)
     auction_sales = sum(float(a.get("sold_price", 0) or 0) for a in auctions)
+    # Auction interest profit (separated from cash recovery — counted as profit only)
+    auction_interest_profit = sum(float(a.get("interest_fee", 0) or 0) for a in auctions)
+    # Invoice tax collected on sold auctions
+    invoices_for_tax = await db.invoices.find({}, {"_id": 0}).to_list(5000)
+    auction_tax_collected = sum(float(i.get("tax_amount", 0) or 0) for i in invoices_for_tax)
 
     # Expenses
     expenses = await db.expenses.find({}, {"_id": 0}).to_list(5000)
@@ -1896,16 +1970,18 @@ async def finance_summary(
     by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_category.items()]
 
     # Profit & cash on hand (lifetime)
+    # Cash on Hand includes the auction tax collected from buyers.
     cash_on_hand = (
-        capital_received + client_payments + auction_sales
+        capital_received + client_payments + auction_sales + auction_tax_collected
         - loans_disbursed - expenses_total - capital_repaid
     )
     # Gross profit (interest + penalties earned) — approximate
     for c in contracts:
         await _recompute_contract_status(c)
     interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts)
-    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in contracts)
-    gross_profit = interest_received + total_penalty
+    total_penalty = sum(float(c.get("penalty_paid", 0) or 0) for c in contracts)
+    # Net profit ALSO includes interest portion of auction proceeds (interest_fee)
+    gross_profit = interest_received + total_penalty + auction_interest_profit
     net_profit = gross_profit - expenses_total
 
     # Invoices
@@ -1921,6 +1997,8 @@ async def finance_summary(
         "loans_disbursed": round(loans_disbursed, 2),
         "client_payments": round(client_payments, 2),
         "auction_sales": round(auction_sales, 2),
+        "auction_interest_profit": round(auction_interest_profit, 2),
+        "auction_tax_collected": round(auction_tax_collected, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
         "interest_received": round(interest_received, 2),

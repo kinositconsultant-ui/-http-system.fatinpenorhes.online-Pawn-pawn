@@ -41,12 +41,14 @@ const KIND_META = {
 
 function vehicleFields(t) {
   return [
+    { k: "name", label: t("item_name"), required: true, placeholder: "Toyota Hilux 2020 Black" },
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
     { k: "manufacture_year", label: t("manufacture_year"), type: "number" },
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "color", label: t("color") },
     { k: "plate", label: t("plate") },
+    { k: "machine_number", label: t("machine_number") },
     { k: "chassis", label: t("chassis") },
     { k: "fuel_percent", label: t("fuel_percent"), type: "number" },
     { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
@@ -74,6 +76,7 @@ function electronicFields(t) {
 
 function pezaduFields(t) {
   return [
+    { k: "name", label: t("item_name"), required: true, placeholder: "Komatsu Forklift FD25T" },
     {
       k: "category",
       label: t("category"),
@@ -87,6 +90,7 @@ function pezaduFields(t) {
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "color", label: t("color") },
     { k: "plate", label: t("plate") },
+    { k: "machine_number", label: t("machine_number") },
     { k: "chassis", label: t("chassis") },
     { k: "serial", label: t("serial") },
     { k: "operating_hours", label: t("operating_hours"), type: "number" },

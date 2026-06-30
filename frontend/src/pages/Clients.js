@@ -364,7 +364,36 @@ export default function Clients() {
               </div>
 
               <div>
-                <div className="text-eyebrow mb-2">{t("payment_history")} ({viewPayments.length})</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-eyebrow">{t("payment_summary")} · {t("payment_history")} ({viewPayments.length})</div>
+                </div>
+                {viewPayments.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3" data-testid="client-payment-summary">
+                    {(() => {
+                      const total = viewPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+                      const byType = (t1) => viewPayments
+                        .filter((p) => p.type === t1)
+                        .reduce((s, p) => s + Number(p.amount || 0), 0);
+                      const tFull = byType("full") + byType("overdue_full");
+                      const tPartial = byType("partial");
+                      const tInterest = byType("interest_only") + byType("overdue_interest_pen");
+                      const tPenalty = byType("overdue_penalty_only");
+                      const cards = [
+                        { label: "Total Paid", val: total, color: "bg-emerald-50 border-emerald-200 text-emerald-900" },
+                        { label: "Full / Close-out", val: tFull, color: "bg-stone-50 border-stone-200 text-stone-900" },
+                        { label: "Partial", val: tPartial, color: "bg-blue-50 border-blue-200 text-blue-900" },
+                        { label: "Interest", val: tInterest, color: "bg-amber-50 border-amber-200 text-amber-900" },
+                        { label: "Penalty", val: tPenalty, color: "bg-red-50 border-red-200 text-red-900" },
+                      ];
+                      return cards.map((c) => (
+                        <div key={c.label} className={`rounded-md border px-3 py-2 ${c.color}`}>
+                          <div className="text-[10px] uppercase tracking-wider opacity-80">{c.label}</div>
+                          <div className="font-display text-base">${Number(c.val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
                 <div className="rounded-md border border-stone-200 overflow-x-auto" data-testid="client-payments-table">
                   <table className="min-w-full text-sm">
                     <thead className="bg-stone-50 text-left">

@@ -168,6 +168,12 @@ export default function Contracts() {
     (i) => i.status === "in_stock" || !i.status
   );
 
+  // Pre-Auction list: contracts 1-10 days overdue (status "overdue", not yet auction_ready)
+  const preAuction = rows.filter(
+    (r) => r.status === "overdue" && Number(r.days_overdue || 0) >= 1 && Number(r.days_overdue || 0) <= 10
+  );
+  const auctionReady = rows.filter((r) => r.status === "auction_ready");
+
   return (
     <div className="space-y-6" data-testid="contracts-root">
       <header className="flex items-end justify-between flex-wrap gap-4">
@@ -300,6 +306,75 @@ export default function Contracts() {
           </DialogContent>
         </Dialog>
       </header>
+
+      {/* Pre-Auction / Auction Ready summary card */}
+      {(preAuction.length > 0 || auctionReady.length > 0) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 shadow-sm overflow-hidden" data-testid="pre-auction-card">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-amber-200 bg-amber-100/60">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-md bg-amber-600 text-white flex items-center justify-center">
+                <Gavel className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider font-semibold text-amber-800">{t("pre_auction") || "Pre-Auction"}</div>
+                <div className="text-xs text-stone-600">
+                  {t("pre_auction_hint") || "Contracts overdue 1-10 days. After 10 days they auto-move to Auction Ready."}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 rounded bg-amber-200 text-amber-900 font-semibold">{preAuction.length} {t("pre_auction") || "Pre-Auction"}</span>
+              <span className="px-2 py-1 rounded bg-red-200 text-red-900 font-semibold">{auctionReady.length} {t("auction_ready") || "Auction Ready"}</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm" data-testid="pre-auction-table">
+              <thead className="text-left bg-amber-50/40">
+                <tr>
+                  <Th>{t("contract_number")}</Th>
+                  <Th>{t("client")}</Th>
+                  <Th>{t("item")}</Th>
+                  <Th right>{t("days_overdue") || "Days Overdue"}</Th>
+                  <Th right>{t("loan_amount")}</Th>
+                  <Th right>{t("penalty")}</Th>
+                  <Th>{t("status")}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...preAuction, ...auctionReady]
+                  .sort((a, b) => Number(b.days_overdue || 0) - Number(a.days_overdue || 0))
+                  .map((r) => (
+                    <tr key={r.id} className="border-t border-amber-100 hover:bg-amber-50/40" data-testid={`pre-auction-row-${r.id}`}>
+                      <Td className="font-medium whitespace-nowrap">{shortContract(r.contract_number)}</Td>
+                      <Td className="max-w-[160px] truncate">{clientName(r.client_id)}</Td>
+                      <Td className="max-w-[180px] truncate">
+                        <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">
+                          {r.item_type}
+                        </span>
+                        {itemLabel(r.item_type, r.item_id)}
+                      </Td>
+                      <Td right>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                          Number(r.days_overdue || 0) > 10 ? "bg-red-100 text-red-800 border-red-300" :
+                          Number(r.days_overdue || 0) >= 8 ? "bg-orange-100 text-orange-800 border-orange-300" :
+                          Number(r.days_overdue || 0) >= 4 ? "bg-amber-100 text-amber-800 border-amber-300" :
+                          "bg-yellow-100 text-yellow-800 border-yellow-300"
+                        }`}>
+                          {r.days_overdue || 0} {Number(r.days_overdue || 0) === 1 ? "day" : "days"}
+                        </span>
+                      </Td>
+                      <Td right className="whitespace-nowrap">${Number(r.loan_amount).toLocaleString()}</Td>
+                      <Td right className="whitespace-nowrap text-red-700 font-medium">
+                        ${Number(r.penalty || 0).toLocaleString()}
+                      </Td>
+                      <Td><StatusBadge status={r.status} /></Td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
         <table className="min-w-full text-sm" data-testid="contracts-table">
@@ -455,17 +530,20 @@ export default function Contracts() {
 function StatusBadge({ status }) {
   const map = {
     active: "bg-emerald-50 text-emerald-800 border-emerald-200",
-    overdue: "bg-red-50 text-red-800 border-red-200",
+    overdue: "bg-amber-50 text-amber-800 border-amber-200",
+    auction_ready: "bg-red-50 text-red-800 border-red-200",
     redeemed: "bg-stone-100 text-stone-700 border-stone-200",
     auction: "bg-orange-50 text-orange-800 border-orange-200",
+    sold: "bg-purple-50 text-purple-800 border-purple-200",
   };
+  const label = status === "auction_ready" ? "auction ready" : status;
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-full border ${
         map[status] || "bg-stone-100 text-stone-700 border-stone-200"
       }`}
     >
-      {status}
+      {label}
     </span>
   );
 }

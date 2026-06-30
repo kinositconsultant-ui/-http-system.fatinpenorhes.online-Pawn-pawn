@@ -19,7 +19,7 @@ export default function Auctions() {
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
-  const [form, setForm] = useState({ sold_price: "", buyer_name: "", notes: "" });
+  const [form, setForm] = useState({ sold_price: "", interest_fee: "", tax_percent: "0", buyer_name: "", notes: "" });
 
   const load = () => api.get("/auctions").then((r) => setRows(r.data));
   useEffect(() => {
@@ -28,17 +28,23 @@ export default function Auctions() {
 
   const openSold = (a) => {
     setCurrent(a);
-    setForm({ sold_price: a.starting_price || "", buyer_name: "", notes: "" });
+    setForm({ sold_price: a.starting_price || "", interest_fee: "", tax_percent: "0", buyer_name: "", notes: "" });
     setOpen(true);
   };
 
   const submitSold = async () => {
     try {
-      await api.post(`/auctions/${current.id}/sold`, {
+      const payload = {
         sold_price: Number(form.sold_price),
+        tax_percent: Number(form.tax_percent || 0),
         buyer_name: form.buyer_name,
         notes: form.notes,
-      });
+      };
+      // Only pass interest_fee if the admin entered one (otherwise backend auto-computes from outstanding interest+penalty)
+      if (form.interest_fee !== "" && !Number.isNaN(Number(form.interest_fee))) {
+        payload.interest_fee = Number(form.interest_fee);
+      }
+      await api.post(`/auctions/${current.id}/sold`, payload);
       toast.success("Marked as sold");
       setOpen(false);
       load();
@@ -138,17 +144,47 @@ export default function Auctions() {
             <DialogTitle>{t("mark_sold")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-stone-500">
+                  {t("sold_price")}
+                </Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.sold_price}
+                  onChange={(e) => setForm({ ...form, sold_price: e.target.value })}
+                  data-testid="auction-sold-price"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-stone-500">
+                  Tax % (buyer-facing)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.tax_percent}
+                  onChange={(e) => setForm({ ...form, tax_percent: e.target.value })}
+                  data-testid="auction-tax-percent"
+                />
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-stone-500">
-                {t("sold_price")}
+                {t("interest_fee")} <span className="text-stone-400 normal-case lowercase">(internal — leave blank to auto-compute from contract)</span>
               </Label>
               <Input
                 type="number"
                 step="0.01"
-                value={form.sold_price}
-                onChange={(e) => setForm({ ...form, sold_price: e.target.value })}
-                data-testid="auction-sold-price"
+                placeholder="auto from outstanding interest + penalty"
+                value={form.interest_fee}
+                onChange={(e) => setForm({ ...form, interest_fee: e.target.value })}
+                data-testid="auction-interest-fee"
               />
+              <p className="text-[11px] text-stone-500 leading-snug">
+                This is the profit portion of the sale. It is added to Net Profit in Finance and is NOT shown on the buyer&apos;s invoice.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-stone-500">
