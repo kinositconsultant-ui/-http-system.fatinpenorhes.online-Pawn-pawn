@@ -6,7 +6,6 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import os
-import uuid
 import logging
 from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional, Literal
@@ -14,7 +13,6 @@ from typing import List, Optional, Literal
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, Header
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from io import BytesIO
 
@@ -42,28 +40,32 @@ from pdf_utils import (
 import storage as objstore
 import whatsapp as wapp
 
-# ---- Setup ----
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+# Shared dependencies + helpers (extracted iter17 refactor)
+from deps import (
+    db,
+    logger,
+    utcnow_iso,
+    new_id,
+    ALL_MODULES,
+    ROLE_DEFAULT_MODULES,
+    COLLECTION_MAP,
+    get_current_user,
+    require_admin,
+    require_module,
+    require_roles,
+    require_not_cashier,
+    write_audit,
+)
 
 app = FastAPI(title="Fatin Penhores Pawn System")
 api = APIRouter(prefix="/api")
 
+# Configure root logger (deps.logger uses this)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("fatin")
-
-
-def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def new_id() -> str:
-    return str(uuid.uuid4())
 
 
 # =====================================================================
-# Auth — JWT via httpOnly cookies
+# Auth models
 # =====================================================================
 class LoginIn(BaseModel):
     email: EmailStr
@@ -76,92 +78,6 @@ class UserOut(BaseModel):
     name: str
     role: str
     allowed_modules: List[str] = []
-
-
-# Module catalog — canonical list of modules a user can be granted access to.
-# Keep in sync with frontend AdminLayout sidebar links and the MODULE_ROUTES map below.
-ALL_MODULES = [
-    "dashboard",
-    "clients",
-    "items",
-    "contracts",
-    "payments",
-    "auctions",
-    "reports",
-    "finance",
-    "users",
-    "settings",
-    "audit_log",
-]
-
-# Default module sets per role (admin always gets everything).
-ROLE_DEFAULT_MODULES = {
-    "admin": ALL_MODULES,
-    "staff": ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports"],
-    "cashier": ["dashboard", "payments"],
-}
-
-
-async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(token)
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Invalid token type")
-    user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
-
-async def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-    return user
-
-
-def require_module(module: str):
-    """Block API access if the user's `allowed_modules` doesn't include this module.
-    Admins are always granted full access. Non-admins must have the module explicitly listed."""
-    async def _dep(user: dict = Depends(get_current_user)) -> dict:
-        if user.get("role") == "admin":
-            return user
-        allowed = user.get("allowed_modules") or ROLE_DEFAULT_MODULES.get(user.get("role"), [])
-        if module not in allowed:
-            raise HTTPException(status_code=403, detail=f"You don't have access to the {module} module")
-        return user
-    return _dep
-
-
-def require_roles(*allowed: str):
-    async def _dep(user: dict = Depends(get_current_user)) -> dict:
-        if user.get("role") not in allowed:
-            raise HTTPException(status_code=403, detail=f"Requires role in {allowed}")
-        return user
-    return _dep
-
-
-# ---- Audit logging ----
-async def write_audit(actor: dict, action: str, resource: str, resource_id: str | None = None, payload: dict | None = None):
-    try:
-        await db.audit_log.insert_one({
-            "id": new_id(),
-            "actor_id": actor.get("id"),
-            "actor_email": actor.get("email"),
-            "actor_role": actor.get("role"),
-            "action": action,
-            "resource": resource,
-            "resource_id": resource_id or "",
-            "payload": payload or {},
-            "created_at": utcnow_iso(),
-        })
-    except Exception as e:  # never block primary operation due to logging
-        logger.warning(f"audit log failed: {e}")
 
 
 @api.post("/auth/login")
@@ -208,10 +124,6 @@ async def auth_refresh(request: Request, response: Response):
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
     return {"ok": True}
-
-
-# Helpers for role gates
-require_not_cashier = require_roles("admin", "staff")
 
 
 # =====================================================================
@@ -394,7 +306,6 @@ async def delete_client(cid: str, _: dict = Depends(require_admin)):
 # Items — separate collections for car / motorcycle / electronic
 # =====================================================================
 ITEM_KINDS = {"car", "motorcycle", "electronic", "pezadu"}
-COLLECTION_MAP = {"car": "cars", "motorcycle": "motorcycles", "electronic": "electronics", "pezadu": "pezadus"}
 
 
 PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
@@ -561,6 +472,7 @@ DEFAULT_SETTINGS = {
     "whatsapp_token": "",
     "whatsapp_phone_id": "",
     "reminder_days_before": 3,
+    "reminders_enabled": True,
 }
 
 
@@ -587,6 +499,7 @@ class SettingsIn(BaseModel):
     whatsapp_token: str = ""
     whatsapp_phone_id: str = ""
     reminder_days_before: int = 3
+    reminders_enabled: bool = True  # Master switch for daily overdue reminders (iter17)
 
 
 @api.get("/settings")
@@ -2436,6 +2349,39 @@ async def whatsapp_logs(_: dict = Depends(get_current_user)):
 
 
 # =====================================================================
+# Daily overdue reminders (iter17) — admin management + manual trigger
+# =====================================================================
+@api.get("/reminders/status")
+async def reminders_status(_: dict = Depends(require_admin)):
+    """Overview for Settings UI — enabled flag, last-run stats, next scheduled run."""
+    from scheduler import next_run_info
+    s = await get_settings_doc()
+    info = next_run_info()
+    return {
+        "enabled": bool(s.get("reminders_enabled", True)),
+        "last_run_at": s.get("reminders_last_run_at"),
+        "last_run_summary": s.get("reminders_last_run_summary", {}),
+        "next_run_at": info.get("next_reminders_run_at"),
+        "reminder_days": [7, 9],
+        "local_time": "09:00 Timor (UTC+9)",
+    }
+
+
+@api.post("/reminders/run")
+async def reminders_run_now(admin: dict = Depends(require_admin)):
+    """Manually trigger the daily reminder job. Returns the send summary."""
+    from reminders import run_daily_reminders
+    result = await run_daily_reminders()
+    await write_audit(admin, "run_reminders", "reminders", None, result)
+    return result
+
+
+@api.get("/reminders/logs")
+async def reminders_logs(_: dict = Depends(require_admin)):
+    return await db.reminder_log.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+
+
+# =====================================================================
 # Admin: backup downloads
 # =====================================================================
 @api.get("/admin/backups")
@@ -2629,4 +2575,6 @@ async def shutdown_db_client():
         shutdown_scheduler()
     except Exception:  # noqa: BLE001
         pass
-    client.close()
+    # Motor client is owned by deps.py — close via its internal reference
+    from deps import _client as _mongo_client
+    _mongo_client.close()

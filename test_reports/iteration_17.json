@@ -1,0 +1,28 @@
+{
+  "summary": "Iter17 (refactor to deps.py + daily overdue reminders) fully verified. 27/27 backend pytest cases pass, including refactor sanity on 14 GET endpoints, RBAC module gating via deps.require_module (cashier 403 on /clients, 200 on /payments, admin bypass), reminders status/run/logs endpoints, dedup on repeated /reminders/run, master toggle disable → run returns {disabled:true, scanned:0}, day-bucket boundary (only 7- and 9-day overdue contracts hit reminder_log; 6/8/10 skipped), and iter16 disbursement auto-record still fires on contract creation. Frontend Settings page renders the new RemindersCard with all 6 data-testids (reminders-card, reminders-run-now, reminders-toggle, reminders-last-run, reminders-next-run, reminders-sent-count, reminders-skipped-count); Run now triggers the API + toast + updates last-run timestamp; toggle off + Save persists reminders_enabled=false across reload. Scheduler log confirms daily_reminders CronTrigger(hour=0,minute=0 UTC) registered alongside daily_backup.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_reminders.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is still ~2560 lines — further extraction (reminders/clients/contracts/payments routers) recommended in a follow-up refactor.",
+    "reminders.py uses date.today() (server-local timezone) rather than UTC; since scheduler runs at 00:00 UTC = 09:00 Timor, and the container is UTC, this works today. If the container TZ ever changes, day-bucket math would drift — safer to use datetime.now(timezone.utc).date().",
+    "The unused `from deps import db as _db` inside run_daily_reminders() (comment says 'avoid circular import' but it's a no-op since deps is already imported at module top). Cosmetic cleanup.",
+    "Reminder dedup key is (contract_id, day_bucket, date=today). If the job runs past midnight UTC while a contract stays at bucket=7 for a second calendar day, it could send twice. Acceptable since buckets are 7 and 9 exactly (only 1 UTC day each), but worth documenting.",
+    "Consider limiting /api/reminders/logs to last N days (currently .limit(500) with no time filter — will get slow over years).",
+    "SettingsIn.reminders_enabled defaults True — good. But the Settings PUT accepts partial payloads (tested here) — confirmed unchanged fields are preserved."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter17_reminders.py"
+  ],
+  "success_rate": {"backend": "100% (27/27)", "frontend": "100% (7/7 UI checks)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md). Cashier fixture creates TEST_cashier_iter17@fatinpenhores.tl / cashierpass1 with allowed_modules=['dashboard','payments'].",
+  "seed_data_creation": "Day-boundary test creates 5 pawn cars + 5 contracts with due_dates 6/7/8/9/10 days ago; contracts are deleted in the finally block. 7- and 9-day contracts leave a reminder_log entry (whatsapp_not_configured -> skipped=1 each). This raised the settings.reminders_last_run_summary.skipped counter to 3 on the live DB — expected/mock-mode behavior. TEST_cashier user remains for future regression runs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter17_reminders.py covers refactor GETs, cashier RBAC, reminders status/run/logs/dedup/toggle/day-boundary, and iter16 disbursement regression. It re-uses admin_session fixture pattern and creates a persistent TEST_cashier user. Run with REACT_APP_BACKEND_URL exported (fetch from /app/frontend/.env). The Save button on Settings is the LAST-of-many with text 'Save' — use save_btns[-1]. Reminders card is between WhatsApp Config and Backups.",
+  "rca of the issue": "N/A — no bugs found. All iter17 acceptance criteria met."
+}

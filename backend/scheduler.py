@@ -79,7 +79,7 @@ def run_backup_and_prune() -> None:
 
 
 def start_scheduler() -> AsyncIOScheduler:
-    """Start the APScheduler with the daily backup job. Idempotent."""
+    """Start the APScheduler with the daily jobs. Idempotent."""
     global _scheduler
     if _scheduler is not None:
         return _scheduler
@@ -91,8 +91,17 @@ def start_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    # Daily WhatsApp overdue reminders — 09:00 Timor (UTC+9) → 00:00 UTC
+    from reminders import run_daily_reminders_sync
+    _scheduler.add_job(
+        run_daily_reminders_sync,
+        CronTrigger(hour=0, minute=0),
+        id="daily_reminders",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     _scheduler.start()
-    logger.info("[scheduler] started — daily backup at 02:00 UTC, keeping last %d snapshots", RETENTION)
+    logger.info("[scheduler] started — daily backup at 02:00 UTC, reminders at 00:00 UTC (09:00 Timor), keeping last %d snapshots", RETENTION)
     return _scheduler
 
 
@@ -108,9 +117,11 @@ def next_run_info() -> dict:
     if _scheduler is None:
         return {"running": False, "next_run_at": None, "retention": RETENTION}
     job = _scheduler.get_job("daily_backup")
+    rem_job = _scheduler.get_job("daily_reminders")
     return {
         "running": True,
         "next_run_at": job.next_run_time.astimezone(timezone.utc).isoformat() if job and job.next_run_time else None,
+        "next_reminders_run_at": rem_job.next_run_time.astimezone(timezone.utc).isoformat() if rem_job and rem_job.next_run_time else None,
         "retention": RETENTION,
         "now_utc": datetime.now(timezone.utc).isoformat(),
     }

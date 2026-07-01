@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Card } from "../components/ui/card";
 import { toast } from "sonner";
-import { Save, Send, Download, Database, RefreshCw } from "lucide-react";
+import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle } from "lucide-react";
 
 export default function Settings() {
   const { t } = useLang();
@@ -352,6 +352,9 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Daily overdue reminders (iter17) */}
+      <RemindersCard s={s} onChange={onChange} />
+
       {/* Backups & Migration */}
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -498,6 +501,145 @@ function Field({ label, children }) {
     <div className="space-y-1.5">
       <Label className="text-xs uppercase tracking-wider text-stone-500">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+/* ---------------- Daily overdue reminders (iter17) ---------------- */
+function RemindersCard({ s, onChange }) {
+  const [status, setStatus] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get("/reminders/status");
+      setStatus(data);
+    } catch (e) {
+      // Non-admins won't see this card at all, so this should never trigger
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const { data } = await api.post("/reminders/run");
+      toast.success(`Reminders: ${data.sent} sent · ${data.skipped} skipped · ${data.errors} errors`);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to run reminders");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    } catch { return iso; }
+  };
+
+  const enabled = s?.reminders_enabled !== false;
+  const summary = status?.last_run_summary || {};
+
+  return (
+    <Card
+      className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4"
+      data-testid="reminders-card"
+    >
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Bell className="w-5 h-5 text-[#B45309]" />
+          <div>
+            <h2 className="font-display text-xl">Daily Overdue Reminders</h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Auto-send WhatsApp reminders to clients whose contracts are day 7 or day 9 overdue — daily at{" "}
+              <span className="font-semibold text-stone-700">{status?.local_time || "09:00 Timor"}</span>.
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={runNow}
+          disabled={running}
+          variant="outline"
+          data-testid="reminders-run-now"
+          className="border-[#B45309] text-[#B45309] hover:bg-amber-50"
+        >
+          <Play className="w-4 h-4 mr-1" /> {running ? "Running…" : "Run now"}
+        </Button>
+      </div>
+
+      {/* Toggle */}
+      <div
+        className={`flex items-center justify-between rounded-md border p-3 ${
+          enabled ? "border-emerald-200 bg-emerald-50/50" : "border-stone-200 bg-stone-50"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          {enabled ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+          ) : (
+            <XCircle className="w-4 h-4 text-stone-500" />
+          )}
+          <div>
+            <div className="text-sm font-semibold text-stone-800">
+              Automatic daily reminders — {enabled ? "ON" : "OFF"}
+            </div>
+            <div className="text-xs text-stone-500">
+              {enabled
+                ? "The system will scan and send at the scheduled time every day."
+                : "No automatic reminders will be sent until re-enabled."}
+            </div>
+          </div>
+        </div>
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <span className="text-xs uppercase tracking-wider text-stone-500">
+            {enabled ? "Enabled" : "Disabled"}
+          </span>
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => onChange("reminders_enabled", e.target.checked)}
+            data-testid="reminders-toggle"
+            className="accent-[#B45309] w-5 h-5"
+          />
+        </label>
+      </div>
+
+      {/* Status grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile label="Last run" value={formatDate(status?.last_run_at)} testid="reminders-last-run" />
+        <StatTile label="Next run" value={formatDate(status?.next_run_at)} testid="reminders-next-run" />
+        <StatTile
+          label="Sent (last)"
+          value={String(summary.sent ?? 0)}
+          testid="reminders-sent-count"
+          accent="text-emerald-700"
+        />
+        <StatTile
+          label="Skipped / Errors"
+          value={`${summary.skipped ?? 0} / ${summary.errors ?? 0}`}
+          testid="reminders-skipped-count"
+          accent={summary.errors ? "text-red-700" : "text-stone-700"}
+        />
+      </div>
+
+      <p className="text-[11px] text-stone-500">
+        Reminder days: <strong>{(status?.reminder_days || [7, 9]).join(" &amp; ")}</strong> after due date.
+        Duplicate prevention uses <code className="px-1 rounded bg-stone-100">reminder_log</code> — the same client won&apos;t be messaged twice per cycle.
+      </p>
+    </Card>
+  );
+}
+
+function StatTile({ label, value, testid, accent = "text-stone-800" }) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50/50 px-3 py-2" data-testid={testid}>
+      <div className="text-[10px] uppercase tracking-wider text-stone-500">{label}</div>
+      <div className={`font-display text-sm mt-0.5 ${accent} truncate`}>{value}</div>
     </div>
   );
 }
