@@ -393,7 +393,8 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
 
     # Pawn item description — shown on every receipt so the client/officer can verify
     # what was pledged. Extra useful on the disbursement receipt (proof of what was handed over).
-    if item:
+    # Explicit truthiness on real fields so an empty {} passed from an orphaned contract skips cleanly.
+    if item and (item.get("brand") or item.get("name") or item.get("model")):
         story.append(Spacer(1, 0.5 * cm))
         story.append(Paragraph("Sasán Penhores · Pawn Item", s["Sub"]))
         story.append(Spacer(1, 0.15 * cm))

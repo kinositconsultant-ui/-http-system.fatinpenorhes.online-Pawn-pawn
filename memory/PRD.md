@@ -113,9 +113,14 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - `SettingsIn.reminders_enabled` master toggle (default `True`). When off, run returns `{disabled: True, scanned: 0}`.
 - **Settings UI**: new `RemindersCard` between WhatsApp Config and Backups — Bell icon + title + schedule, "Run now" outline button, on/off toggle (accent-amber), 4 stat tiles (Last run / Next run / Sent / Skipped-Errors), dedup explanation footer.
 
+## Implemented (Iter 18 — 2026-02)
+- **Payment receipt PDF now includes the Pawn Item block** — Type, Category, Name/Model, Brand, Year, Color, Machine No., Chassis, Plate, Market Value, and optional free-text Description. Warm cream background (#F5F1EA) to visually differentiate from the money box. Applies to BOTH disbursement AND regular repayment receipts.
+- **Signature line auto-prints the client's full_name** in bold navy on the left, "Fatin Penhores" on the right, with "Client Signature" / "Authorized Officer" labels below. Client signs next to their own printed name (mirrors passport / notary form UX).
+- **Orphan-safe**: if the pawn item was deleted, the receipt still renders cleanly and simply omits the Pawn Item block. Explicit truthiness check (`item and (item.brand or item.name or item.model)`) prevents empty placeholders.
+
 ## Test Coverage (cumulative)
-- Backend iter17: **27/27 PASS** (refactor sanity on 14 GETs, cashier RBAC via new deps.require_module, reminders CRUD + dedup + toggle + day boundary [7 & 9 only], iter16 disbursement regression).
-- Frontend iter17: **7/7 PASS** — reminders-card + all 6 sub-testids, Run now toast, toggle persists across reload.
+- Iter18: **9/9 backend PASS** (Pawn Item block on disbursement + regular payment, signature name on both, orphan safety, free-text description round-trip). Regression: **34/34 iter16+17 PASS**.
+- Iter17 (refactor + reminders): 27/27 PASS.
 - Iter16 (disbursement + Article 4): 7/7 PASS.
 - Iter15 (Contracts overflow): 8/8 PASS.
 - Iter14 (P2 polish batch): 46/46 backend + 14/14 frontend PASS.
