@@ -1,0 +1,80 @@
+{
+  "stamp_utc": "20260624-1339",
+  "total_refs": 18,
+  "downloaded": 10,
+  "failed": 1,
+  "refs": [
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/4e74348e-f4b4-4fdf-8cb0-95d640cf4f40/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/a5ac4410-747c-4a83-8943-dda35a7d5303/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/995ff7e0-b32d-4290-b020-264b3a40d5ea/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/54677f58-b756-4b53-8032-aaf6b21201af/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/f998e679-4761-4986-8df5-00661fc9d446/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/6acebaea-bcc5-4ecb-a80a-adc29af98681/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/f57d53b6-3d6a-4975-8480-1ba5b48ca913.jpeg",
+      "source": "clients/93d0c58e-6081-4ab3-921a-a67833584ade/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/x/photo.jpg",
+      "source": "clients/5e0a0e63-d468-41ec-b1a9-4bdc0e858ae7/photo_url"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/59faaa57-164a-487f-9907-956e95b115eb.png",
+      "source": "files/69909c17-758f-46a9-bbd8-81a10f21d17d/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/42d21ba8-e781-47b9-831b-226041e990fe.png",
+      "source": "files/e32cf081-b4e0-4bbd-bdc3-eeaa1755a503/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/881367c3-5272-4f9d-ae82-418ae080d527.png",
+      "source": "files/b07d4928-e700-4b68-a0f5-78de82f7ec8e/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/1de6fcc6-33bc-4b8c-83b4-c5de9448af9c.png",
+      "source": "files/b8e2af9a-33f0-46fe-b208-6eea8b28551e/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/025a7ed6-e649-4ac9-89d4-12a715fa7ca1.png",
+      "source": "files/8b7164cd-4484-4452-9463-ecda30a2ed0d/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/7d5bc62d-42be-4ea0-9aa7-e0768999dfa0.png",
+      "source": "files/416c3c31-1a5c-4419-80d1-bd8e54971a46/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/6c22c877-533b-4a96-aaf6-5621c02ac14f.png",
+      "source": "files/41433825-1b28-41ac-8c23-6d2b10921660/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/034b5d6e-41f3-40ad-bed3-b8e8521d1c05.png",
+      "source": "files/d67eeb58-51f5-456e-ac65-869be36758ad/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/f57d53b6-3d6a-4975-8480-1ba5b48ca913.jpeg",
+      "source": "files/d9737c9e-d886-42ea-84c4-9f7edbb3f6ad/storage_path"
+    },
+    {
+      "object_path": "fatin-penhores/uploads/2d719b6c-8995-4c33-859d-33d5bed45490/6ed07b1b-fc13-4271-8312-f66592fcc193.png",
+      "source": "files/b2139904-7f1a-4a66-aa1b-bcc233dfd982/storage_path"
+    }
+  ]
+}

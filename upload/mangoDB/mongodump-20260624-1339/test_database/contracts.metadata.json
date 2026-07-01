@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"id":{"$numberInt":"1"}},"name":"id_1","unique":true},{"v":{"$numberInt":"2"},"key":{"contract_number":{"$numberInt":"1"}},"name":"contract_number_1","unique":true}],"uuid":"cb473a4760c34dcaa36f59eee7a9cd0e","collectionName":"contracts","type":"collection"}
