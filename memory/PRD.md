@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 14)
+**Last updated:** 2026-02 (Iteration 16)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -98,7 +98,22 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Client-side route guard** — new `ModuleGuard` wraps every admin route. When a non-admin user navigates to a forbidden module they see (a) a red 403 "Access denied" panel with module name + Back to Dashboard button, (b) a sonner toast.error, (c) auto-redirect to `/dashboard` after 2.5s. Admins always bypass.
 - **Pezadu filter in Reports → Inventory** — verified pre-existing.
 
+## Implemented (Iter 16 — 2026-02)
+- **Loan Disbursement auto-record** — creating a contract now inserts a `Payment` with `type="disbursement"`, `amount=loan_amount`, `date=contract_date`, `notes="Loan disbursed to client at contract signing"`. Appears in client payment history + Finance client_payments filter excludes it (loans_disbursed already reflects the cash-out, prevents double count). `_recompute_contract_status` skips `type="disbursement"` so paid_amount stays 0.
+- **"Loan Disbursement Receipt" PDF** — same `/api/payments/{pid}/pdf` endpoint auto-adapts when `payment.type=="disbursement"`: title becomes "Resibu Entrega Empréstimu · Loan Disbursement Receipt"; box switches from repayment layout (Principal/Interest Remaining, Penalty) to disbursement layout (Loan Amount, Amount Received by Client, Interest Rate at maturity, Contract Start/Due). Client signs this on receiving the loan.
+- **Frontend Payments — 3rd tab "Disbursements"** — blue-tinted table showing only disbursement transactions with a blue badge (`bg-blue-100 text-blue-900 border-blue-300`). Regular Payments tab now excludes disbursements.
+- **Contract PDF — 2 new clauses in Artigu 4º (Prazu Kontratu)**:
+  - "Kontratu liu loron 1 konsidera fulan 1" — contract past day 1 counts as 1 full month of interest.
+  - "Tolerasia 10 dias — wainhira liu loron 10, kompania sei halo leilaun ka faan sasán penhor (kareta, motor, pezadu)." — 10-day tolerance then auction.
+
 ## Test Coverage (cumulative)
+- Backend iter16: **7/7 PASS** (contract auto-disbursement, PDF branching, finance exclusion, Article 4 text, partial regression).
+- Frontend iter16: **100%** — 3-tab layout, blue disbursement table, badge color, iter10 fields regression.
+- Iter15 (Contracts overflow): 8/8 PASS.
+- Iter14 (P2 polish): 46/46 backend + 14/14 frontend PASS.
+- Iter13 (RBAC v2): 24+15 PASS. Iter10-12: covered.
+
+## Test Coverage (Iter 14)
 - Backend: **290/290 PASS** (244 prior + 7 new iter14 auction-gate + 24 iter13 regression + 15 iter10 regression rerun).
 - Frontend Playwright iter14: **14/14 PASS** (all bullets in the spec: reports colors, RC/CT/INV short numbers + hover full, photo column, pezadu filter, auction gate + unlock + colored grid + filters + lock-again, sessionStorage sharing, ModuleGuard on 9 forbidden routes for cashier + admin bypass on all routes).
 
