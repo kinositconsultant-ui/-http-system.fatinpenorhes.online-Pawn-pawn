@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 16)
+**Last updated:** 2026-02 (Iteration 17)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -106,12 +106,19 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
   - "Kontratu liu loron 1 konsidera fulan 1" — contract past day 1 counts as 1 full month of interest.
   - "Tolerasia 10 dias — wainhira liu loron 10, kompania sei halo leilaun ka faan sasán penhor (kareta, motor, pezadu)." — 10-day tolerance then auction.
 
+## Implemented (Iter 17 — 2026-02)
+- **Backend refactor phase 1**: extracted shared code to `/app/backend/deps.py` (~150 lines): DB client, ALL_MODULES, ROLE_DEFAULT_MODULES, COLLECTION_MAP, `get_current_user`, `require_admin`, `require_module`, `require_roles`, `require_not_cashier`, `write_audit`, `utcnow_iso`, `new_id`, logger. `server.py` now imports from `deps` and shrunk from 2633 → ~2570 lines. All API paths and behavior unchanged.
+- **Daily WhatsApp overdue reminders** — new `/app/backend/reminders.py` runs at **00:00 UTC = 09:00 Timor (UTC+9)** via APScheduler CronTrigger. Targets contracts overdue by exactly 7 or 9 days. Sends EN/TET WhatsApp messages via existing `wapp.send_text`. Duplicate prevention via `db.reminder_log` (contract_id + day_bucket + date). UTC-safe date math (`datetime.now(timezone.utc).date()`) so scheduler-timezone drift can't cause double-sends.
+- New backend endpoints: `GET /api/reminders/status`, `POST /api/reminders/run` (manual trigger), `GET /api/reminders/logs` (last 90 days, capped at 500 rows) — all admin-only.
+- `SettingsIn.reminders_enabled` master toggle (default `True`). When off, run returns `{disabled: True, scanned: 0}`.
+- **Settings UI**: new `RemindersCard` between WhatsApp Config and Backups — Bell icon + title + schedule, "Run now" outline button, on/off toggle (accent-amber), 4 stat tiles (Last run / Next run / Sent / Skipped-Errors), dedup explanation footer.
+
 ## Test Coverage (cumulative)
-- Backend iter16: **7/7 PASS** (contract auto-disbursement, PDF branching, finance exclusion, Article 4 text, partial regression).
-- Frontend iter16: **100%** — 3-tab layout, blue disbursement table, badge color, iter10 fields regression.
+- Backend iter17: **27/27 PASS** (refactor sanity on 14 GETs, cashier RBAC via new deps.require_module, reminders CRUD + dedup + toggle + day boundary [7 & 9 only], iter16 disbursement regression).
+- Frontend iter17: **7/7 PASS** — reminders-card + all 6 sub-testids, Run now toast, toggle persists across reload.
+- Iter16 (disbursement + Article 4): 7/7 PASS.
 - Iter15 (Contracts overflow): 8/8 PASS.
-- Iter14 (P2 polish): 46/46 backend + 14/14 frontend PASS.
-- Iter13 (RBAC v2): 24+15 PASS. Iter10-12: covered.
+- Iter14 (P2 polish batch): 46/46 backend + 14/14 frontend PASS.
 
 ## Test Coverage (Iter 14)
 - Backend: **290/290 PASS** (244 prior + 7 new iter14 auction-gate + 24 iter13 regression + 15 iter10 regression rerun).

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 
 from deps import db, utcnow_iso, new_id
 import whatsapp as wapp
@@ -53,7 +53,7 @@ def _short_contract(number: str | None) -> str:
 
 async def _sent_today(contract_id: str, day_bucket: int) -> bool:
     """Return True if a reminder for this contract & bucket was already sent this cycle."""
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     existing = await db.reminder_log.find_one({
         "contract_id": contract_id,
         "day_bucket": day_bucket,
@@ -67,7 +67,7 @@ async def _mark_sent(contract_id: str, day_bucket: int, phone: str, ok: bool, er
         "id": new_id(),
         "contract_id": contract_id,
         "day_bucket": day_bucket,
-        "date": date.today().isoformat(),
+        "date": datetime.now(timezone.utc).date().isoformat(),
         "phone": phone,
         "success": ok,
         "error": error or "",
@@ -93,7 +93,7 @@ async def run_daily_reminders() -> dict:
     # We import here to avoid circular import at module load
     from deps import db as _db  # noqa: F401
     # Locally recompute overdue days rather than pulling every contract through _recompute
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     contracts = await db.contracts.find(
         {"status": {"$in": ["overdue", "active"]}},
         {"_id": 0, "id": 1, "contract_number": 1, "client_id": 1, "due_date": 1,

@@ -2378,7 +2378,11 @@ async def reminders_run_now(admin: dict = Depends(require_admin)):
 
 @api.get("/reminders/logs")
 async def reminders_logs(_: dict = Depends(require_admin)):
-    return await db.reminder_log.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+    """Return the last 90 days of reminder attempts, capped at 500 rows."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    return await db.reminder_log.find(
+        {"created_at": {"$gte": cutoff}}, {"_id": 0}
+    ).sort("created_at", -1).limit(500).to_list(500)
 
 
 # =====================================================================
