@@ -249,6 +249,8 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(_article(s, "Artigu 4º — Prazu Kontratu", [
         f"Prazu kontratu hahu husi {start} to'o {end}.",
         "Prazu maximu ida ne'e mak fulan rua (2). Aluga ka ekstensaun bele halo se parte rua konkorda.",
+        "Kontratu liu loron 1 konsidera fulan 1 — se kliente la selu iha loron limite, sei aplika interese ba fulan tomak tuir mai.",
+        "Tolerasia 10 dias — wainhira liu loron 10, kompania sei halo leilaun ka faan sasán penhor (kareta, motor, pezadu).",
     ]))
 
     item_label_map = {"car": "Karreta", "motorcycle": "Motorizada", "electronic": "Eletróniku"}
@@ -315,7 +317,7 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     return buf.getvalue()
 
 
-def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float) -> bytes:
+def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None) -> bytes:
     s = _styles()
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -323,15 +325,22 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         leftMargin=2 * cm, rightMargin=2 * cm,
         topMargin=1.4 * cm, bottomMargin=1.6 * cm,
     )
+    is_disbursement = payment.get("type") == "disbursement"
+    item = item or {}
     story = []
     story.append(_branded_header(s))
-    story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
+    if is_disbursement:
+        story.append(Paragraph("Resibu Entrega Empréstimu · Loan Disbursement Receipt", s["Sub"]))
+    else:
+        story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
     story.append(Spacer(1, 0.3 * cm))
 
     money = _money
+    date_label = "Disbursement Date" if is_disbursement else "Payment Date"
+    type_label = "Transaction Type" if is_disbursement else "Payment Type"
     box1 = Table([
-        ["Receipt No.", payment.get("receipt_number", ""), "Payment Date", payment.get("date", "")],
-        ["Payment Type", str(payment.get("type", "")).replace("_", " ").title(),
+        ["Receipt No.", payment.get("receipt_number", ""), date_label, payment.get("date", "")],
+        [type_label, str(payment.get("type", "")).replace("_", " ").title(),
          "Contract No.", contract.get("contract_number", "")],
         ["Client", client.get("full_name", ""), "Phone", client.get("phone", "")],
     ], colWidths=[3.5 * cm, 5.2 * cm, 3.5 * cm, 4.8 * cm])
@@ -353,15 +362,25 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     amt = float(payment.get("amount", 0))
     loan = float(contract.get("loan_amount", 0))
     rate = float(contract.get("interest_rate", 0))
-    box2 = Table([
-        ["Original Loan", money(loan)],
-        ["Interest Rate", f"{rate:.2f}%"],
-        ["Amount Paid (this receipt)", money(amt)],
-        ["Principal Remaining", money(contract.get("principal_remaining", 0))],
-        ["Interest Remaining", money(contract.get("interest_remaining", 0))],
-        ["Penalty (if overdue)", money(contract.get("penalty", 0))],
-        ["Total Remaining Balance", money(remaining)],
-    ], colWidths=[6.5 * cm, 10.5 * cm])
+    if is_disbursement:
+        # Disbursement receipt: focus on what the client received; no remaining/penalty section
+        box2 = Table([
+            ["Loan Amount", money(loan)],
+            ["Amount Received by Client", money(amt)],
+            ["Interest Rate (applies at maturity)", f"{rate:.2f}%"],
+            ["Contract Start", contract.get("contract_date", "")],
+            ["Contract Due Date", contract.get("due_date", "")],
+        ], colWidths=[6.5 * cm, 10.5 * cm])
+    else:
+        box2 = Table([
+            ["Original Loan", money(loan)],
+            ["Interest Rate", f"{rate:.2f}%"],
+            ["Amount Paid (this receipt)", money(amt)],
+            ["Principal Remaining", money(contract.get("principal_remaining", 0))],
+            ["Interest Remaining", money(contract.get("interest_remaining", 0))],
+            ["Penalty (if overdue)", money(contract.get("penalty", 0))],
+            ["Total Remaining Balance", money(remaining)],
+        ], colWidths=[6.5 * cm, 10.5 * cm])
     box2.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
@@ -372,17 +391,68 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     ]))
     story.append(box2)
 
+    # Pawn item description — shown on every receipt so the client/officer can verify
+    # what was pledged. Extra useful on the disbursement receipt (proof of what was handed over).
+    # Explicit truthiness on real fields so an empty {} passed from an orphaned contract skips cleanly.
+    if item and (item.get("brand") or item.get("name") or item.get("model")):
+        story.append(Spacer(1, 0.5 * cm))
+        story.append(Paragraph("Sasán Penhores · Pawn Item", s["Sub"]))
+        story.append(Spacer(1, 0.15 * cm))
+        item_type = contract.get("item_type") or item.get("item_type") or ""
+        # Compose a friendly name — fall back to brand+model if no explicit name
+        item_name = item.get("name") or f"{item.get('brand', '')} {item.get('model', '')}".strip() or "—"
+        year = item.get("manufacture_year") or ""
+        color = item.get("color") or ""
+        rows = [
+            ["Type", str(item_type).title() or "—", "Category", item.get("category", "") or "—"],
+            ["Name / Model", item_name, "Year", str(year) or "—"],
+            ["Brand", item.get("brand", "") or "—", "Color", color or "—"],
+            ["Machine No.", item.get("machine_number", "") or "—", "Chassis", item.get("chassis", "") or "—"],
+            ["Plate", item.get("plate", "") or "—", "Market Value", _money(item.get("market_value", 0))],
+        ]
+        # Description spans full width if present
+        desc = item.get("description", "").strip()
+        item_box = Table(rows, colWidths=[3.5 * cm, 5.2 * cm, 3.5 * cm, 4.8 * cm])
+        item_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F1EA")),
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+            ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9.5),
+            ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
+            ("TEXTCOLOR", (2, 0), (2, -1), MUTED),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.25, RULE),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(item_box)
+        if desc:
+            story.append(Spacer(1, 0.2 * cm))
+            story.append(Paragraph(
+                f"<b>Deskrisaun:</b> {desc}",
+                ParagraphStyle("ItemDesc", parent=s["Body"], fontSize=9.5, textColor=MUTED),
+            ))
+
     story.append(Spacer(1, 1.2 * cm))
+
+    # Signature block — client name auto-printed under the line so the client signs next to it.
+    client_name = client.get("full_name", "") or "—"
     sign = Table(
-        [["_______________________", "_______________________"],
-         ["Asinatura Kliente · Client", "Ofisiál Autorizadu · Officer"]],
+        [
+            ["_______________________", "_______________________"],
+            [client_name, "Fatin Penhores"],
+            ["Asinatura Kliente · Client Signature", "Ofisiál Autorizadu · Authorized Officer"],
+        ],
         colWidths=[8 * cm, 8 * cm],
     )
     sign.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 1), (-1, 1), "Helvetica-Bold", 9.5),  # name row emphasized
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TEXTCOLOR", (0, 1), (-1, 1), MUTED),
+        ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#1B2D5C")),
+        ("TEXTCOLOR", (0, 2), (-1, 2), MUTED),
         ("TOPPADDING", (0, 1), (-1, 1), 2),
+        ("TOPPADDING", (0, 2), (-1, 2), 0),
     ]))
     story.append(sign)
 
