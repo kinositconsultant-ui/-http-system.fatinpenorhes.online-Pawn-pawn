@@ -126,8 +126,9 @@ export default function Payments() {
     ["overdue_full", "overdue_interest_pen", "overdue_penalty_only"].includes(r.type)
   );
   const regularPayments = rows.filter(
-    (r) => !["overdue_full", "overdue_interest_pen", "overdue_penalty_only"].includes(r.type)
+    (r) => !["overdue_full", "overdue_interest_pen", "overdue_penalty_only", "disbursement"].includes(r.type)
   );
+  const disbursements = rows.filter((r) => r.type === "disbursement");
 
   return (
     <div className="space-y-6" data-testid="payments-root">
@@ -262,6 +263,10 @@ export default function Payments() {
             <AlertTriangle className="w-3.5 h-3.5 mr-1 text-amber-700" />
             {t("overdue_payment")} <span className="ml-1 text-xs text-stone-500">({overduePayments.length})</span>
           </TabsTrigger>
+          <TabsTrigger value="disbursements" data-testid="tab-disbursements">
+            <Banknote className="w-3.5 h-3.5 mr-1 text-emerald-700" />
+            {t("disbursements") || "Disbursements"} <span className="ml-1 text-xs text-stone-500">({disbursements.length})</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all">
@@ -269,6 +274,9 @@ export default function Payments() {
         </TabsContent>
         <TabsContent value="overdue">
           <PaymentsTable rows={overduePayments} contractLabel={contractLabel} t={t} testid="overdue-payments-table" overdue />
+        </TabsContent>
+        <TabsContent value="disbursements">
+          <PaymentsTable rows={disbursements} contractLabel={contractLabel} t={t} testid="disbursements-table" disbursement />
         </TabsContent>
       </Tabs>
 
@@ -385,7 +393,7 @@ export default function Payments() {
   );
 }
 
-function PaymentsTable({ rows, contractLabel, t, testid, overdue = false }) {
+function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbursement = false }) {
   const typeBadge = (type) => {
     const map = {
       full: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -394,13 +402,20 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false }) {
       overdue_full: "bg-emerald-100 text-emerald-900 border-emerald-300",
       overdue_interest_pen: "bg-amber-100 text-amber-900 border-amber-300",
       overdue_penalty_only: "bg-red-100 text-red-900 border-red-300",
+      disbursement: "bg-blue-100 text-blue-900 border-blue-300",
     };
     return map[type] || "bg-stone-100 text-stone-700 border-stone-200";
   };
+  const wrapperColor = disbursement
+    ? "border-blue-200"
+    : overdue
+    ? "border-amber-200"
+    : "border-stone-200";
+  const headBg = disbursement ? "bg-blue-50/60" : overdue ? "bg-amber-50/60" : "bg-stone-50";
   return (
-    <div className={`rounded-lg border ${overdue ? "border-amber-200" : "border-stone-200"} bg-white overflow-x-auto`}>
+    <div className={`rounded-lg border ${wrapperColor} bg-white overflow-x-auto`}>
       <table className="min-w-full text-sm" data-testid={testid}>
-        <thead className={`${overdue ? "bg-amber-50/60" : "bg-stone-50"} text-left`}>
+        <thead className={`${headBg} text-left`}>
           <tr>
             <Th>Receipt</Th>
             <Th>{t("contract_number")}</Th>

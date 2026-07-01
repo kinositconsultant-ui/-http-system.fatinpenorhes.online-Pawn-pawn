@@ -249,6 +249,8 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(_article(s, "Artigu 4º — Prazu Kontratu", [
         f"Prazu kontratu hahu husi {start} to'o {end}.",
         "Prazu maximu ida ne'e mak fulan rua (2). Aluga ka ekstensaun bele halo se parte rua konkorda.",
+        "Kontratu liu loron 1 konsidera fulan 1 — se kliente la selu iha loron limite, sei aplika interese ba fulan tomak tuir mai.",
+        "Tolerasia 10 dias — wainhira liu loron 10, kompania sei halo leilaun ka faan sasán penhor (kareta, motor, pezadu).",
     ]))
 
     item_label_map = {"car": "Karreta", "motorcycle": "Motorizada", "electronic": "Eletróniku"}
@@ -323,15 +325,21 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         leftMargin=2 * cm, rightMargin=2 * cm,
         topMargin=1.4 * cm, bottomMargin=1.6 * cm,
     )
+    is_disbursement = payment.get("type") == "disbursement"
     story = []
     story.append(_branded_header(s))
-    story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
+    if is_disbursement:
+        story.append(Paragraph("Resibu Entrega Empréstimu · Loan Disbursement Receipt", s["Sub"]))
+    else:
+        story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
     story.append(Spacer(1, 0.3 * cm))
 
     money = _money
+    date_label = "Disbursement Date" if is_disbursement else "Payment Date"
+    type_label = "Transaction Type" if is_disbursement else "Payment Type"
     box1 = Table([
-        ["Receipt No.", payment.get("receipt_number", ""), "Payment Date", payment.get("date", "")],
-        ["Payment Type", str(payment.get("type", "")).replace("_", " ").title(),
+        ["Receipt No.", payment.get("receipt_number", ""), date_label, payment.get("date", "")],
+        [type_label, str(payment.get("type", "")).replace("_", " ").title(),
          "Contract No.", contract.get("contract_number", "")],
         ["Client", client.get("full_name", ""), "Phone", client.get("phone", "")],
     ], colWidths=[3.5 * cm, 5.2 * cm, 3.5 * cm, 4.8 * cm])
@@ -353,15 +361,25 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     amt = float(payment.get("amount", 0))
     loan = float(contract.get("loan_amount", 0))
     rate = float(contract.get("interest_rate", 0))
-    box2 = Table([
-        ["Original Loan", money(loan)],
-        ["Interest Rate", f"{rate:.2f}%"],
-        ["Amount Paid (this receipt)", money(amt)],
-        ["Principal Remaining", money(contract.get("principal_remaining", 0))],
-        ["Interest Remaining", money(contract.get("interest_remaining", 0))],
-        ["Penalty (if overdue)", money(contract.get("penalty", 0))],
-        ["Total Remaining Balance", money(remaining)],
-    ], colWidths=[6.5 * cm, 10.5 * cm])
+    if is_disbursement:
+        # Disbursement receipt: focus on what the client received; no remaining/penalty section
+        box2 = Table([
+            ["Loan Amount", money(loan)],
+            ["Amount Received by Client", money(amt)],
+            ["Interest Rate (applies at maturity)", f"{rate:.2f}%"],
+            ["Contract Start", contract.get("contract_date", "")],
+            ["Contract Due Date", contract.get("due_date", "")],
+        ], colWidths=[6.5 * cm, 10.5 * cm])
+    else:
+        box2 = Table([
+            ["Original Loan", money(loan)],
+            ["Interest Rate", f"{rate:.2f}%"],
+            ["Amount Paid (this receipt)", money(amt)],
+            ["Principal Remaining", money(contract.get("principal_remaining", 0))],
+            ["Interest Remaining", money(contract.get("interest_remaining", 0))],
+            ["Penalty (if overdue)", money(contract.get("penalty", 0))],
+            ["Total Remaining Balance", money(remaining)],
+        ], colWidths=[6.5 * cm, 10.5 * cm])
     box2.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),

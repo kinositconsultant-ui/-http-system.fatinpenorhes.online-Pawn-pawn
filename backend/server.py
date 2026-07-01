@@ -689,6 +689,9 @@ async def _recompute_contract_status(contract: dict) -> dict:
     for p in sorted(payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))):
         amt = float(p.get("amount", 0))
         ptype = p.get("type", "partial")
+        if ptype == "disbursement":
+            # Money OUT to client at signing — informational only, not a repayment
+            continue
         if ptype == "interest_only":
             take = min(amt, max(0.0, interest - interest_paid))
             interest_paid += take
@@ -830,7 +833,22 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
         {"id": payload.item_id},
         {"$set": {"status": "pawned", "active_contract_id": doc["id"]}},
     )
-    await write_audit(user, "create", "contract", doc["id"], {"contract_number": contract_number, "loan_amount": doc["loan_amount"]})
+    # Auto-record loan DISBURSEMENT — client received the cash at signing
+    disb_receipt = await _generate_receipt_number()
+    disbursement = {
+        "id": new_id(),
+        "receipt_number": disb_receipt,
+        "contract_id": doc["id"],
+        "contract_number": contract_number,
+        "amount": float(doc["loan_amount"]),
+        "type": "disbursement",
+        "date": doc["contract_date"],
+        "notes": "Loan disbursed to client at contract signing",
+        "created_at": utcnow_iso(),
+        "created_by": user["id"],
+    }
+    await db.payments.insert_one(disbursement)
+    await write_audit(user, "create", "contract", doc["id"], {"contract_number": contract_number, "loan_amount": doc["loan_amount"], "disbursement_receipt": disb_receipt})
     doc.pop("_id", None)
     return await _recompute_contract_status(doc)
 
@@ -919,6 +937,7 @@ class PaymentIn(BaseModel):
         "overdue_full",          # Loan + Interest + Penalty (full close-out)
         "overdue_interest_pen",  # Interest + Penalty (contract stays open)
         "overdue_penalty_only",  # Just clear penalty
+        "disbursement",          # Loan money paid OUT to client at contract signing (informational)
     ]
     date: str  # YYYY-MM-DD
     notes: str = ""
@@ -2051,7 +2070,8 @@ async def finance_summary(
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     loans_disbursed = sum(float(c.get("loan_amount", 0) or 0) for c in contracts)
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
-    client_payments = sum(float(p.get("amount", 0) or 0) for p in payments)
+    # client_payments = repayments only (exclude disbursement which is money OUT already counted in loans_disbursed)
+    client_payments = sum(float(p.get("amount", 0) or 0) for p in payments if p.get("type") != "disbursement")
     auctions = await db.auctions.find({"status": "sold"}, {"_id": 0}).to_list(5000)
     auction_sales = sum(float(a.get("sold_price", 0) or 0) for a in auctions)
     # Auction interest profit (separated from cash recovery — counted as profit only)
