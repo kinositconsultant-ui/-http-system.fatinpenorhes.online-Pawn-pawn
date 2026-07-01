@@ -916,7 +916,11 @@ async def payment_pdf(pid: str, _: dict = Depends(get_current_user)):
     c = await db.contracts.find_one({"id": p["contract_id"]}, {"_id": 0}) or {}
     c = await _recompute_contract_status(c) if c else {}
     client_doc = await db.clients.find_one({"id": c.get("client_id")}, {"_id": 0}) or {}
-    pdf_bytes = build_receipt_pdf(p, c, client_doc, c.get("remaining_balance", 0))
+    # Also load the pawned item so we can show its description in the receipt (esp. for disbursement)
+    item_doc = {}
+    if c.get("item_type") and c.get("item_id"):
+        item_doc = await _fetch_item(c["item_type"], c["item_id"]) or {}
+    pdf_bytes = build_receipt_pdf(p, c, client_doc, c.get("remaining_balance", 0), item=item_doc)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
