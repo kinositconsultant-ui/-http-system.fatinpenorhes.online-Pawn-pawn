@@ -1,0 +1,64 @@
+{
+  "summary": "Iter19 frontend testing PASSED — Pre-Auction card Actions column with 4 icon buttons per row fully functional. All 20 assertions verified: headers, counts, conditional Move-to-Auction rendering, WhatsApp/PDF/Reactivate wiring, confirm dialog, layout at 1600 & 1366 (EN+TET), and full end-to-end move-to-auction flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "structure": {
+      "pre_auction_card_renders": "PASS",
+      "columns_count": "PASS — 8 columns: ['Contract No.', 'Client', 'Item', 'Days Overdue', 'Loan Amount', 'Penalty', 'Status', 'Actions']",
+      "last_column_is_actions": "PASS"
+    },
+    "button_counts": {
+      "total_rows": 45,
+      "pa_whatsapp": "45 (matches rows)",
+      "pa_reactivate": "45 (matches rows)",
+      "pa_pdf": "45 (matches rows)",
+      "pa_auction": "4 (matches auction_ready badge count = 4)",
+      "auction_button_on_non_ready_rows": 0,
+      "auction_ready_rows_missing_button": 0
+    },
+    "whatsapp_flow": {
+      "endpoint_called": "POST /api/whatsapp/send",
+      "status": 200,
+      "toast_shown": "'WhatsApp (mocked — set token in Settings)' — MOCKED as expected (Meta creds not set)"
+    },
+    "reactivate_flow": {
+      "dialog_opens": "PASS — role='dialog' visible on pa-reactivate click"
+    },
+    "move_to_auction_flow": {
+      "confirm_dialog_shown": "PASS — message 'Move CT-2026-115 to auction?'",
+      "dismiss_prevents_api_call": "PASS — /api/auctions/move NOT called on dismiss",
+      "accept_calls_api": "PASS — POST /api/auctions/move returned 200",
+      "row_removed_from_pre_auction": "PASS",
+      "row_appears_in_auctions_module": "PASS — verified visually: CT-2026-0115 shown at top of Leilaun/Auctions table with status='listed'"
+    },
+    "pdf_flow": {
+      "href": "{API_BASE}/contracts/{id}/pdf — correct",
+      "target": "_blank — correct"
+    },
+    "layout": {
+      "1600x900_en": "scrollWidth=1214, clientWidth=1214 — no overflow",
+      "1366x768_en": "scrollWidth=1044, clientWidth=1044, overflow-x=auto — no overflow",
+      "1366x768_tet": "scrollWidth=1044, clientWidth=1044, overflow-x=auto — no overflow",
+      "actions_column_reachable_via_scroll": "PASS"
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Move-to-Auction uses native window.confirm() — acceptable per spec, but for consistency with rest of app (which uses shadcn AlertDialog elsewhere) consider switching to a styled confirmation dialog in future iteration.",
+    "Dialog accessibility warning in console: 'Missing Description or aria-describedby={undefined} for {DialogContent}' on the reactivate dialog — minor a11y issue, existing (not introduced by iter19)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (20/20 assertions)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Test mutation: contract CT-2026-0115 (id=15abbc3e-03c5-4ba9-8a40-e8f5143f388a) was moved from Pre-Auction to Auctions during end-to-end verification of pa-auction click. This reduces auction_ready count from 4 to 3. Main agent may re-run seed/simulation or manually revert if needed for further testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "mocked_apis_confirmed": ["WhatsApp send returned 'mocked — set token in Settings' toast (Meta creds not configured — acceptable per spec)"],
+  "context_for_next_testing_agent": "Iter19 fully verified. One test mutation: CT-2026-0115 was moved to Auctions during testing (now listed there). If subsequent tests need 4 auction_ready contracts, re-seed or aging simulation may be required. All pa-* selectors work as specified: pa-whatsapp-{id}, pa-reactivate-{id}, pa-pdf-{id} on every row; pa-auction-{id} ONLY on auction_ready rows. Backend endpoints /api/whatsapp/send, /api/contracts/{id}/reactivate, /api/auctions/move, /api/contracts/{id}/pdf all responsive (200)."
+}

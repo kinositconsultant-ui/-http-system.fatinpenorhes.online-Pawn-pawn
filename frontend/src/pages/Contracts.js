@@ -338,6 +338,7 @@ export default function Contracts() {
                   <Th right>{t("loan_amount")}</Th>
                   <Th right>{t("penalty")}</Th>
                   <Th>{t("status")}</Th>
+                  <Th right>{t("actions")}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -368,6 +369,48 @@ export default function Contracts() {
                         ${Number(r.penalty || 0).toLocaleString()}
                       </Td>
                       <Td><StatusBadge status={r.status} /></Td>
+                      <Td right>
+                        <div className="flex justify-end gap-0.5">
+                          <button
+                            onClick={() => sendWhatsApp(r.id, "tet")}
+                            data-testid={`pa-whatsapp-${r.id}`}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                            title={t("send_whatsapp") || "Send WhatsApp reminder"}
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openReactivate(r)}
+                            data-testid={`pa-reactivate-${r.id}`}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                            title={t("reactivate") || "Reactivate (extend due date)"}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                          {r.status === "auction_ready" && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Move ${shortContract(r.contract_number)} to auction?`)) moveToAuction(r.id);
+                              }}
+                              data-testid={`pa-auction-${r.id}`}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
+                              title={t("move_to_auction") || "Move to auction"}
+                            >
+                              <Gavel className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <a
+                            href={`${API_BASE}/contracts/${r.id}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            data-testid={`pa-pdf-${r.id}`}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
+                            title={t("download_pdf")}
+                          >
+                            <FileDown className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      </Td>
                     </tr>
                   ))}
               </tbody>

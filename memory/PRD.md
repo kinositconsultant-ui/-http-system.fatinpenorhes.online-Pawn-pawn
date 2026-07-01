@@ -118,12 +118,20 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Signature line auto-prints the client's full_name** in bold navy on the left, "Fatin Penhores" on the right, with "Client Signature" / "Authorized Officer" labels below. Client signs next to their own printed name (mirrors passport / notary form UX).
 - **Orphan-safe**: if the pawn item was deleted, the receipt still renders cleanly and simply omits the Pawn Item block. Explicit truthiness check (`item and (item.brand or item.name or item.model)`) prevents empty placeholders.
 
+## Implemented (Iter 19 — 2026-02)
+- **Pre-Auction Actions Column** — new rightmost column on the amber Pre-Auction card in `/contracts`. 4 icon buttons per row for instant action:
+  - **WhatsApp** (emerald, `pa-whatsapp-{id}`) — sends Tetum reminder via existing `/api/whatsapp/send`.
+  - **Reactivate** (blue, `pa-reactivate-{id}`) — opens the existing dialog to extend the due date.
+  - **Move to Auction** (terracotta, `pa-auction-{id}`) — appears **only** on `auction_ready` rows (>10 days overdue); confirms then calls `/api/auctions/move`.
+  - **Download PDF** (red, `pa-pdf-{id}`) — opens contract PDF in a new tab.
+- Reuses existing helpers (`sendWhatsApp`, `openReactivate`, `moveToAuction`) — zero backend changes.
+- Layout verified at 1600×900 EN + 1366×768 EN/TET — no overflow, actions reachable.
+
 ## Test Coverage (cumulative)
-- Iter18: **9/9 backend PASS** (Pawn Item block on disbursement + regular payment, signature name on both, orphan safety, free-text description round-trip). Regression: **34/34 iter16+17 PASS**.
+- Iter19: **20/20 frontend PASS** (structure, counts, WhatsApp/Reactivate/Auction/PDF wiring, confirm dialog dismiss+accept, layout EN+TET at 2 viewports).
+- Iter18 (Pawn Item + auto sign name): 9/9 PASS.
 - Iter17 (refactor + reminders): 27/27 PASS.
-- Iter16 (disbursement + Article 4): 7/7 PASS.
-- Iter15 (Contracts overflow): 8/8 PASS.
-- Iter14 (P2 polish batch): 46/46 backend + 14/14 frontend PASS.
+- Iter16-14: covered.
 
 ## Test Coverage (Iter 14)
 - Backend: **290/290 PASS** (244 prior + 7 new iter14 auction-gate + 24 iter13 regression + 15 iter10 regression rerun).
