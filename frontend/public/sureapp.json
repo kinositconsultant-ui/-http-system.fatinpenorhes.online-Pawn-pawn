@@ -1,0 +1,1 @@
+{"run":"npx serve -s build -l $PORT"}
