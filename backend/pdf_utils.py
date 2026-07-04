@@ -957,3 +957,237 @@ DEFAULT_TNC_TET = """1. Kliente entrega sasán ne'ebé deskreve iha leten nudar 
 6. Pagamentu parsiál hamenus uluk principal; interese kalkula tan iha balansu principal ne'ebé restu.
 7. Multa atrasu: 10% husi montante empréstimu orijinál (la inklui taxa interese).
 8. Se la selu kompleta to'o data limite, sasán bele hatama ba leilaun ka kontratu bele halo aktivu fali husi Ofisiál."""
+
+
+
+# =====================================================================
+# Member ID Card (CR80 credit-card size: 85.6 × 54 mm, front + back on A4)
+# =====================================================================
+def build_member_card_pdf(client: dict, verify_url: str) -> bytes:
+    """Generate a printable Member ID Card PDF for a client.
+
+    Front (navy, credit-card sized): brand mark, name, member no, dates,
+    photo. Back (white): QR code linking to public verify page + address /
+    contact fine print. Two cards laid out on a single A4 for easy cutting.
+    """
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    import qrcode
+    import urllib.request
+    from datetime import datetime
+
+    buf = BytesIO()
+    page_w, page_h = A4  # portrait
+    c = canvas.Canvas(buf, pagesize=A4)
+    c.setTitle(f"Member Card — {client.get('full_name', '')}")
+
+    # Card dimensions — CR80
+    card_w = 85.6 * mm
+    card_h = 54.0 * mm
+    # Center horizontally; stack front (upper) + back (lower) with a gap
+    x = (page_w - card_w) / 2
+    gap = 12 * mm
+    top_y = page_h - 30 * mm - card_h  # front top card position
+    bot_y = top_y - card_h - gap        # back card position
+
+    name = (client.get("full_name") or "").upper()
+    member_no = client.get("member_no", "")
+    issued = client.get("member_issued_at", "") or ""
+    expires = client.get("member_expires_at", "") or ""
+    status = (client.get("member_status") or "").upper()
+    photo_url = client.get("photo_url") or ""
+
+    def _fmt_date(v: str) -> str:
+        if not v:
+            return ""
+        try:
+            return datetime.fromisoformat(v[:10]).strftime("%d %b %Y")
+        except Exception:
+            return v[:10]
+
+    # ---------- FRONT (navy) ----------
+    c.setFillColor(NAVY)
+    c.rect(x, top_y, card_w, card_h, fill=1, stroke=0)
+
+    # Silver accent strip along top
+    c.setFillColor(SILVER)
+    c.rect(x, top_y + card_h - 5 * mm, card_w, 5 * mm, fill=1, stroke=0)
+
+    # Logo (top-left)
+    logo_size = 12 * mm
+    if LOGO_PATH.exists():
+        try:
+            c.drawImage(str(LOGO_PATH), x + 4 * mm, top_y + card_h - 22 * mm,
+                        width=logo_size, height=logo_size,
+                        preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
+
+    # Company wordmark
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(x + 18 * mm, top_y + card_h - 12 * mm, "FATIN PENHORES")
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(SILVER)
+    c.drawString(x + 18 * mm, top_y + card_h - 15.5 * mm, "UNIPESSOAL, LDA")
+
+    # Ribbon: MEMBER ID CARD / KARTAUN MEMBRU
+    c.setFillColor(colors.HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 7)
+    c.drawRightString(x + card_w - 4 * mm, top_y + card_h - 12 * mm, "MEMBER ID CARD")
+    c.setFont("Helvetica", 6)
+    c.setFillColor(SILVER)
+    c.drawRightString(x + card_w - 4 * mm, top_y + card_h - 15 * mm, "Kartaun Membru")
+
+    # Photo box (right side)
+    photo_w = 22 * mm
+    photo_h = 27 * mm
+    photo_x = x + card_w - photo_w - 4 * mm
+    photo_y = top_y + 6 * mm
+    c.setFillColor(colors.white)
+    c.rect(photo_x, photo_y, photo_w, photo_h, fill=1, stroke=0)
+    drew_photo = False
+    if photo_url:
+        try:
+            with urllib.request.urlopen(photo_url, timeout=5) as resp:
+                img_bytes = resp.read()
+            img = ImageReader(BytesIO(img_bytes))
+            c.drawImage(img, photo_x, photo_y, width=photo_w, height=photo_h,
+                        preserveAspectRatio=True, mask="auto")
+            drew_photo = True
+        except Exception:
+            drew_photo = False
+    if not drew_photo:
+        # Initials avatar
+        initials = "".join([w[0] for w in (client.get("full_name") or "?").split()[:2]]).upper()
+        c.setFillColor(NAVY_DARK)
+        c.rect(photo_x, photo_y, photo_w, photo_h, fill=1, stroke=0)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 22)
+        c.drawCentredString(photo_x + photo_w / 2, photo_y + photo_h / 2 - 5, initials or "FP")
+
+    # Name & details block (left side)
+    left_x = x + 4 * mm
+    detail_y = top_y + 26 * mm
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 11)
+    # Truncate long names to fit
+    display_name = name if len(name) <= 22 else name[:21] + "…"
+    c.drawString(left_x, detail_y, display_name)
+
+    c.setFont("Helvetica", 6)
+    c.setFillColor(SILVER)
+    c.drawString(left_x, detail_y - 3.2 * mm, "MEMBER NO.")
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(colors.white)
+    c.drawString(left_x, detail_y - 7.2 * mm, member_no or "—")
+
+    c.setFont("Helvetica", 6)
+    c.setFillColor(SILVER)
+    c.drawString(left_x, detail_y - 11.2 * mm, "ISSUED")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.white)
+    c.drawString(left_x, detail_y - 14.4 * mm, _fmt_date(issued))
+
+    c.setFont("Helvetica", 6)
+    c.setFillColor(SILVER)
+    c.drawString(left_x + 22 * mm, detail_y - 11.2 * mm, "EXPIRES")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.white)
+    c.drawString(left_x + 22 * mm, detail_y - 14.4 * mm, _fmt_date(expires))
+
+    # Tagline strip
+    c.setFillColor(NAVY_DARK)
+    c.rect(x, top_y, card_w, 5 * mm, fill=1, stroke=0)
+    c.setFillColor(SILVER)
+    c.setFont("Helvetica-Oblique", 6)
+    c.drawCentredString(x + card_w / 2, top_y + 1.6 * mm,
+                        "Pawn with confidence. Recover with dignity.")
+
+    # ---------- BACK (white) ----------
+    c.setFillColor(colors.white)
+    c.rect(x, bot_y, card_w, card_h, fill=1, stroke=1)
+    c.setStrokeColor(RULE)
+    c.setLineWidth(0.3)
+    c.rect(x, bot_y, card_w, card_h, fill=0, stroke=1)
+
+    # Header strip
+    c.setFillColor(NAVY)
+    c.rect(x, bot_y + card_h - 5 * mm, card_w, 5 * mm, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(x + 3 * mm, bot_y + card_h - 3.5 * mm, "FATIN PENHORES  ·  MEMBER VERIFICATION")
+
+    # QR code (left)
+    qr_size = 30 * mm
+    qr_x = x + 4 * mm
+    qr_y = bot_y + (card_h - qr_size) / 2 - 2 * mm
+    try:
+        qr_img = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M,
+                                box_size=8, border=1)
+        qr_img.add_data(verify_url)
+        qr_img.make(fit=True)
+        pil_img = qr_img.make_image(fill_color="black", back_color="white").convert("RGB")
+        qr_buf = BytesIO()
+        pil_img.save(qr_buf, format="PNG")
+        qr_buf.seek(0)
+        c.drawImage(ImageReader(qr_buf), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+    except Exception:
+        c.setFillColor(colors.lightgrey)
+        c.rect(qr_x, qr_y, qr_size, qr_size, fill=1, stroke=0)
+
+    # Right-side text block
+    right_x = qr_x + qr_size + 4 * mm
+    text_y = bot_y + card_h - 9 * mm
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(right_x, text_y, "SCAN TO VERIFY")
+    c.setFont("Helvetica", 6)
+    c.setFillColor(MUTED)
+    c.drawString(right_x, text_y - 2.6 * mm, "Skan atu verifika kartaun ida-ne'e")
+
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(right_x, text_y - 7 * mm, "ADDRESS")
+    c.setFont("Helvetica", 5.5)
+    c.setFillColor(MUTED)
+    c.drawString(right_x, text_y - 9.2 * mm, COMPANY_ADDR)
+
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 6)
+    c.drawString(right_x, text_y - 12.5 * mm, "CONTACT")
+    c.setFont("Helvetica", 5.5)
+    c.setFillColor(MUTED)
+    c.drawString(right_x, text_y - 14.7 * mm, "WhatsApp: +670 78372678")
+    c.drawString(right_x, text_y - 17.0 * mm, "fatinpenhores@gmail.com")
+
+    # Fine print bottom
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica-Oblique", 4.5)
+    c.drawString(x + 3 * mm, bot_y + 3 * mm,
+                 "Property of Fatin Penhores Unipessoal, Lda. If found, please return.")
+    c.setFont("Helvetica", 4.5)
+    c.drawRightString(x + card_w - 3 * mm, bot_y + 3 * mm, f"#{member_no}")
+
+    # Cut guide (dashed rectangles are already the card borders — add subtle marks)
+    c.setStrokeColor(colors.HexColor("#CBD5E1"))
+    c.setLineWidth(0.2)
+    c.setDash(1, 2)
+    c.rect(x, top_y, card_w, card_h, fill=0, stroke=1)
+    c.setDash()
+
+    # Page footer note
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(page_w / 2, 15 * mm,
+                        "Cut along the dashed border. Front (top) · Back (bottom).")
+    if status and status != "ACTIVE":
+        c.setFillColor(colors.HexColor("#993333"))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawCentredString(page_w / 2, 10 * mm, f"STATUS: {status}")
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()

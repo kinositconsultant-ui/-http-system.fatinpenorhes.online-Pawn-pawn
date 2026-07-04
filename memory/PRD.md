@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 21 — Expense Categories Expansion)
+**Last updated:** 2026-02 (Iteration 22 — Member ID Cards)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -206,6 +206,25 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Backend: `EXPENSE_CATEGORY_GROUPS` (ordered, grouped) replaces flat `EXPENSE_CATEGORIES` list. `GET /api/expense-categories` now returns `{groups: [{label, items[]}], flat: [...]}` for backward compatibility.
 - Frontend: `Finance.js` now renders the Category `<Select>` with Shadcn `SelectGroup`/`SelectLabel` section headers (Payroll & Bonus / Utilities & Office / Armazen (Warehouse) / Transport & Fuel / Operations / Other). Applies to both the New/Edit dialog and the filter dropdown. Verified via curl + screenshot.
 - Regression: `tests/test_iter7_finance.py::TestExpenseCategories::test_list_categories` updated to assert new response shape + all 13 new items present.
+
+
+## Iteration 22 (2026-02) — Member ID Cards
+- Complete card lifecycle for clients: **issue → PDF → renew → revoke → verify**.
+- Card format: printable A4 with **front (navy)** + **back (QR)** layout, credit-card size (CR80 85.6×54mm) — cut along dashed border.
+- Front: FP logo, "FATIN PENHORES / UNIPESSOAL, LDA" wordmark, "MEMBER ID CARD / Kartaun Membru" ribbon, full name (uppercased), member no., issued/expires dates, photo (from Object Storage) or initials avatar, "Pawn with confidence. Recover with dignity." tagline.
+- Back: **QR code** encoding `<PUBLIC_BASE_URL>/verify/<token>`, "SCAN TO VERIFY / Skan atu verifika" (EN/TET), address, WhatsApp/email, fine print + member no.
+- Backend endpoints (all `require_not_cashier`, revoke is `require_admin`):
+  - `POST /api/clients/{id}/issue-card` — assigns `member_no` (`FP-YYYY-####` yearly seq), status=active, 1-year expiry, secure `member_verify_token` (idempotent — re-issue returns existing values).
+  - `POST /api/clients/{id}/renew-card` — extends expiry by 365 days & flips status to active.
+  - `POST /api/clients/{id}/revoke-card` (admin-only) — status=revoked.
+  - `GET /api/clients/{id}/card-pdf` — returns the printable card PDF.
+  - `GET /api/public/verify/{token}` — **PUBLIC (no auth)** — returns `{valid, status, member_no, full_name, photo_url, issued_at, expires_at}` for QR scans.
+- Client model gains dynamic fields: `member_no`, `member_status` (`active`/`revoked`), `member_issued_at`, `member_expires_at`, `member_verify_token`.
+- Frontend: Member ID Card panel added inside Client details modal (Clients.js) — badge shows Active/Expired/Revoked with color coding, buttons: **PDF**, **Verify Link** (copy to clipboard), **Renew 1 yr**, **Revoke** (admin only, hidden when already revoked).
+- New public route: `/verify/:token` (VerifyMember.js) — mobile-friendly card, big status badge (green ✅ / amber ⏰ / red 🚫 / stone ❌), member photo + name + dates. No sensitive data (no ID number, address, contract details).
+- New deps: `qrcode==8.2` (Pillow already installed). New env: `PUBLIC_BASE_URL` in `/app/backend/.env` — the domain used in QR codes.
+- Audit log: every `issue_card` / `renew_card` / `revoke_card` recorded.
+- Tests: `tests/test_iter21_member_cards.py` (10 tests: lifecycle, idempotence, PDF byte-check, public verify happy/bad-token, revoke, renew, RBAC cashier-blocked). **All 10 PASS**.
 
 
 ## Prioritized Backlog

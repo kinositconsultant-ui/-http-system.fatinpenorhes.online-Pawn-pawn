@@ -35,6 +35,7 @@ from pdf_utils import (
     build_capital_sources_pdf,
     build_expenses_pdf,
     build_finance_summary_pdf,
+    build_member_card_pdf,
     DEFAULT_TNC_EN,
     DEFAULT_TNC_TET,
 )
@@ -301,6 +302,149 @@ async def delete_client(cid: str, _: dict = Depends(require_admin)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
     return {"ok": True}
+
+
+# =====================================================================
+# Member ID Cards — issue / renew / revoke / verify / PDF
+# =====================================================================
+import secrets as _secrets  # noqa: E402
+
+
+async def _generate_member_no() -> str:
+    """Yearly sequence: FP-<YEAR>-<0000>."""
+    year = datetime.now(timezone.utc).year
+    prefix = f"FP-{year}-"
+    last = await db.clients.find(
+        {"member_no": {"$regex": f"^{prefix}"}}
+    ).sort("member_no", -1).limit(1).to_list(1)
+    if last:
+        try:
+            seq = int(last[0]["member_no"].split("-")[-1]) + 1
+        except Exception:
+            seq = 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:04d}"
+
+
+def _public_verify_url(token: str) -> str:
+    """Public URL a QR code should point to. Uses PUBLIC_BASE_URL env or falls
+    back to the API host — the frontend catches `/verify/:token` and calls the
+    backend `/api/public/verify/:token` endpoint."""
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    if not base:
+        base = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+    return f"{base}/verify/{token}"
+
+
+def _card_status(c: dict) -> str:
+    """Return live status: revoked → revoked; else expired if past expiry; else the stored status."""
+    if not c.get("member_no"):
+        return "none"
+    if c.get("member_status") == "revoked":
+        return "revoked"
+    exp = c.get("member_expires_at") or ""
+    if exp:
+        try:
+            if date.fromisoformat(exp[:10]) < date.today():
+                return "expired"
+        except Exception:
+            pass
+    return c.get("member_status") or "active"
+
+
+@api.post("/clients/{cid}/issue-card")
+async def issue_member_card(cid: str, user: dict = Depends(require_not_cashier)):
+    client = await db.clients.find_one({"id": cid}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    # Only assign a new member_no if the client has never had a card
+    member_no = client.get("member_no") or await _generate_member_no()
+    today = date.today()
+    expires = today + timedelta(days=365)
+    token = client.get("member_verify_token") or _secrets.token_urlsafe(18)
+    updates = {
+        "member_no": member_no,
+        "member_status": "active",
+        "member_issued_at": today.isoformat(),
+        "member_expires_at": expires.isoformat(),
+        "member_verify_token": token,
+    }
+    await db.clients.update_one({"id": cid}, {"$set": updates})
+    await write_audit(user, "issue_card", "client", cid, {"member_no": member_no})
+    client.update(updates)
+    return {"ok": True, **updates}
+
+
+@api.post("/clients/{cid}/renew-card")
+async def renew_member_card(cid: str, user: dict = Depends(require_not_cashier)):
+    client = await db.clients.find_one({"id": cid}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not client.get("member_no"):
+        raise HTTPException(status_code=400, detail="No card issued yet — issue first")
+    today = date.today()
+    expires = today + timedelta(days=365)
+    updates = {
+        "member_status": "active",
+        "member_issued_at": today.isoformat(),
+        "member_expires_at": expires.isoformat(),
+    }
+    await db.clients.update_one({"id": cid}, {"$set": updates})
+    await write_audit(user, "renew_card", "client", cid, {"member_no": client.get("member_no")})
+    return {"ok": True, **updates}
+
+
+@api.post("/clients/{cid}/revoke-card")
+async def revoke_member_card(cid: str, user: dict = Depends(require_admin)):
+    client = await db.clients.find_one({"id": cid}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not client.get("member_no"):
+        raise HTTPException(status_code=400, detail="No card issued")
+    await db.clients.update_one({"id": cid}, {"$set": {"member_status": "revoked"}})
+    await write_audit(user, "revoke_card", "client", cid, {"member_no": client.get("member_no")})
+    return {"ok": True, "member_status": "revoked"}
+
+
+@api.get("/clients/{cid}/card-pdf")
+async def member_card_pdf(cid: str, _: dict = Depends(require_module("clients"))):
+    client = await db.clients.find_one({"id": cid}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not client.get("member_no") or not client.get("member_verify_token"):
+        raise HTTPException(status_code=400, detail="No card issued yet — issue first")
+    # Reflect live status in the PDF (expired/revoked banner)
+    client["member_status"] = _card_status(client)
+    verify_url = _public_verify_url(client["member_verify_token"])
+    pdf = build_member_card_pdf(client, verify_url)
+    safe_no = (client["member_no"] or "card").replace("/", "-")
+    return StreamingResponse(
+        BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="member-card-{safe_no}.pdf"'},
+    )
+
+
+@api.get("/public/verify/{token}")
+async def public_verify_member(token: str):
+    """Public — anyone with the token (from QR scan) can verify the card."""
+    if not token or len(token) < 8:
+        raise HTTPException(status_code=404, detail="Not found")
+    client = await db.clients.find_one({"member_verify_token": token}, {"_id": 0})
+    if not client:
+        return {"valid": False, "status": "not_found"}
+    status = _card_status(client)
+    return {
+        "valid": status == "active",
+        "status": status,
+        "member_no": client.get("member_no"),
+        "full_name": client.get("full_name"),
+        "photo_url": client.get("photo_url", ""),
+        "issued_at": client.get("member_issued_at"),
+        "expires_at": client.get("member_expires_at"),
+        "company": "FATIN PENHORES UNIPESSOAL, LDA",
+    }
 
 
 # =====================================================================

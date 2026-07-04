@@ -18,6 +18,7 @@ import Contact from "@/pages/public/Contact";
 import Services from "@/pages/public/Services";
 import Simulasaun from "@/pages/public/Simulasaun";
 import FAQ from "@/pages/public/FAQ";
+import VerifyMember from "@/pages/public/VerifyMember";
 
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -53,6 +54,9 @@ function App() {
 
               {/* Auth */}
               <Route path="/login" element={<Login />} />
+
+              {/* Public member card verification (opened from QR scan on physical card) */}
+              <Route path="/verify/:token" element={<VerifyMember />} />
 
               {/* Admin */}
               <Route

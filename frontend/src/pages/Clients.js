@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, API_BASE } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Plus, Trash2, Pencil, Eye, FileText } from "lucide-react";
+import { Plus, Trash2, Pencil, Eye, FileText, IdCard, RefreshCw, Ban, Download, Copy } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
@@ -41,6 +42,8 @@ const blank = {
 
 export default function Clients() {
   const { t } = useLang();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
@@ -106,6 +109,75 @@ export default function Clients() {
     } catch (e) {
       toast.error("Failed to load history");
     }
+  };
+
+  // --- Member ID Card actions --------------------------------------
+  const refreshViewingFromServer = async (cid) => {
+    try {
+      const r = await api.get(`/clients/${cid}`);
+      setViewing(r.data);
+      // Also refresh underlying list so badge stays in sync
+      load();
+    } catch (_) { /* noop */ }
+  };
+
+  const issueCard = async () => {
+    if (!viewing) return;
+    try {
+      await api.post(`/clients/${viewing.id}/issue-card`);
+      toast.success("Member card issued");
+      await refreshViewingFromServer(viewing.id);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+  const renewCard = async () => {
+    if (!viewing) return;
+    try {
+      await api.post(`/clients/${viewing.id}/renew-card`);
+      toast.success("Card renewed for 1 year");
+      await refreshViewingFromServer(viewing.id);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+  const revokeCard = async () => {
+    if (!viewing) return;
+    if (!window.confirm("Revoke this member card? Public verify will show REVOKED.")) return;
+    try {
+      await api.post(`/clients/${viewing.id}/revoke-card`);
+      toast.success("Card revoked");
+      await refreshViewingFromServer(viewing.id);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+  const downloadCardPdf = () => {
+    if (!viewing) return;
+    window.open(`${API_BASE}/clients/${viewing.id}/card-pdf`, "_blank");
+  };
+  const copyVerifyLink = async () => {
+    if (!viewing?.member_verify_token) return;
+    const url = `${window.location.origin}/verify/${viewing.member_verify_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Verify link copied");
+    } catch {
+      toast.error("Copy failed — link: " + url);
+    }
+  };
+
+  const cardStatus = (c) => {
+    if (!c?.member_no) return "none";
+    if (c.member_status === "revoked") return "revoked";
+    if (c.member_expires_at && c.member_expires_at < new Date().toISOString().slice(0, 10)) return "expired";
+    return c.member_status || "active";
+  };
+  const cardStatusStyles = {
+    active: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    expired: "bg-amber-50 text-amber-800 border-amber-200",
+    revoked: "bg-rose-50 text-rose-800 border-rose-200",
+    none: "bg-stone-50 text-stone-600 border-stone-200",
   };
 
   const filtered = rows.filter((r) =>
@@ -320,6 +392,62 @@ export default function Clients() {
                   <Info label={t("posto")} value={viewing.posto} />
                   <Info label={t("suco")} value={viewing.suco} />
                   <Info label={t("aldeia")} value={viewing.aldeia} />
+                </div>
+              </div>
+
+              {/* Member ID Card panel */}
+              <div className="rounded-md border border-stone-200 bg-stone-50/50 p-4" data-testid="member-card-panel">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-md bg-[#1B2D5C] text-white flex items-center justify-center">
+                      <IdCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-eyebrow">Member ID Card</div>
+                      {viewing.member_no ? (
+                        <div className="text-sm text-stone-700">
+                          <span className="font-mono font-semibold" data-testid="member-no">{viewing.member_no}</span>
+                          <span className="text-stone-400 mx-2">·</span>
+                          <span className={`inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${cardStatusStyles[cardStatus(viewing)]}`}
+                                data-testid="member-status">
+                            {cardStatus(viewing)}
+                          </span>
+                          {viewing.member_expires_at && (
+                            <span className="text-xs text-stone-500 ml-2">Expires {viewing.member_expires_at}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-stone-500">No card issued yet</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {!viewing.member_no && (
+                      <Button onClick={issueCard} className="bg-[#1B2D5C] hover:bg-[#0F1B3A] gap-2" data-testid="member-issue-btn">
+                        <IdCard className="w-4 h-4" /> Issue Card
+                      </Button>
+                    )}
+                    {viewing.member_no && (
+                      <>
+                        <Button onClick={downloadCardPdf} variant="outline" className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white"
+                                data-testid="member-download-btn">
+                          <Download className="w-4 h-4" /> PDF
+                        </Button>
+                        <Button onClick={copyVerifyLink} variant="outline" className="gap-2" data-testid="member-copy-link-btn">
+                          <Copy className="w-4 h-4" /> Verify Link
+                        </Button>
+                        <Button onClick={renewCard} variant="outline" className="gap-2" data-testid="member-renew-btn">
+                          <RefreshCw className="w-4 h-4" /> Renew 1 yr
+                        </Button>
+                        {isAdmin && cardStatus(viewing) !== "revoked" && (
+                          <Button onClick={revokeCard} variant="outline" className="gap-2 border-rose-300 text-rose-700 hover:bg-rose-50"
+                                  data-testid="member-revoke-btn">
+                            <Ban className="w-4 h-4" /> Revoke
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
