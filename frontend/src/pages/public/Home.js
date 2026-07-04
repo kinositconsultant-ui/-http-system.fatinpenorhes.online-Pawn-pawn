@@ -48,7 +48,7 @@ const CATEGORIES = [
     Icon: Truck,
     titleKey: "cat_pez_title",
     bodyKey: "cat_pez_body",
-    img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+    img: "https://images.unsplash.com/photo-1591768793355-74d04bb6608f?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
     tint: "from-[#0F1B3A] to-[#000000]",
   },
 ];

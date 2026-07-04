@@ -1,0 +1,27 @@
+{
+  "summary": "Verified heavy-equipment image fix on /services and / (Home). New URL photo-1591768793355-74d04bb6608f (semi-trailer truck) is now rendered in both `service-card-heavy` and `home-category-pez` after a frontend restart (HMR had not picked up the file change; explicit supervisorctl restart frontend was required to rebuild the bundle). All 5 service cards load (naturalWidth>0) and all 4 home category tiles load. Content is contextually appropriate: image shows a heavy semi-trailer truck at sunset, matching 'Kamiaun pezadu / heavy duty truck' description. The castle image (photo-1518709268805-4e9042af9f23) from iter_23 is no longer present in the bundle.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/services - Car Guarantee card (service-card-car)", "issues": ["Image (unsplash photo-1549924231-f129b911e442) is a UK 'BOND STREET' Underground road sign, NOT a car. Content mismatch with the 'Car Guarantee / Loans with car, pickup or commercial vehicle' description. This is a pre-existing issue outside the scope of this iteration's heavy-equipment fix, but flagging for the next design pass. Home page home-category-car uses a different URL (photo-1552519507-da3b142c6e3d) which is a proper car photo."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL: Replace Services.js line 9 car image URL (photo-1549924231-f129b911e442 is a 'Bond Street' road sign, not a car). Suggest using the same URL as home page car category: photo-1552519507-da3b142c6e3d.",
+    "OPS NOTE: Webpack HMR failed to pick up the recent Services.js/Home.js edits on the running dev server — the bundle still served the OLD castle URL until `sudo supervisorctl restart frontend` was run. If main agent had verified only via a local reload (or if a user tried immediately after the edit) the fix would have appeared missing. Consider a routine `restart frontend` after image/URL swaps."
+  ],
+  "critical_code_review_comments": [
+    "Services.js `service-card-car` uses an image (photo-1549924231-f129b911e442) that visually shows a London 'Bond Street' tube sign, which does not represent a car. Recommend swapping to a proper car photo (e.g. photo-1552519507-da3b142c6e3d already used on Home).",
+    "Two sources of truth for category images: Services.js SERVICES array and Home.js CATEGORIES array both hard-code image URLs. Consider extracting to a shared constants file (e.g. /src/data/categoryImages.js) so future URL updates only need to be made in one place — this bug has now recurred 3 times (iter_21 translation, iter_23 castle, iter_24 truck)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only test)", "frontend": "100% (image fix verified)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter_24 confirmed the Heavy Equipment card fix. Bundle needed a supervisor restart because HMR silently failed to rebuild — worth remembering for future frontend-URL-only bug fixes. There is still a pre-existing content mismatch on the Services.js Car Guarantee card image (Bond Street road sign) — not in scope of this iteration but should be picked up in a future design polish.",
+  "rca of the issue": "Root cause of the retest confusion: after the source-code URL update in Services.js/Home.js, `webpack compiled successfully` messages were logged, yet the served /static/js/bundle.js still contained the OLD castle URL (photo-1518709268805-4e9042af9f23). A full `sudo supervisorctl restart frontend` was required to force a clean rebuild — after restart, the bundle correctly served the NEW truck URL (photo-1591768793355-74d04bb6608f). Reproduction: edit an image URL string in a JSX file → observe stale bundle → restart frontend → bundle updated. Mitigation: after any file edit that doesn't show the expected change in the served bundle, `sudo supervisorctl restart frontend` and re-verify via `curl <REACT_APP_BACKEND_URL>/static/js/bundle.js | grep <expected-string>` before user-facing testing."
+}
