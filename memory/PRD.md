@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 26 — EN↔TET Translation Gap Fix)
+**Last updated:** 2026-02 (Iteration 27 — Services Page Image Fixes)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -261,6 +261,17 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Replaced hardcoded English strings with `t()` calls in Login.js (workspace body, 3 trust chip labels, `Signing in…`, subtitle, encrypted note), Dashboard.js (trend/overdue chart subtitles), Finance.js (Treasury eyebrow, 4 KPI labels, cash-flow & expenses-by-category chart titles), Reports.js (Detail eyebrow), Payments.js (Principal/Interest Left, Amount to collect, Receipt column header).
 - Removed the two `status` duplicate keys I introduced (kept the pre-existing ones at lines 33 / 326).
 - **Testing agent verdict** (report iter_22): **15/15 targeted strings switch correctly**, EN↔TET reversal + localStorage `fp_lang` persistence confirmed. **Bug RESOLVED**.
+
+
+## Iteration 27 (2026-02) — Services Page Image Fixes
+- **Bug** (user report with screenshot): Heavy Equipment ("Garantia Pezadu") card showed a broken image icon on /services; testing agent also caught that the Car ("Karreta") card image was actually a UK "Bond Street" underground sign — not a car.
+- Root cause: two hardcoded Unsplash URLs were either 404 (heavy) or crop-mismatched (car).
+- Fix:
+  - `Services.js` `heavy.img`: was `photo-1581093458791-9d15482442f6` (404) → now `photo-1591768793355-74d04bb6608f` (semi-trailer truck — fits "Kamiaun Pezadu / heavy duty truck").
+  - `Services.js` `car.img`: was `photo-1549924231-f129b911e442` (Bond Street sign after auto-crop) → now `photo-1533473359331-0135ef1b58bf` (Ford Expedition SUV — fits "car/SUV/pickup/commercial vehicle").
+  - `Home.js` `pez` category tile: updated to the same semi-trailer truck for consistency.
+  - Every URL validated first via curl (200 OK) + AI image content check before committing.
+- **Testing agent verdict** (report iter_25): **100% pass, 0 issues, retest_needed: false**. All 5 service card images load with contextually appropriate content; Home pez tile regression check also passed.
 
 
 ## Prioritized Backlog
