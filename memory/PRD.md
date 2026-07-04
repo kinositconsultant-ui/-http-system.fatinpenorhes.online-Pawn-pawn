@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 25 — Admin Delete for Payments & Auctions)
+**Last updated:** 2026-02 (Iteration 26 — EN↔TET Translation Gap Fix)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -253,6 +253,14 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Payments.js**: red trash-outline button appears next to the PDF button on every payment row **only when `user.role === "admin"`**. Confirms with a modal explaining "This will recompute the contract balance. This action is logged." New testids: `payment-delete-{id}`.
 - **Auctions.js**: same trash-outline button on every auction row for admin. Confirmation text is adaptive — if `status === "sold"` it warns that the invoice/sale won't be reversed; otherwise it explains the contract will revert to overdue so it can be re-listed or reactivated. New testids: `auction-delete-{id}`.
 - Verified via curl: admin delete → 200 & record gone; unauth → 401; cashier → 403 "Admin role required" on both endpoints.
+
+
+## Iteration 26 (2026-02) — EN↔TET Translation Gap Fix
+- **Bug** (user report): "when change to Tetum no translates" — several UI strings stayed in English after selecting TET.
+- Added 22 new i18n keys to `/app/frontend/src/lib/i18n.js` (both `en` and `tet` blocks): `login_subtitle`, `login_workspace_body`, `login_years_label`, `login_encrypted_label`, `login_sameday_label`, `login_signing_in`, `login_encrypted_note`, `monthly_trends_sub`, `contracts_past_due`, `treasury`, `finance_cash_on_hand`, `finance_capital_outstanding`, `finance_expenses_lifetime`, `finance_net_profit`, `finance_cash_flow`, `finance_expenses_by_cat`, `detail`, `principal_left`, `interest_left`, `amount_to_collect`, `receipt`.
+- Replaced hardcoded English strings with `t()` calls in Login.js (workspace body, 3 trust chip labels, `Signing in…`, subtitle, encrypted note), Dashboard.js (trend/overdue chart subtitles), Finance.js (Treasury eyebrow, 4 KPI labels, cash-flow & expenses-by-category chart titles), Reports.js (Detail eyebrow), Payments.js (Principal/Interest Left, Amount to collect, Receipt column header).
+- Removed the two `status` duplicate keys I introduced (kept the pre-existing ones at lines 33 / 326).
+- **Testing agent verdict** (report iter_22): **15/15 targeted strings switch correctly**, EN↔TET reversal + localStorage `fp_lang` persistence confirmed. **Bug RESOLVED**.
 
 
 ## Prioritized Backlog
