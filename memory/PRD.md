@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 17)
+**Last updated:** 2026-02 (Iteration 21 — Expense Categories Expansion)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -195,6 +195,18 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 ## Test Coverage (cumulative)
 - Backend: **92/92 PASS** (iter1 33 + iter2 22 + iter4-old 22 + iter5 15).
 - Frontend: 100% — all 6 report tabs, filters, KPI cards (20 across tabs), export links, and item-car-location field verified.
+
+## Iteration 21 (2026-02) — Expense Categories Expansion
+- Added 13 new expense categories to Finance → Tabela Despeza:
+  `EDTL token Office`, `EDTL token Armazen`, `Mina Trasporte`,
+  `Hadia Trasporte Lelaun No Elektróniku`, `Internet Astralin-Telemor`,
+  `Pulsa telefone`, `Fo Bónus`, `Broker Trata Dokumentus`, `Gastus Jerál`,
+  `Hola Materiál - Armazen 2`, `Trasporte - Armazen 2`,
+  `Selu Badain - Armazen 2`, `Tabela ATK FP - Armazen 2`.
+- Backend: `EXPENSE_CATEGORY_GROUPS` (ordered, grouped) replaces flat `EXPENSE_CATEGORIES` list. `GET /api/expense-categories` now returns `{groups: [{label, items[]}], flat: [...]}` for backward compatibility.
+- Frontend: `Finance.js` now renders the Category `<Select>` with Shadcn `SelectGroup`/`SelectLabel` section headers (Payroll & Bonus / Utilities & Office / Armazen (Warehouse) / Transport & Fuel / Operations / Other). Applies to both the New/Edit dialog and the filter dropdown. Verified via curl + screenshot.
+- Regression: `tests/test_iter7_finance.py::TestExpenseCategories::test_list_categories` updated to assert new response shape + all 13 new items present.
+
 
 ## Prioritized Backlog
 ### P1 — Stability / Architecture

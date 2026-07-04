@@ -1855,10 +1855,46 @@ async def contact_messages(_: dict = Depends(require_admin)):
 # =====================================================================
 # Finance — funding sources, operating expenses, treasury
 # =====================================================================
-EXPENSE_CATEGORIES = [
-    "Salary", "Maintenance", "Travel", "Meals", "Compensation",
-    "Utilities", "Rent", "Other",
+# Grouped expense categories. Kept as an ordered list of (group_label, [items])
+# so the dropdown can be rendered with section headers. `EXPENSE_CATEGORIES`
+# preserves a flat list of every valid category (used for validation & filters).
+EXPENSE_CATEGORY_GROUPS = [
+    ("Payroll & Bonus", [
+        "Salary",
+        "Fo Bónus",
+        "Compensation",
+    ]),
+    ("Utilities & Office", [
+        "EDTL token Office",
+        "Internet Astralin-Telemor",
+        "Pulsa telefone",
+        "Utilities",
+        "Rent",
+    ]),
+    ("Armazen (Warehouse)", [
+        "EDTL token Armazen",
+        "Hola Materiál - Armazen 2",
+        "Trasporte - Armazen 2",
+        "Selu Badain - Armazen 2",
+        "Tabela ATK FP - Armazen 2",
+    ]),
+    ("Transport & Fuel", [
+        "Mina Trasporte",
+        "Hadia Trasporte Lelaun No Elektróniku",
+        "Travel",
+    ]),
+    ("Operations", [
+        "Broker Trata Dokumentus",
+        "Maintenance",
+        "Meals",
+        "Gastus Jerál",
+    ]),
+    ("Other", [
+        "Other",
+    ]),
 ]
+
+EXPENSE_CATEGORIES = [item for _, items in EXPENSE_CATEGORY_GROUPS for item in items]
 
 
 class FundingSourceIn(BaseModel):
@@ -1953,7 +1989,10 @@ class ExpenseIn(BaseModel):
 
 @api.get("/expense-categories")
 async def expense_categories(_: dict = Depends(get_current_user)):
-    return EXPENSE_CATEGORIES
+    return {
+        "groups": [{"label": label, "items": items} for label, items in EXPENSE_CATEGORY_GROUPS],
+        "flat": EXPENSE_CATEGORIES,
+    }
 
 
 @api.get("/expenses")

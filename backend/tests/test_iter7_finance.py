@@ -56,9 +56,21 @@ class TestExpenseCategories:
     def test_list_categories(self, admin):
         r = admin.get(f"{BASE_URL}/api/expense-categories")
         assert r.status_code == 200
-        cats = r.json()
+        payload = r.json()
+        # New response: {groups: [...], flat: [...]}
+        assert "flat" in payload and "groups" in payload
+        cats = set(payload["flat"])
         expected = {"Salary", "Maintenance", "Travel", "Meals", "Compensation", "Utilities", "Rent", "Other"}
-        assert expected.issubset(set(cats)), f"got={cats}"
+        assert expected.issubset(cats), f"got={cats}"
+        # 13 new categories added
+        new_expected = {
+            "EDTL token Office", "EDTL token Armazen", "Mina Trasporte",
+            "Hadia Trasporte Lelaun No Elektróniku", "Internet Astralin-Telemor",
+            "Pulsa telefone", "Fo Bónus", "Broker Trata Dokumentus", "Gastus Jerál",
+            "Hola Materiál - Armazen 2", "Trasporte - Armazen 2",
+            "Selu Badain - Armazen 2", "Tabela ATK FP - Armazen 2",
+        }
+        assert new_expected.issubset(cats), f"missing new categories: {new_expected - cats}"
 
 
 # -------- Funding sources --------

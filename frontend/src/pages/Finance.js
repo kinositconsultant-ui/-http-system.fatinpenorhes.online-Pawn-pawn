@@ -21,6 +21,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "../components/ui/select";
 import {
   Tabs,
@@ -50,7 +52,7 @@ export default function Finance() {
   const [summary, setSummary] = useState(null);
   const [sources, setSources] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState({ groups: [], flat: [] });
   const [invoices, setInvoices] = useState([]);
 
   const load = useCallback(async () => {
@@ -492,7 +494,12 @@ function ExpensesSection({ expenses, categories, reload, t }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("all_categories")}</SelectItem>
-              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {(categories.groups || []).map((g) => (
+                <SelectGroup key={g.label}>
+                  <SelectLabel className="text-[10px] uppercase tracking-wider text-stone-500 pt-2">{g.label}</SelectLabel>
+                  {g.items.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectGroup>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -518,9 +525,14 @@ function ExpensesSection({ expenses, categories, reload, t }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FF label="Category">
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger data-testid="expense-category"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectTrigger data-testid="expense-category"><SelectValue placeholder="Select a category" /></SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {(categories.groups || []).map((g) => (
+                      <SelectGroup key={g.label}>
+                        <SelectLabel className="text-[10px] uppercase tracking-wider text-stone-500 pt-2">{g.label}</SelectLabel>
+                        {g.items.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectGroup>
+                    ))}
                   </SelectContent>
                 </Select>
               </FF>
