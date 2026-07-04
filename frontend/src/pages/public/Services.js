@@ -6,7 +6,7 @@ const SERVICES = [
   {
     key: "car",
     Icon: Car,
-    img: "https://images.unsplash.com/photo-1549924231-f129b911e442?auto=format&fit=crop&w=900&q=80",
+    img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80",
     titleEn: "Car Guarantee",
     titleTet: "Garantia Karreta",
     descEn: "Loans with car, pickup or commercial vehicle as collateral.",
