@@ -58,7 +58,7 @@ export default function Auctions() {
     <div className="space-y-6" data-testid="auctions-root">
       <header>
         <div className="text-eyebrow">{t("auctions")}</div>
-        <h1 className="font-display text-4xl font-semibold mt-1">{t("auctions")}</h1>
+        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("auctions")}</h1>
         <p className="text-stone-600 text-sm mt-1">
           Overdue items are moved here from contracts. Mark them as sold to close the loop.
         </p>

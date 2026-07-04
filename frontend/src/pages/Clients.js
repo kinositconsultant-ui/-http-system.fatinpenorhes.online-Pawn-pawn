@@ -191,7 +191,7 @@ export default function Clients() {
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <div className="text-eyebrow">{t("clients")}</div>
-          <h1 className="font-display text-4xl font-semibold mt-1">{t("clients")}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("clients")}</h1>
         </div>
         <div className="flex gap-3 items-center">
           <Input

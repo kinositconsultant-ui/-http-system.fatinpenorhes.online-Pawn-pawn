@@ -94,40 +94,40 @@ export default function Dashboard() {
     <div className="space-y-8" data-testid="dashboard-root">
       <header>
         <div className="text-eyebrow">{t("overview")}</div>
-        <h1 className="font-display text-4xl font-semibold text-stone-900 mt-1">
+        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-stone-900 mt-1">
           {t("dashboard")}
         </h1>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {cards.map((c) => (
           <Card
             key={c.key}
-            className="p-6 border border-stone-200 shadow-none rounded-lg bg-white"
+            className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white"
             data-testid={c.testid}
           >
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-eyebrow">{c.label}</div>
-                <div className="font-display text-3xl font-semibold mt-3">
+                <div className="font-display text-2xl md:text-3xl font-semibold mt-3 break-words">
                   {c.value}
                 </div>
               </div>
-              <c.Icon className={`w-6 h-6 ${c.tone}`} />
+              <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white lg:col-span-2" data-testid="chart-trends">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white lg:col-span-2" data-testid="chart-trends">
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="text-eyebrow">{t("monthly_trends")}</div>
               <div className="font-display text-lg mt-1">Loans · Payments · Interest</div>
             </div>
           </div>
-          <div className="h-72">
+          <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trends?.months || []}>
                 <defs>
@@ -177,10 +177,10 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="chart-overdue">
+        <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="chart-overdue">
           <div className="text-eyebrow">{t("overdue_by_type")}</div>
           <div className="font-display text-lg mt-1 mb-4">Contracts past due</div>
-          <div className="h-72">
+          <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trends?.overdue_by_type || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
@@ -200,7 +200,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white">
+      <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
         <div className="text-eyebrow mb-3">{t("status")}</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label={t("active_contracts")} value={data?.active_contracts} />

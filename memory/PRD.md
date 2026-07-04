@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 22 — Member ID Cards)
+**Last updated:** 2026-02 (Iteration 24 — Login Redesign)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -225,6 +225,26 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - New deps: `qrcode==8.2` (Pillow already installed). New env: `PUBLIC_BASE_URL` in `/app/backend/.env` — the domain used in QR codes.
 - Audit log: every `issue_card` / `renew_card` / `revoke_card` recorded.
 - Tests: `tests/test_iter21_member_cards.py` (10 tests: lifecycle, idempotence, PDF byte-check, public verify happy/bad-token, revoke, renew, RBAC cashier-blocked). **All 10 PASS**.
+
+
+## Iteration 23 (2026-02) — Mobile Responsive Pass
+- **AdminLayout** rewritten with a **slide-out drawer** for `< md` (768px). Desktop unchanged (`hidden md:flex` on the fixed sidebar). New mobile top bar (navy, 56px) shows a hamburger + FP logo + the current page label. Drawer supports body-scroll-lock while open, auto-closes on route change, has an X close button and a tap-outside backdrop. Content area gets `pt-14 md:pt-0` to account for the mobile top bar.
+- **Content padding**: All admin pages now use `px-4 py-4 md:px-8 md:py-8` (was `px-8 py-8`) — much more room on phones.
+- **Page headers**: Every h1 changed from `text-4xl` to `text-2xl sm:text-3xl md:text-4xl` (Dashboard, Clients, Payments, Reports, Contracts, Items, Auctions, Finance, Users, Settings, Audit Log).
+- **Dashboard**: KPI grid now `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` (was forcing 3-col at md, tight at ~800px). Cards use `p-4 md:p-6`, big numbers `text-2xl md:text-3xl` with `break-words`. Charts `h-64 md:h-72`.
+- **Reports**: KPI cards default to 2-col on mobile (`grid-cols-2`), numbers `text-xl md:text-3xl` with `break-words`, card padding `p-4 md:p-6`, detail header padding responsive.
+- **Finance**: KPI grid 2-col on mobile with `Kpi` component now sized `text-lg md:text-3xl`, `p-4 md:p-6`, `w-5 h-5 md:w-6 md:h-6` icons. Chart containers `h-64 md:h-72`.
+- **Radix Tabs (shared)**: TabsList gains `max-w-full overflow-x-auto`, TabsTrigger gains `shrink-0` — tab bars in Payments, Finance, Items now scroll horizontally when they overflow.
+- **Radix Dialog (shared)**: Content now `w-[calc(100vw-1.5rem)] max-h-[calc(100vh-2rem)] overflow-y-auto p-4 md:p-6` — dialogs fit any phone, scroll internally when tall, less padding on mobile.
+- **Payments**: Overdue-payment "Amount to collect + Date" row uses `flex-wrap` so date picker wraps below.
+- Verified via 390×844 (iPhone 12) screenshots on Dashboard, Clients, Payments, Reports, Finance, Items, Auctions, Contracts — hamburger opens/closes drawer, tables horizontally scroll, forms usable, nothing clipped.
+
+
+## Iteration 24 (2026-02) — Login Page Redesign
+- Full professional restyle of `/login`. Left panel (desktop): navy hero with layered treatment (background image at 40% opacity + `bg-gradient-to-br from-[#0B1633]/95 via-[#0F1B3A]/85 to-[#1B2D5C]/70` overlay + inline SVG grain + soft `blur-3xl` accent orbs). Pulsing "Trusted Pawn & Auction House" badge, big hero title, description, and 3 glass trust chips (`10+ Years Serving TL / 24/7 Encrypted Access / USD Same-Day Cash`).
+- Right panel: subtle dot-grid pattern background, elevated white card (`rounded-2xl`, backdrop-blur, soft navy shadow), email + password inputs with lucide icons inside (`Mail`, `Lock`), show/hide password toggle (Eye/EyeOff), "Signing in…" state with spinning `Loader2`, and a "Encrypted session · JWT httpOnly cookies" `ShieldCheck` reassurance under the CTA.
+- Mobile: hero panel hidden, compact brand centered above the card, everything scales down cleanly. Home back-link + EN/TET toggle pinned to the top corners.
+- New data-testids: `login-home-link`, `login-toggle-password`; existing ones preserved (`login-email`, `login-password`, `login-submit`, `login-error`, `login-form`, `login-brand`).
 
 
 ## Prioritized Backlog

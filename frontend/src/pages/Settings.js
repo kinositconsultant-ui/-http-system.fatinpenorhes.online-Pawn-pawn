@@ -137,7 +137,7 @@ export default function Settings() {
     <div className="space-y-8" data-testid="settings-root">
       <header>
         <div className="text-eyebrow">{t("settings")}</div>
-        <h1 className="font-display text-4xl font-semibold mt-1">{t("settings")}</h1>
+        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("settings")}</h1>
       </header>
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">

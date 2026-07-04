@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
@@ -14,6 +15,8 @@ import {
   LogOut,
   Settings as SettingsIcon,
   ScrollText,
+  Menu,
+  X,
 } from "lucide-react";
 
 const links = [
@@ -30,89 +33,163 @@ const links = [
   { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", module: "audit_log", adminOnly: true },
 ];
 
+function SidebarBody({ onNavigate, user, t, handleLogout }) {
+  return (
+    <>
+      <div className="mb-5 flex flex-col items-center gap-2">
+        <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-md bg-white p-2 shadow-md flex items-center justify-center">
+          <img src="/brand/logo.jpg" alt="FP" className="w-full h-full object-contain" />
+        </div>
+        <div className="text-center">
+          <div className="font-display text-lg lg:text-xl font-semibold text-white tracking-wide drop-shadow-sm">
+            Fatin Penhores
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 mt-0.5">
+            Admin Console
+          </div>
+        </div>
+      </div>
+
+      <div className="h-px bg-white/10 mb-3" />
+
+      <nav className="space-y-1.5 flex-1 overflow-y-auto min-h-0">
+        {links.map((l) => {
+          if (l.adminOnly && user?.role !== "admin") return null;
+          const allowed = user?.role === "admin" || (user?.allowed_modules || []).includes(l.module);
+          if (!allowed) return null;
+          const Icon = l.icon;
+          return (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              onClick={onNavigate}
+              data-testid={l.testid}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
+                  isActive
+                    ? "bg-[#1B2D5C] text-white shadow-md ring-1 ring-white/20"
+                    : "bg-white text-[#1B2D5C] hover:bg-[#FFF8E1] hover:text-[#1B2D5C]"
+                }`
+              }
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="truncate">{t(l.key)}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      <div className="pt-4 mt-4 space-y-3">
+        <div className="h-px bg-white/10" />
+        <LangToggle />
+        <div className="text-xs text-white/70 truncate">
+          {user?.name} · {user?.role}
+        </div>
+        <button
+          onClick={handleLogout}
+          data-testid="logout-btn"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-colors shadow-md"
+        >
+          <LogOut className="w-4 h-4" /> {t("logout")}
+        </button>
+        <div className="text-[10px] text-white/50 leading-relaxed pt-1 text-center">
+          FATIN PENHORES UNIP., LDA<br />
+          Caicoli, Dili, Timor-Leste<br />
+          WhatsApp: +670 78372678<br />
+          © 2026 All Rights Reserved.
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const { t } = useLang();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close the drawer whenever route changes (extra safety in case the NavLink onClick misses)
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Prevent body scroll while drawer is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
+  // Try to derive a short label for the mobile topbar
+  const currentLink = links.find((l) => location.pathname.startsWith(l.to));
+  const topLabel = currentLink ? t(currentLink.key) : "Admin";
+
   return (
     <div className="min-h-screen flex bg-[#FAFAF9] text-stone-900">
-      <aside className="w-64 shrink-0 bg-[#4A5568] px-4 py-6 flex flex-col text-white shadow-xl">
-        <div className="mb-5 flex flex-col items-center gap-2">
-          <div className="w-24 h-24 rounded-md bg-white p-2 shadow-md flex items-center justify-center">
-            <img
-              src="/brand/logo.jpg"
-              alt="FP"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <div className="text-center">
-            <div className="font-display text-xl font-semibold text-white tracking-wide drop-shadow-sm">
-              Fatin Penhores
-            </div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 mt-0.5">
-              Admin Console
-            </div>
-          </div>
-        </div>
-
-        <div className="h-px bg-white/10 mb-3" />
-
-        <nav className="space-y-2 flex-1">
-          {links.map((l) => {
-            if (l.adminOnly && user?.role !== "admin") return null;
-            // Module-level visibility: admin sees everything; others must have the module in allowed_modules
-            const allowed = user?.role === "admin" || (user?.allowed_modules || []).includes(l.module);
-            if (!allowed) return null;
-            const Icon = l.icon;
-            return (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                data-testid={l.testid}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-semibold transition-all shadow-sm ${
-                    isActive
-                      ? "bg-[#1B2D5C] text-white shadow-md ring-1 ring-white/20"
-                      : "bg-white text-[#1B2D5C] hover:bg-[#FFF8E1] hover:text-[#1B2D5C]"
-                  }`
-                }
-              >
-                <Icon className="w-4 h-4" />
-                {t(l.key)}
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        <div className="pt-4 mt-4 space-y-3">
-          <div className="h-px bg-white/10" />
-          <LangToggle />
-          <div className="text-xs text-white/70">
-            {user?.name} · {user?.role}
-          </div>
-          <button
-            onClick={handleLogout}
-            data-testid="logout-btn"
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-colors shadow-md"
-          >
-            <LogOut className="w-4 h-4" /> {t("logout")}
-          </button>
-          <div className="text-[10px] text-white/50 leading-relaxed pt-1 text-center">
-            FATIN PENHORES UNIP., LDA<br />
-            Caicoli, Dili, Timor-Leste<br />
-            WhatsApp: +670 78372678<br />
-            © 2026 All Rights Reserved.
-          </div>
-        </div>
+      {/* -------- Desktop sidebar (md+) -------- */}
+      <aside className="hidden md:flex w-64 shrink-0 bg-[#4A5568] px-4 py-6 flex-col text-white shadow-xl">
+        <SidebarBody user={user} t={t} handleLogout={handleLogout} />
       </aside>
-      <main className="flex-1 overflow-x-hidden">
-        <div className="max-w-7xl mx-auto px-8 py-8">
+
+      {/* -------- Mobile: top bar + slide-out drawer -------- */}
+      {/* Top bar */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-[#1B2D5C] text-white flex items-center justify-between px-3 shadow-md">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -ml-1 rounded-md active:bg-white/10"
+          aria-label="Open menu"
+          data-testid="mobile-menu-btn"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="/brand/logo.jpg" alt="FP" className="w-8 h-8 rounded bg-white p-0.5" />
+          <div className="leading-tight min-w-0">
+            <div className="text-[10px] uppercase tracking-widest text-white/60 truncate">Fatin Penhores</div>
+            <div className="text-sm font-semibold truncate">{topLabel}</div>
+          </div>
+        </div>
+        <div className="w-8 h-8" />{/* spacer to balance the hamburger */}
+      </div>
+
+      {/* Backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px]"
+          data-testid="mobile-menu-backdrop"
+        />
+      )}
+
+      {/* Drawer */}
+      <aside
+        className={`md:hidden fixed z-50 top-0 left-0 h-full w-72 max-w-[85vw] bg-[#4A5568] text-white shadow-2xl transform transition-transform duration-300 ease-out flex flex-col px-4 py-6 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        data-testid="mobile-drawer"
+      >
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="absolute top-3 right-3 p-2 rounded-md hover:bg-white/10"
+          aria-label="Close menu"
+          data-testid="mobile-menu-close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <SidebarBody user={user} t={t} handleLogout={handleLogout} onNavigate={() => setMobileOpen(false)} />
+      </aside>
+
+      {/* -------- Main content -------- */}
+      <main className="flex-1 overflow-x-hidden pt-14 md:pt-0">
+        <div className="max-w-7xl mx-auto px-4 py-4 md:px-8 md:py-8">
           <Outlet />
         </div>
       </main>

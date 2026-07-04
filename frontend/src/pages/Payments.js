@@ -135,7 +135,7 @@ export default function Payments() {
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <div className="text-eyebrow">{t("payments")}</div>
-          <h1 className="font-display text-4xl font-semibold mt-1">{t("payments")}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("payments")}</h1>
         </div>
         <div className="flex gap-2">
           <Button
@@ -356,7 +356,7 @@ export default function Payments() {
               </div>
             </div>
 
-            <div className="flex items-end justify-between gap-3 bg-stone-50 border border-stone-200 rounded-md p-3">
+            <div className="flex items-end justify-between gap-3 bg-stone-50 border border-stone-200 rounded-md p-3 flex-wrap">
               <div>
                 <div className="text-eyebrow">Amount to collect</div>
                 <div className="font-display text-2xl text-[#1B2D5C]" data-testid="overdue-amount">

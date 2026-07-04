@@ -179,7 +179,7 @@ export default function Contracts() {
       <header className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <div className="text-eyebrow">{t("contracts")}</div>
-          <h1 className="font-display text-4xl font-semibold mt-1">{t("contracts")}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("contracts")}</h1>
         </div>
         <Dialog
           open={open}

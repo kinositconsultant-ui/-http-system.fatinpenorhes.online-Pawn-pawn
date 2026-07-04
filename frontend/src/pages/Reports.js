@@ -122,7 +122,7 @@ export default function Reports() {
     <div className="space-y-6 print:space-y-3" data-testid="reports-root">
       <header className="print:hidden">
         <div className="text-eyebrow">{t("reports")}</div>
-        <h1 className="font-display text-4xl font-semibold mt-1">
+        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">
           {t(currentTab?.labelKey || "reports")}
         </h1>
       </header>
@@ -241,17 +241,17 @@ export default function Reports() {
       </Card>
 
       {/* KPI cards */}
-      <div className={`grid gap-4 ${currentTab.kpis.length === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"}`}>
+      <div className={`grid gap-3 md:gap-4 ${currentTab.kpis.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 md:grid-cols-2 lg:grid-cols-4"}`}>
         {currentTab.kpis.map((k) => {
           const v = data?.kpis?.[k];
           return (
             <Card
               key={k}
-              className="p-6 border border-stone-200 shadow-none rounded-lg bg-white"
+              className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white"
               data-testid={`kpi-${k}`}
             >
               <div className="text-eyebrow">{t(k) === k ? prettify(k) : t(k)}</div>
-              <div className="font-display text-3xl font-semibold mt-3 text-stone-900">
+              <div className="font-display text-xl md:text-3xl font-semibold mt-2 md:mt-3 text-stone-900 break-words">
                 {data == null ? "…" : MONEY_KEYS.has(k) ? fmtMoney(v) : v ?? "—"}
               </div>
             </Card>
@@ -261,7 +261,7 @@ export default function Reports() {
 
       {/* Detail table */}
       <Card className="border border-stone-200 shadow-none rounded-lg bg-white overflow-hidden">
-        <div className="px-6 pt-5 pb-3 border-b border-stone-200">
+        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-stone-200">
           <div className="text-eyebrow">Detail</div>
           <div className="font-display text-lg mt-1 text-stone-900">
             {t(currentTab.labelKey)} · {data?.rows?.length ?? 0} rows

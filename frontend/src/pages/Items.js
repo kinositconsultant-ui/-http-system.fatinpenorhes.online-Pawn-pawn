@@ -161,7 +161,7 @@ export default function Items() {
     <div className="space-y-6" data-testid="items-root">
       <header>
         <div className="text-eyebrow">{t("items")}</div>
-        <h1 className="font-display text-4xl font-semibold mt-1">{t("items")}</h1>
+        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("items")}</h1>
         <p className="text-stone-600 text-sm mt-1">
           Separate tables for {t("car")} · {t("motorcycle")} · {t("electronic")}.
         </p>

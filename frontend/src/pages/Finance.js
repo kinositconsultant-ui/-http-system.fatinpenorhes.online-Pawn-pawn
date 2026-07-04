@@ -77,7 +77,7 @@ export default function Finance() {
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="text-eyebrow">Treasury</div>
-          <h1 className="font-display text-4xl font-semibold mt-1">Finance</h1>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">Finance</h1>
         </div>
         <a
           href={pdfUrl("/finance/summary/export/pdf")}
@@ -92,7 +92,7 @@ export default function Finance() {
       </header>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Kpi label="Cash on Hand" value={summary ? fmt(summary.cash_on_hand) : "…"}
              Icon={Wallet} tone={Number(summary?.cash_on_hand || 0) >= 0 ? "text-emerald-700" : "text-red-700"}
              testid="kpi-cash-on-hand" />
@@ -106,10 +106,10 @@ export default function Finance() {
       </div>
 
       {/* Cash flow + Expenses charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
           <div className="text-eyebrow mb-3">Cash Flow Snapshot</div>
-          <div className="h-72">
+          <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
                 { k: "Capital In", v: summary?.capital_received || 0 },
@@ -133,9 +133,9 @@ export default function Finance() {
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white">
+        <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
           <div className="text-eyebrow mb-3">Expenses by Category (lifetime)</div>
-          <div className="h-72">
+          <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -211,13 +211,13 @@ export default function Finance() {
 
 function Kpi({ label, value, Icon, tone = "text-stone-900", testid }) {
   return (
-    <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid={testid}>
-      <div className="flex items-start justify-between">
-        <div>
+    <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid={testid}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
           <div className="text-eyebrow">{label}</div>
-          <div className={`font-display text-3xl font-semibold mt-3 ${tone}`}>{value}</div>
+          <div className={`font-display text-lg md:text-3xl font-semibold mt-2 md:mt-3 break-words ${tone}`}>{value}</div>
         </div>
-        <Icon className={`w-6 h-6 ${tone}`} />
+        <Icon className={`w-5 h-5 md:w-6 md:h-6 shrink-0 ${tone}`} />
       </div>
     </Card>
   );
