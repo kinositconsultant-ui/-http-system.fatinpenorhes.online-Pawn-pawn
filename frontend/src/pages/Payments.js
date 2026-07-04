@@ -327,7 +327,7 @@ export default function Payments() {
             {odContract && (
               <div className="grid grid-cols-3 gap-3 text-sm bg-amber-50/60 border border-amber-200 rounded-md p-3">
                 <div>
-                  <div className="text-eyebrow">Principal Left</div>
+                  <div className="text-eyebrow">{t("principal_left")}</div>
                   <div className="font-display text-base">${Number(odContract.principal_remaining || 0).toLocaleString()}</div>
                 </div>
                 <div>
@@ -373,7 +373,7 @@ export default function Payments() {
 
             <div className="flex items-end justify-between gap-3 bg-stone-50 border border-stone-200 rounded-md p-3 flex-wrap">
               <div>
-                <div className="text-eyebrow">Amount to collect</div>
+                <div className="text-eyebrow">{t("amount_to_collect")}</div>
                 <div className="font-display text-2xl text-[#1B2D5C]" data-testid="overdue-amount">
                   ${Number(odAmount || 0).toLocaleString()}
                 </div>
@@ -432,7 +432,7 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
       <table className="min-w-full text-sm" data-testid={testid}>
         <thead className={`${headBg} text-left`}>
           <tr>
-            <Th>Receipt</Th>
+            <Th>{t("receipt")}</Th>
             <Th>{t("contract_number")}</Th>
             <Th>{t("payment_type")}</Th>
             <Th right>{t("amount")}</Th>

@@ -43,6 +43,33 @@ const dict = {
     redeemed: "Redeemed",
     auction: "Auction",
     overview: "Overview",
+    // Login / Auth extra
+    login_subtitle: "Enter your credentials to access the admin console.",
+    login_workspace_body: "A secure workspace for the Fatin Penhores team. Manage clients, contracts, payments and auctions with full audit control.",
+    login_years_label: "Years serving TL",
+    login_encrypted_label: "Encrypted access",
+    login_sameday_label: "Same-day cash",
+    login_signing_in: "Signing in…",
+    login_encrypted_note: "Encrypted session · JWT httpOnly cookies",
+    // Dashboard chart labels
+    monthly_trends_sub: "Loans · Payments · Interest",
+    contracts_past_due: "Contracts past due",
+    status: "Status",
+    // Finance
+    treasury: "Treasury",
+    finance_cash_on_hand: "Cash on Hand",
+    finance_capital_outstanding: "Capital Outstanding",
+    finance_expenses_lifetime: "Expenses (Lifetime)",
+    finance_net_profit: "Net Profit",
+    finance_cash_flow: "Cash Flow Snapshot",
+    finance_expenses_by_cat: "Expenses by Category (lifetime)",
+    // Reports
+    detail: "Detail",
+    // Payments extras
+    principal_left: "Principal Left",
+    interest_left: "Interest Left",
+    amount_to_collect: "Amount to collect",
+    receipt: "Receipt",
     // Client
     full_name: "Full Name",
     id_type: "ID Type",
@@ -308,6 +335,33 @@ const dict = {
     redeemed: "Rezgatadu",
     auction: "Leilaun",
     overview: "Vizão",
+    // Login / Auth extra
+    login_subtitle: "Insere ó nia kredensiál atu asesu painel administrasaun.",
+    login_workspace_body: "Fatin traballu seguru ba ekipa Fatin Penhores. Jere klientes, kontratu, pagamentu no leilaun ho auditoria kompletu.",
+    login_years_label: "Tinan serve TL",
+    login_encrypted_label: "Asesu enkriptadu",
+    login_sameday_label: "Osan loron hanesan",
+    login_signing_in: "Tama hela…",
+    login_encrypted_note: "Sesaun enkriptadu · JWT httpOnly cookies",
+    // Dashboard chart labels
+    monthly_trends_sub: "Empréstimu · Pagamentu · Juru",
+    contracts_past_due: "Kontratu atrazadu",
+    status: "Estatus",
+    // Finance
+    treasury: "Tesourária",
+    finance_cash_on_hand: "Osan iha Liman",
+    finance_capital_outstanding: "Kapitál Rai",
+    finance_expenses_lifetime: "Despeza (Total)",
+    finance_net_profit: "Lukru Netu",
+    finance_cash_flow: "Movimentu Osan",
+    finance_expenses_by_cat: "Despeza tuir Kategoria (total)",
+    // Reports
+    detail: "Detallu",
+    // Payments extras
+    principal_left: "Principal Restu",
+    interest_left: "Juru Restu",
+    amount_to_collect: "Montante atu simu",
+    receipt: "Resibu",
     full_name: "Naran Kompletu",
     id_type: "Tipu BI",
     id_number: "Númeru BI",

@@ -76,7 +76,7 @@ export default function Finance() {
     <div className="space-y-8" data-testid="finance-root">
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="text-eyebrow">Treasury</div>
+          <div className="text-eyebrow">{t("treasury")}</div>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">Finance</h1>
         </div>
         <a
@@ -93,14 +93,14 @@ export default function Finance() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <Kpi label="Cash on Hand" value={summary ? fmt(summary.cash_on_hand) : "…"}
+        <Kpi label={t("finance_cash_on_hand")} value={summary ? fmt(summary.cash_on_hand) : "…"}
              Icon={Wallet} tone={Number(summary?.cash_on_hand || 0) >= 0 ? "text-emerald-700" : "text-red-700"}
              testid="kpi-cash-on-hand" />
-        <Kpi label="Capital Outstanding" value={summary ? fmt(summary.capital_outstanding) : "…"}
+        <Kpi label={t("finance_capital_outstanding")} value={summary ? fmt(summary.capital_outstanding) : "…"}
              Icon={Landmark} tone="text-[#1B2D5C]" testid="kpi-capital-outstanding" />
-        <Kpi label="Expenses (Lifetime)" value={summary ? fmt(summary.expenses_total) : "…"}
+        <Kpi label={t("finance_expenses_lifetime")} value={summary ? fmt(summary.expenses_total) : "…"}
              Icon={Receipt} tone="text-[#C17767]" testid="kpi-expenses-total" />
-        <Kpi label="Net Profit" value={summary ? fmt(summary.net_profit) : "…"}
+        <Kpi label={t("finance_net_profit")} value={summary ? fmt(summary.net_profit) : "…"}
              Icon={TrendingUp} tone={Number(summary?.net_profit || 0) >= 0 ? "text-emerald-700" : "text-red-700"}
              testid="kpi-net-profit" />
       </div>
@@ -108,7 +108,7 @@ export default function Finance() {
       {/* Cash flow + Expenses charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
-          <div className="text-eyebrow mb-3">Cash Flow Snapshot</div>
+          <div className="text-eyebrow mb-3">{t("finance_cash_flow")}</div>
           <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
@@ -134,7 +134,7 @@ export default function Finance() {
           </div>
         </Card>
         <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
-          <div className="text-eyebrow mb-3">Expenses by Category (lifetime)</div>
+          <div className="text-eyebrow mb-3">{t("finance_expenses_by_cat")}</div>
           <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

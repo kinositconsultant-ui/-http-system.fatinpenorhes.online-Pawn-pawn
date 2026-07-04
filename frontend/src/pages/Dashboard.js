@@ -124,7 +124,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="text-eyebrow">{t("monthly_trends")}</div>
-              <div className="font-display text-lg mt-1">Loans · Payments · Interest</div>
+              <div className="font-display text-lg mt-1">{t("monthly_trends_sub")}</div>
             </div>
           </div>
           <div className="h-64 md:h-72">
@@ -179,7 +179,7 @@ export default function Dashboard() {
 
         <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="chart-overdue">
           <div className="text-eyebrow">{t("overdue_by_type")}</div>
-          <div className="font-display text-lg mt-1 mb-4">Contracts past due</div>
+          <div className="font-display text-lg mt-1 mb-4">{t("contracts_past_due")}</div>
           <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trends?.overdue_by_type || []}>

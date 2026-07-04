@@ -184,7 +184,7 @@ export default function Login() {
               {t("sign_in")}
             </h1>
             <div className="mt-3 text-sm text-stone-500">
-              Enter your credentials to access the admin console.
+              {t("login_subtitle")}
             </div>
           </div>
 
@@ -264,7 +264,7 @@ export default function Login() {
           >
             {submitting ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Signing in…
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t("login_signing_in")}
               </>
             ) : (
               t("sign_in")
@@ -274,7 +274,7 @@ export default function Login() {
           {/* Security note */}
           <div className="mt-6 flex items-center gap-2 text-[11px] text-stone-500 justify-center">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            Encrypted session · JWT httpOnly cookies
+            {t("login_encrypted_note")}
           </div>
         </form>
 

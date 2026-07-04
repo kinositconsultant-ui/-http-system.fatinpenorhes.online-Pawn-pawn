@@ -262,7 +262,7 @@ export default function Reports() {
       {/* Detail table */}
       <Card className="border border-stone-200 shadow-none rounded-lg bg-white overflow-hidden">
         <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-stone-200">
-          <div className="text-eyebrow">Detail</div>
+          <div className="text-eyebrow">{t("detail")}</div>
           <div className="font-display text-lg mt-1 text-stone-900">
             {t(currentTab.labelKey)} · {data?.rows?.length ?? 0} rows
           </div>

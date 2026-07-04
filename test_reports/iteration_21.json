@@ -1,0 +1,47 @@
+{
+  "summary": "Verified EN↔TET translation gap fix across Login, Dashboard, Finance, Reports, Payments, and Overdue Payment dialog. 12 of 15 targeted strings translate correctly; 3 targeted strings still hardcoded in English because the t() call replacement was NOT applied. Language toggle mechanism, localStorage persistence (fp_lang), and reload behavior all work correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Login.js — workspace body paragraph (lines 96-97)",
+        "issue": "String 'A secure workspace for the Fatin Penhores team. Manage clients, contracts, payments and auctions with full audit control.' is HARDCODED in JSX and does not switch to Tetum when TET is selected. Key `login_workspace_body` exists in i18n.js but is NOT called via t(). Expected in TET: 'Fatin traballu seguru ba ekipa Fatin Penhores...'",
+        "selector": "Left navy hero body paragraph on /login (visible in screenshot as 'A secure workspace...')",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Login.js — trust chip labels (lines 103-105)",
+        "issue": "The three trust-chip `v:` labels 'Years serving TL', 'Encrypted access', 'Same-day cash' are HARDCODED in the array literal and never switch to Tetum. Keys `login_years_label`, `login_encrypted_label`, `login_sameday_label` exist in i18n.js but are NOT called via t(). Expected in TET: 'Tinan serve TL', 'Asesu enkriptadu', 'Osan loron hanesan'.",
+        "selector": "Login page left hero, 3 chip captions under the 10+ / 24/7 / USD figures",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Payments.js — Overdue Payment dialog (line 334)",
+        "issue": "Eyebrow label rendered as literal `<div className=\"text-eyebrow\">Interest Left</div>` — hardcoded English, does not switch to Tetum. Neighbouring 'Principal Left' (line 330) and 'Amount to collect' (line 376) correctly use t(). Expected in TET: 'Juru Restu'. Confirmed visible as 'INTEREST LEFT' in Overdue Payment modal even when fp_lang=tet.",
+        "selector": "Overdue Payment dialog, middle eyebrow between Principal Restu and Multa",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Login.js line 96-97: replace hardcoded paragraph with `{t(\"login_workspace_body\")}`.",
+    "Login.js lines 103-105: change trust-chip array to use `v: t(\"login_years_label\")`, `v: t(\"login_encrypted_label\")`, `v: t(\"login_sameday_label\")` (build the array inside the component body after `const { t } = useLang();` so t() is in scope).",
+    "Payments.js line 334: replace `>Interest Left<` with `>{t(\"interest_left\")}<`.",
+    "i18n.js cleanup (minor code review): duplicate keys inside the same object literal — `status` at lines 33 & 57 (en) and 326 & 349 (tet); `serial` at lines 110 & 291 (en) and 400 & 574 (tet). JS silently uses the last one so behavior is OK, but ESLint no-dupe-keys will flag these — consolidate."
+  ],
+  "critical_code_review_comments": [
+    "i18n.js contains duplicate keys within the same object literal (`status`, `serial`). This is a code smell that ESLint/Prettier flag; second occurrence silently overrides first. Should be consolidated to a single entry each.",
+    "The `t()` replacements listed in the review request for Login.js and Payments.js line 334 were only PARTIALLY applied. Verify all listed keys are actually consumed via `t()` before considering the fix complete — the presence of a key in the dictionary is not sufficient."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "80% (12/15 targeted strings translate; 3 fail because t() replacement was not applied in source)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (loaded from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified pieces (all pass): Login `login_subtitle`, `login_encrypted_note`, `login_signing_in` button label; Dashboard `monthly_trends_sub` and `contracts_past_due`; Finance eyebrow `treasury`, all 4 KPI labels, `finance_cash_flow`, `finance_expenses_by_cat`; Reports `detail` eyebrow; Payments column header `receipt` (rendered UPPERCASE via CSS); Overdue dialog `principal_left` and `amount_to_collect`. LangToggle mechanism, localStorage `fp_lang` persistence across reload, and EN↔TET reversal all confirmed working. Note: many labels use `.text-eyebrow` which applies `text-transform: uppercase` — use case-insensitive comparison when probing with Playwright's inner_text, otherwise you'll get false negatives. Remaining fixes needed are in Login.js (lines 96-97 workspace body, lines 103-105 trust chip array) and Payments.js line 334 (Interest Left).",
+  "rca of the issue": "Main agent added the new keys to /app/frontend/src/lib/i18n.js (both en and tet blocks) correctly, but the corresponding source-code updates to invoke `t()` were only partially applied: Login.js was updated for `login_subtitle`, `login_signing_in`, `login_encrypted_note` (lines 187, 267, 277) but NOT for `login_workspace_body` (lines 96-97 still contain the hardcoded EN paragraph) and NOT for the three trust chips (lines 103-105 still contain the hardcoded EN strings 'Years serving TL', 'Encrypted access', 'Same-day cash'). Payments.js updated `principal_left` (line 330), `amount_to_collect` (line 376), and `receipt` header (line 435) but skipped `interest_left` (line 334 still hardcoded 'Interest Left'). Reproduction: navigate to /login, click TET toggle — the paragraph and chip labels remain in English; then log in, go to Payments, click 'Pagamentu Atrazu', pick a contract — the middle eyebrow shows 'INTEREST LEFT' instead of 'JURU RESTU'. Mitigation is the 3 file edits listed under action_items."
+}
