@@ -331,7 +331,7 @@ export default function Payments() {
                   <div className="font-display text-base">${Number(odContract.principal_remaining || 0).toLocaleString()}</div>
                 </div>
                 <div>
-                  <div className="text-eyebrow">Interest Left</div>
+                  <div className="text-eyebrow">{t("interest_left")}</div>
                   <div className="font-display text-base">${Number(odContract.interest_remaining || 0).toLocaleString()}</div>
                 </div>
                 <div>

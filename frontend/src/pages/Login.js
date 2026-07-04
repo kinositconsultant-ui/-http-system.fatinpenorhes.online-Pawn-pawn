@@ -93,16 +93,15 @@ export default function Login() {
               {t("hero_title")}
             </h2>
             <p className="mt-5 text-sm xl:text-base text-white/70 leading-relaxed max-w-md">
-              A secure workspace for the Fatin Penhores team. Manage clients,
-              contracts, payments and auctions with full audit control.
+              {t("login_workspace_body")}
             </p>
 
             {/* Trust chips */}
             <div className="mt-8 grid grid-cols-3 gap-3 max-w-md">
               {[
-                { k: "10+", v: "Years serving TL" },
-                { k: "24/7", v: "Encrypted access" },
-                { k: "USD", v: "Same-day cash" },
+                { k: "10+", v: t("login_years_label") },
+                { k: "24/7", v: t("login_encrypted_label") },
+                { k: "USD", v: t("login_sameday_label") },
               ].map((s) => (
                 <div
                   key={s.k}

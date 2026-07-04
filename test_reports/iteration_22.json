@@ -1,0 +1,24 @@
+{
+  "summary": "RETEST after iter_21 — all 3 previously-hardcoded strings now switch to Tetum correctly, and the 12 regression items still pass. Bug 'when change to Tetum no translates' is RESOLVED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Payments list", "issues": ["Out-of-scope observation: payment-type badges in the Payments table ('interest only', 'full', 'partial') and the 'disbursements (2)' tab label remain in English even in TET mode. Not part of this bug's scope but flagging for future translation pass."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Note: i18n.js still contains a duplicate 'serial' key (lines 110/291 in en, 400/574 in tet) as flagged in iter_21. ESLint no-dupe-keys will flag it; JS silently uses the last one. Out of scope of this fix but worth cleaning up."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100% (15/15 targeted strings translate correctly; localStorage persistence + EN↔TET reversal confirmed)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (loaded from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Verified via Playwright on /login and /payments (Pagamentu Atrazu dialog). Login TET body starts 'Fatin traballu seguru ba ekipa Fatin Penhores...'; trust chips render as 'TINAN SERVE TL' / 'ASESU ENKRIPTADU' / 'OSAN LORON HANESAN' (uppercase via CSS). Overdue dialog eyebrows: ['PAGAMENTU','PRINCIPAL RESTU','JURU RESTU','MULTA','MONTANTE ATU SIMU'] — no 'INTEREST LEFT' present. localStorage fp_lang=tet persists after reload and reverts on EN click. Source code fixes at Login.js:96 (t('login_workspace_body')), Login.js:102-104 (t('login_years_label')/t('login_encrypted_label')/t('login_sameday_label')), and Payments.js:334 (t('interest_left')) are all in place. Out-of-scope observation: payment-type badge values in Payments list table and 'disbursements' tab label still show English — likely future translation work.",
+  "rca of the issue": "Iter_21's search_replace edits had not been applied. This retest confirms iter_22 edits are on disk (grep verified) and the UI renders correctly in both languages."
+}

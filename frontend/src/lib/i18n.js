@@ -54,7 +54,6 @@ const dict = {
     // Dashboard chart labels
     monthly_trends_sub: "Loans · Payments · Interest",
     contracts_past_due: "Contracts past due",
-    status: "Status",
     // Finance
     treasury: "Treasury",
     finance_cash_on_hand: "Cash on Hand",
@@ -346,7 +345,6 @@ const dict = {
     // Dashboard chart labels
     monthly_trends_sub: "Empréstimu · Pagamentu · Juru",
     contracts_past_due: "Kontratu atrazadu",
-    status: "Estatus",
     // Finance
     treasury: "Tesourária",
     finance_cash_on_hand: "Osan iha Liman",
