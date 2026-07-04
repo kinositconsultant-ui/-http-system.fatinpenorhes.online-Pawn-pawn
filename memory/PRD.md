@@ -127,11 +127,28 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Reuses existing helpers (`sendWhatsApp`, `openReactivate`, `moveToAuction`) — zero backend changes.
 - Layout verified at 1600×900 EN + 1366×768 EN/TET — no overflow, actions reachable.
 
+## Implemented (Iter 20 — 2026-02) — BREAKING interest model change
+- **Monthly interest calculation (Article 4)** — replaces the previous flat one-time rate. Rules:
+  - `per_month_interest = loan × rate% / 100`
+  - `months_elapsed = max(1, ceil((max(due_date, today) - contract_date) / 30))` — "1 day past = counts as month 1"
+  - `interest_amount = per_month_interest × months_elapsed`
+  - Overdue contracts have interest that automatically ticks up as time passes
+  - New contract response fields: `months_elapsed`, `per_month_interest`, `next_interest_date`
+- **"Next Payment" block on receipt PDF** (bilingual Tetum + English) — appears on repayment receipts (not disbursement, not fully-paid):
+  - Next payment date
+  - Current balance
+  - Next month interest (+$X)
+  - If unpaid by that date, new total = current + next month
+  - Advisory paragraph: "Favor selu iha loron X atu evita interese fulan tan · Please pay by X to avoid another month of interest"
+- Repayment box also shows `Interest Rate (per month)` label + `Months Billed So Far` row.
+- **Backwards impact**: existing overdue contracts now show higher interest (e.g., 111-day overdue contract that used to show $50 flat now shows $180 for 6 months × $30/mo). Confirmed by user before deployment.
+
 ## Test Coverage (cumulative)
-- Iter19: **20/20 frontend PASS** (structure, counts, WhatsApp/Reactivate/Auction/PDF wiring, confirm dialog dismiss+accept, layout EN+TET at 2 viewports).
+- Iter20: **31/31 PASS** — 15 new (Article 4 math on 115 contracts, next_interest_date always strictly future + 30-day aligned, PDF block appears/omits per spec) + 16 iter16+18 regression.
+- Iter19 (Pre-Auction actions): 20/20 frontend PASS.
 - Iter18 (Pawn Item + auto sign name): 9/9 PASS.
 - Iter17 (refactor + reminders): 27/27 PASS.
-- Iter16-14: covered.
+- Iter14-16: covered.
 
 ## Test Coverage (Iter 14)
 - Backend: **290/290 PASS** (244 prior + 7 new iter14 auction-gate + 24 iter13 regression + 15 iter10 regression rerun).

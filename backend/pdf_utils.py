@@ -396,9 +396,11 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     # about when interest bumps up next. Skipped on disbursement receipts (no repayment context).
     next_date = contract.get("next_interest_date") or ""
     per_month = float(contract.get("per_month_interest", 0) or 0)
-    already_paid = float(remaining) <= 0.01
+    # Defensive: use contract.remaining_balance if caller passed a stale `remaining`
+    live_remaining = float(contract.get("remaining_balance", remaining) or remaining or 0)
+    already_paid = live_remaining <= 0.01
     if not is_disbursement and next_date and per_month > 0 and not already_paid:
-        current_total = float(remaining)
+        current_total = live_remaining
         projected_next = round(current_total + per_month, 2)
         story.append(Spacer(1, 0.4 * cm))
         story.append(Paragraph(

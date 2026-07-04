@@ -8,6 +8,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import logging
 from datetime import datetime, timezone, date, timedelta
+from math import ceil
 from typing import List, Optional, Literal
 
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, Header
@@ -589,7 +590,6 @@ async def _recompute_contract_status(contract: dict) -> dict:
     Interest model (Article 4): billed per calendar month (30 days). "Contract past
     day 1 counts as month 1" — so any partial month rolls up to a full month.
     """
-    from math import ceil
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
     rate = float(contract["interest_rate"])
@@ -613,7 +613,6 @@ async def _recompute_contract_status(contract: dict) -> dict:
     interest = round(per_month_interest * months_elapsed, 2)
 
     # Next interest bump date — the date on which one more month of interest is added
-    from datetime import timedelta
     next_interest_date = contract_start + timedelta(days=months_elapsed * 30)
     # Ensure it's always strictly in the future (for clarity on the receipt)
     while next_interest_date <= today_dt:
