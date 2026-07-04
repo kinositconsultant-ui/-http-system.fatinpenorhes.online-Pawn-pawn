@@ -584,14 +584,41 @@ def _today_iso() -> str:
 
 
 async def _recompute_contract_status(contract: dict) -> dict:
-    """Compute live status, principal/interest split, and penalty."""
+    """Compute live status, principal/interest split, penalty, and next milestone dates.
+
+    Interest model (Article 4): billed per calendar month (30 days). "Contract past
+    day 1 counts as month 1" — so any partial month rolls up to a full month.
+    """
+    from math import ceil
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
     rate = float(contract["interest_rate"])
-    interest = round(loan * rate / 100.0, 2)
+    per_month_interest = round(loan * rate / 100.0, 2)
 
-    # Compute potential penalty first (used by overdue payment types).
+    # Compute months elapsed from contract_date. Overdue contracts use today's date
+    # as the effective end so the interest ticks up automatically.
     today = _today_iso()
+    try:
+        contract_start = date.fromisoformat(contract["contract_date"])
+        due = date.fromisoformat(contract["due_date"])
+    except Exception:
+        contract_start = date.today()
+        due = date.today()
+    today_dt = date.today()
+    effective_end = max(due, today_dt)
+    days_elapsed = max(0, (effective_end - contract_start).days)
+    # Article 4 rule: 1 day past = counts as another full month.
+    # Baseline: at least 1 month billed on any contract that runs even 1 day.
+    months_elapsed = max(1, ceil(days_elapsed / 30)) if days_elapsed > 0 else 1
+    interest = round(per_month_interest * months_elapsed, 2)
+
+    # Next interest bump date — the date on which one more month of interest is added
+    from datetime import timedelta
+    next_interest_date = contract_start + timedelta(days=months_elapsed * 30)
+    # Ensure it's always strictly in the future (for clarity on the receipt)
+    while next_interest_date <= today_dt:
+        next_interest_date = next_interest_date + timedelta(days=30)
+
     is_overdue = contract.get("due_date", today) < today
     full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
 
@@ -684,6 +711,9 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["principal_remaining"] = principal_remaining
     contract["interest_remaining"] = interest_remaining
     contract["interest_amount"] = interest
+    contract["per_month_interest"] = per_month_interest
+    contract["months_elapsed"] = months_elapsed
+    contract["next_interest_date"] = next_interest_date.isoformat()
     contract["penalty"] = penalty
     contract["penalty_paid"] = round(penalty_paid, 2)
     contract["penalty_full"] = full_penalty

@@ -1,0 +1,62 @@
+{
+  "summary": "Iter20 backend testing PASSED — monthly interest (Article 4) + Next Payment PDF block fully verified. 15/15 new tests pass across live dataset of 115 contracts, plus 16/16 regression (iter16 + iter18) pass. All new fields present and mathematically consistent, next_interest_date always strictly future and 30-day aligned, PDF blocks appear/omit per spec, penalty & idempotency preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "detailed_results": {
+    "new_contract_fields": {
+      "months_elapsed_present_on_all_115_contracts": "PASS",
+      "per_month_interest_present_on_all_contracts": "PASS",
+      "next_interest_date_present_on_all_contracts": "PASS",
+      "months_elapsed_is_positive_int": "PASS (>=1 always)",
+      "per_month_interest_equals_loan_rate_over_100": "PASS on all 115",
+      "interest_amount_equals_per_month_times_months": "PASS on all 115"
+    },
+    "article4_month_rule": {
+      "fresh_contracts_show_months_1": "PASS",
+      "all_contracts_match_max_1_ceil_days_over_30": "PASS across 115 contracts",
+      "canary_CTR-2026-0115": "PASS — loan=$500 rate=15% contract=2024-01-01 → months=31, per_month=$75, interest=$2325.00 (matches main-agent curl)"
+    },
+    "next_interest_date": {
+      "always_strictly_future": "PASS (next > today for all 115)",
+      "aligned_to_30_day_boundary_from_contract_start": "PASS — (next - contract_date).days % 30 == 0 for all"
+    },
+    "idempotency_and_penalty": {
+      "repeated_GET_returns_identical_values": "PASS on overdue contract",
+      "penalty_full_equals_10_percent_loan_on_overdue": "PASS on all overdue/auction_ready"
+    },
+    "receipt_pdf_next_payment_block": {
+      "repayment_pdf_shows_Interest_Rate_per_month_label": "PASS",
+      "repayment_pdf_shows_Months_Billed_So_Far_row": "PASS",
+      "repayment_pdf_shows_Pagamentu_Tuir_Mai_Next_Payment_header": "PASS (bilingual header)",
+      "repayment_pdf_shows_4_rows": "PASS — Next payment date / Current balance / Next month interest / If unpaid",
+      "repayment_pdf_shows_bilingual_advisory": "PASS — 'Favor selu iha loron ...' + 'Please pay by ...'",
+      "repayment_pdf_shows_next_interest_date_literal": "PASS",
+      "disbursement_pdf_omits_next_payment_block": "PASS (only 'Interest Rate (applies at maturity)' shown)",
+      "fully_paid_pdf_omits_next_payment_block": "PASS on redeemed contract with repayment"
+    },
+    "regression_iter18_and_earlier": {
+      "iter18_pawn_item_block_and_signature_still_present": "PASS on same PDF",
+      "iter18_full_suite": "PASS (9/9)",
+      "iter16_disbursement_full_suite": "PASS (7/7)"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter20_monthly_interest.py",
+    "/app/test_reports/pytest/iter20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:592 — `from math import ceil` and `from datetime import timedelta` are imported inside the async function on every call. Minor: hoist to module-level imports for micro-perf + readability. Not a bug.",
+    "server.py:619 — `while next_interest_date <= today_dt: next_interest_date += 30d` loop is correct but O(n) in months; for a hypothetical decade-old contract it still stays O(hundreds). Fine at current scale; could be `+= 30 * (extra_months+1)` in one shot if ever needed.",
+    "server.py:612 — When days_elapsed == 0 (contract dated today or in the future) months_elapsed is forced to 1. Combined with `effective_end = max(due, today)` this ensures at least 1 month is always billed even on same-day payoff. Confirmed behaviour is intentional (Article 4) and matches user approval.",
+    "pdf_utils.py:400 — Guard `not is_disbursement and next_date and per_month > 0 and not already_paid` is precise and matches spec. Note: `float(remaining) <= 0.01` uses the outer `remaining` argument, not the recomputed contract.remaining_balance — currently both are the same value at call site, but if any future caller passes a stale `remaining` the block visibility could diverge. Consider using `contract.get('remaining_balance', remaining)` for defensiveness.",
+    "pdf_utils.py:429 — Advisory paragraph is a single string. If Tetum locale needs to be dominant on some receipts, consider `Paragraph` splitting or right-alignment for the English side. Not blocking."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter20_monthly_interest.py"],
+  "success_rate": {"backend": "100% (15/15 iter20 + 16/16 regression = 31/31)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing 115-contract dataset. No mutations performed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter20 fully verified. Live 'today' at test time falls within [2026-07-01, 2026-07-19) inferred from CTR-2026-0115 having months_elapsed=31 and next_interest_date=2026-07-19. Dataset has 115 contracts covering fresh(m=1), overdue(m=1), heavy-overdue(m=31), redeemed, and auction states. New test file test_iter20_monthly_interest.py can be re-run as regression for any future interest-model change. pypdf 6.14.0 in place. iter16/iter18 tests still green."
+}

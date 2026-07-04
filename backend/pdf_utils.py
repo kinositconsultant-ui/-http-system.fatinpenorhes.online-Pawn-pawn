@@ -374,7 +374,8 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     else:
         box2 = Table([
             ["Original Loan", money(loan)],
-            ["Interest Rate", f"{rate:.2f}%"],
+            ["Interest Rate (per month)", f"{rate:.2f}%"],
+            ["Months Billed So Far", str(int(contract.get("months_elapsed", 1)))],
             ["Amount Paid (this receipt)", money(amt)],
             ["Principal Remaining", money(contract.get("principal_remaining", 0))],
             ["Interest Remaining", money(contract.get("interest_remaining", 0))],
@@ -390,6 +391,48 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         ("TOPPADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(box2)
+
+    # Client-friendly "Next Payment" reminder — plain-language block that removes surprises
+    # about when interest bumps up next. Skipped on disbursement receipts (no repayment context).
+    next_date = contract.get("next_interest_date") or ""
+    per_month = float(contract.get("per_month_interest", 0) or 0)
+    already_paid = float(remaining) <= 0.01
+    if not is_disbursement and next_date and per_month > 0 and not already_paid:
+        current_total = float(remaining)
+        projected_next = round(current_total + per_month, 2)
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(Paragraph(
+            "Pagamentu Tuir Mai · Next Payment",
+            ParagraphStyle(
+                "NextPayHdr", parent=s["Sub"], fontSize=10,
+                textColor=colors.HexColor("#1B2D5C"),
+            ),
+        ))
+        note_box = Table([
+            ["Next payment date", next_date],
+            ["Current balance", _money(current_total)],
+            ["Next month interest", f"+ {_money(per_month)}"],
+            ["If unpaid by that date, new total", _money(projected_next)],
+        ], colWidths=[6.5 * cm, 10.5 * cm])
+        note_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FEF3C7")),  # warm amber
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+            ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78350F")),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(note_box)
+        story.append(Spacer(1, 0.15 * cm))
+        story.append(Paragraph(
+            f"Favor selu iha loron {next_date} atu evita interese fulan tan (${per_month:,.2f}). · "
+            f"Please pay by {next_date} to avoid another month of interest.",
+            ParagraphStyle(
+                "NextPayHint", parent=s["Body"], fontSize=8.5,
+                textColor=MUTED, alignment=0,
+            ),
+        ))
 
     # Pawn item description — shown on every receipt so the client/officer can verify
     # what was pledged. Extra useful on the disbursement receipt (proof of what was handed over).
