@@ -42,7 +42,7 @@ const SERVICES = [
   {
     key: "heavy",
     Icon: Truck,
-    img: "https://images.unsplash.com/photo-1581093458791-9d15482442f6?auto=format&fit=crop&w=900&q=80",
+    img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80",
     titleEn: "Heavy Equipment Guarantee",
     titleTet: "Garantia Pezadu",
     descEn: "Forklift, tractor, loader, heavy duty truck — accepted as collateral.",
