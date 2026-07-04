@@ -2058,7 +2058,7 @@ EXPENSE_CATEGORY_GROUPS = [
     ]),
     ("Utilities & Office", [
         "EDTL token Office",
-        "Internet Astralin-Telemor",
+        "Internet Starlink & Telemor",
         "Pulsa telefone",
         "Utilities",
         "Rent",

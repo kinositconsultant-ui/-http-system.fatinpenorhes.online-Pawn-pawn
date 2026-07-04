@@ -65,7 +65,7 @@ class TestExpenseCategories:
         # 13 new categories added
         new_expected = {
             "EDTL token Office", "EDTL token Armazen", "Mina Trasporte",
-            "Hadia Trasporte Lelaun No Elektróniku", "Internet Astralin-Telemor",
+            "Hadia Trasporte Lelaun No Elektróniku", "Internet Starlink & Telemor",
             "Pulsa telefone", "Fo Bónus", "Broker Trata Dokumentus", "Gastus Jerál",
             "Hola Materiál - Armazen 2", "Trasporte - Armazen 2",
             "Selu Badain - Armazen 2", "Tabela ATK FP - Armazen 2",

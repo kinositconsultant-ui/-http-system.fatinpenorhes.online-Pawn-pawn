@@ -199,7 +199,7 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 ## Iteration 21 (2026-02) — Expense Categories Expansion
 - Added 13 new expense categories to Finance → Tabela Despeza:
   `EDTL token Office`, `EDTL token Armazen`, `Mina Trasporte`,
-  `Hadia Trasporte Lelaun No Elektróniku`, `Internet Astralin-Telemor`,
+  `Hadia Trasporte Lelaun No Elektróniku`, `Internet Starlink & Telemor`,
   `Pulsa telefone`, `Fo Bónus`, `Broker Trata Dokumentus`, `Gastus Jerál`,
   `Hola Materiál - Armazen 2`, `Trasporte - Armazen 2`,
   `Selu Badain - Armazen 2`, `Tabela ATK FP - Armazen 2`.
