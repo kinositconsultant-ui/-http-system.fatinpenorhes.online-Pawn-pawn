@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, API_BASE } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -25,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, FileDown, AlertTriangle, Coins, Banknote } from "lucide-react";
+import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
 
@@ -39,6 +40,8 @@ const blank = {
 
 export default function Payments() {
   const { t } = useLang();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [rows, setRows] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [open, setOpen] = useState(false);
@@ -58,6 +61,18 @@ export default function Payments() {
   useEffect(() => {
     load();
   }, []);
+
+  const deletePayment = async (payment) => {
+    const label = payment.receipt_number || payment.id;
+    if (!window.confirm(`Delete payment ${label}?\nThis will recompute the contract balance. This action is logged.`)) return;
+    try {
+      await api.delete(`/payments/${payment.id}`);
+      toast.success("Payment deleted");
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -270,13 +285,13 @@ export default function Payments() {
         </TabsList>
 
         <TabsContent value="all">
-          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} t={t} testid="payments-table" />
+          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} />
         </TabsContent>
         <TabsContent value="overdue">
-          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} t={t} testid="overdue-payments-table" overdue />
+          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} />
         </TabsContent>
         <TabsContent value="disbursements">
-          <PaymentsTable rows={disbursements} contractLabel={contractLabel} t={t} testid="disbursements-table" disbursement />
+          <PaymentsTable rows={disbursements} contractLabel={contractLabel} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} />
         </TabsContent>
       </Tabs>
 
@@ -393,7 +408,7 @@ export default function Payments() {
   );
 }
 
-function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbursement = false }) {
+function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete }) {
   const typeBadge = (type) => {
     const map = {
       full: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -438,7 +453,7 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
               <Td right className="whitespace-nowrap font-medium">${Number(r.amount).toLocaleString()}</Td>
               <Td className="whitespace-nowrap">{r.date}</Td>
               <Td right>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-1.5">
                   <a
                     href={`${API_BASE}/payments/${r.id}/pdf`}
                     target="_blank"
@@ -449,6 +464,17 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
                   >
                     <FileDown className="w-3.5 h-3.5" />
                   </a>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete?.(r)}
+                      data-testid={`payment-delete-${r.id}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
+                      title="Delete payment (admin only)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </Td>
             </tr>

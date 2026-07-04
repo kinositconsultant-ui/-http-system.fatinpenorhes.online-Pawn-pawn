@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 24 — Login Redesign)
+**Last updated:** 2026-02 (Iteration 25 — Admin Delete for Payments & Auctions)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -245,6 +245,14 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Right panel: subtle dot-grid pattern background, elevated white card (`rounded-2xl`, backdrop-blur, soft navy shadow), email + password inputs with lucide icons inside (`Mail`, `Lock`), show/hide password toggle (Eye/EyeOff), "Signing in…" state with spinning `Loader2`, and a "Encrypted session · JWT httpOnly cookies" `ShieldCheck` reassurance under the CTA.
 - Mobile: hero panel hidden, compact brand centered above the card, everything scales down cleanly. Home back-link + EN/TET toggle pinned to the top corners.
 - New data-testids: `login-home-link`, `login-toggle-password`; existing ones preserved (`login-email`, `login-password`, `login-submit`, `login-error`, `login-form`, `login-brand`).
+
+
+## Iteration 25 (2026-02) — Admin-Only Delete on Payments & Auctions
+- Added **`DELETE /api/payments/{pid}`** (admin-only). Deletes the record, then calls `_recompute_contract_status` on the parent contract so the balance/status stays consistent. Writes an audit log entry with the receipt number, amount, type and contract_id for traceability.
+- Hardened **`DELETE /api/auctions/{aid}`** (already admin-only): now also reverts the parent contract's status back to `overdue` and unsets `auction_id` when the auction was still `listed`/`auction_ready` — the workflow won't get stuck. Also writes audit log with contract number + prior status.
+- **Payments.js**: red trash-outline button appears next to the PDF button on every payment row **only when `user.role === "admin"`**. Confirms with a modal explaining "This will recompute the contract balance. This action is logged." New testids: `payment-delete-{id}`.
+- **Auctions.js**: same trash-outline button on every auction row for admin. Confirmation text is adaptive — if `status === "sold"` it warns that the invoice/sale won't be reversed; otherwise it explains the contract will revert to overdue so it can be re-listed or reactivated. New testids: `auction-delete-{id}`.
+- Verified via curl: admin delete → 200 & record gone; unauth → 401; cashier → 403 "Admin role required" on both endpoints.
 
 
 ## Prioritized Backlog

@@ -1101,6 +1101,30 @@ async def payment_pdf(pid: str, _: dict = Depends(get_current_user)):
     )
 
 
+@api.delete("/payments/{pid}")
+async def delete_payment(pid: str, user: dict = Depends(require_admin)):
+    """Admin-only: delete a payment record. If it was a disbursement, the
+    contract balance goes back up; if it was a regular repayment, it goes down
+    again. Contract status is recomputed automatically."""
+    payment = await db.payments.find_one({"id": pid}, {"_id": 0})
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    res = await db.payments.delete_one({"id": pid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    # Recompute contract if it still exists
+    contract = await db.contracts.find_one({"id": payment.get("contract_id")}, {"_id": 0})
+    if contract:
+        await _recompute_contract_status(contract)
+    await write_audit(user, "delete", "payment", pid, {
+        "receipt_number": payment.get("receipt_number"),
+        "amount": payment.get("amount"),
+        "type": payment.get("type"),
+        "contract_id": payment.get("contract_id"),
+    })
+    return {"ok": True}
+
+
 # =====================================================================
 # Auctions
 # =====================================================================
@@ -1329,10 +1353,34 @@ async def invoice_pdf(iid: str, _: dict = Depends(get_current_user)):
 
 
 @api.delete("/auctions/{aid}")
-async def delete_auction(aid: str, _: dict = Depends(require_admin)):
+async def delete_auction(aid: str, user: dict = Depends(require_admin)):
+    """Admin-only: remove an auction listing. If the auction was still 'listed'
+    (not sold), we also flip the underlying contract back to 'overdue' so it
+    doesn't stay stuck in the 'auction' state. Sold auctions are only removed
+    if the caller confirms — but we still cascade so the finance/invoice stays
+    consistent."""
+    a = await db.auctions.find_one({"id": aid}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Auction not found")
     res = await db.auctions.delete_one({"id": aid})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Auction not found")
+    # Revert contract status so the workflow doesn't get stuck
+    if a.get("contract_id"):
+        contract = await db.contracts.find_one({"id": a["contract_id"]}, {"_id": 0})
+        if contract:
+            # Only revert if the contract is still in "auction" state (i.e. the auction
+            # hadn't been sold and reconciled). Otherwise leave it alone.
+            if contract.get("status") in ("auction", "auction_ready"):
+                await db.contracts.update_one(
+                    {"id": contract["id"]},
+                    {"$set": {"status": "overdue"}, "$unset": {"auction_id": ""}},
+                )
+    await write_audit(user, "delete", "auction", aid, {
+        "contract_id": a.get("contract_id"),
+        "contract_number": a.get("contract_number"),
+        "status": a.get("status"),
+    })
     return {"ok": True}
 
 

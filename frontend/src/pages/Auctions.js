@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, pdfUrl } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -11,12 +12,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "../components/ui/dialog";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { shortInvoice } from "../lib/docNumbers";
 
 export default function Auctions() {
   const { t } = useLang();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
@@ -48,6 +51,21 @@ export default function Auctions() {
       await api.post(`/auctions/${current.id}/sold`, payload);
       toast.success("Marked as sold");
       setOpen(false);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+
+  const deleteAuction = async (a) => {
+    const label = a.contract_number || a.id;
+    const extra = a.status === "sold"
+      ? "\nThis auction is already SOLD — deleting it will not remove the invoice or reverse the sale, but the record will disappear from this list."
+      : "\nThe underlying contract will revert to 'overdue' so you can re-list or reactivate it.";
+    if (!window.confirm(`Delete auction ${label}?${extra}`)) return;
+    try {
+      await api.delete(`/auctions/${a.id}`);
+      toast.success("Auction deleted");
       load();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
@@ -123,6 +141,17 @@ export default function Auctions() {
                       >
                         <FileText className="w-3 h-3" /> {shortInvoice(r.invoice_number) || t("invoice")}
                       </a>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => deleteAuction(r)}
+                        data-testid={`auction-delete-${r.id}`}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
+                        title="Delete auction (admin only)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                 </Td>
