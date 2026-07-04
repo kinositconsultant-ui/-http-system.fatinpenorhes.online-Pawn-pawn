@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 27 — Services Page Image Fixes)
+**Last updated:** 2026-02 (Iteration 28 — Member Card PDF Auth Fix)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -272,6 +272,18 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
   - `Home.js` `pez` category tile: updated to the same semi-trailer truck for consistency.
   - Every URL validated first via curl (200 OK) + AI image content check before committing.
 - **Testing agent verdict** (report iter_25): **100% pass, 0 issues, retest_needed: false**. All 5 service card images load with contextually appropriate content; Home pez tile regression check also passed.
+
+
+## Iteration 28 (2026-02) — Member Card PDF Auth Fix
+- **Bug** (user report): The Member Card "PDF" button on the Client details modal used raw `window.open(${API_BASE}/clients/${id}/card-pdf, "_blank")`. In some browsers (Chrome new-tab GETs with SameSite httpOnly cookies) the auth cookie was stripped, so the endpoint returned 401 and the tab loaded a JSON error instead of the PDF.
+- Fix in `/app/frontend/src/pages/Clients.js` `downloadCardPdf`:
+  - Now uses `await api.get('/clients/{id}/card-pdf', { responseType: 'blob' })` — the shared axios instance already has `withCredentials: true` so cookies flow reliably.
+  - Wraps the byte stream in a `new Blob([data], { type: 'application/pdf' })`, calls `URL.createObjectURL`, then `window.open(url, "_blank", "noopener,noreferrer")`.
+  - Popup-blocker fallback: if `window.open` returns null, we create a hidden `<a href={blobUrl} download="member-card-FP-YYYY-####.pdf">` and click it.
+  - Error handling: 401 shows a friendly toast ("Session expired — please sign in again."); other errors surface `response.data.detail`.
+  - `URL.revokeObjectURL` cleanup after 60s to release memory.
+- Backend endpoint unchanged — still protected via `Depends(require_module('clients'))`.
+- **Testing agent verdict** (report iter_26): **100% pass, 0 issues, retest_needed: false**. Verified with a real admin session on `FP-2026-0001`: PDF opens correctly, payments-row PDF anchor still works, 401 toast path also verified.
 
 
 ## Prioritized Backlog
