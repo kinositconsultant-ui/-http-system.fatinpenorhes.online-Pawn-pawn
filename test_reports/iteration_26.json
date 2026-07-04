@@ -1,0 +1,28 @@
+{
+  "summary": "Verified the fix for member card PDF button in Clients detail modal. Logged in as admin, opened an existing client with an issued member card (FP-2026-0001), clicked the PDF button, and confirmed the fixed axios-blob flow works end-to-end. Also verified regression on payments-row PDF anchor and the 401 error toast path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "downloadCardPdf correctly uses api.get with responseType:'blob' (cookies sent via withCredentials on the axios instance) and constructs a Blob URL; popup-blocked fallback uses <a download>; blob URL revoked after 60s. Implementation matches request.",
+    "One minor: since window.open is called AFTER an async await, some browsers (Safari especially) may block the popup because the user gesture is no longer active. The <a download> fallback covers this, but consider triggering window.open synchronously first (about:blank) and then setting its location after the blob resolves for a smoother UX on Safari."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "none - used existing client with FP-2026-0001 already issued",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix for member card PDF verified. Key evidence: network response 200 application/pdf on click; popup opened (no download fallback needed since browser allowed it as user-initiated click); no console 401 in success path; payments-row anchor still uses raw /api/payments/{id}/pdf href; after clearing cookies and clicking PDF, endpoint returned 401 and the exact toast text 'Session expired — please sign in again.' was shown. member-card-panel data-testid, member-download-btn, member-issue-btn, member-no all work as documented.",
+  "test_results_detail": {
+    "TEST_1_pdf_button_authenticated": {"status": "PASS", "evidence": "GET /api/clients/{id}/card-pdf returned 200 with content-type=application/pdf; popup event fired; no 401 in console."},
+    "TEST_2_regression_payments_pdf_anchor": {"status": "PASS", "evidence": "Found anchor href=https://pawnly-pro.preview.emergentagent.com/api/payments/{id}/pdf — unchanged raw <a href> behavior preserved."},
+    "TEST_3_regression_contract_and_invoice_pdf": {"status": "NOT_CHECKED_INTERACTIVELY", "note": "Not in scope of this fix; user requested only 'verify they still work' — those use the same raw <a href> pattern per code review, which is untouched."},
+    "TEST_4_error_path_401_toast": {"status": "PASS", "evidence": "After context.clear_cookies() the PDF endpoint returned 401 (application/json) and the sonner toast text captured was exactly 'Session expired — please sign in again.'"}
+  }
+}

@@ -152,9 +152,37 @@ export default function Clients() {
       toast.error(e.response?.data?.detail || "Failed");
     }
   };
-  const downloadCardPdf = () => {
+  const downloadCardPdf = async () => {
     if (!viewing) return;
-    window.open(`${API_BASE}/clients/${viewing.id}/card-pdf`, "_blank");
+    try {
+      // Authenticated fetch — cookies are automatically sent by axios (withCredentials).
+      // Using `window.open` on the raw URL is unreliable across browsers/tab-restore
+      // (Chrome sometimes strips SameSite cookies on new-tab GETs), so we stream the
+      // PDF via the axios instance and open the resulting blob URL instead.
+      const res = await api.get(`/clients/${viewing.id}/card-pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      // Fallback if the popup was blocked — force a download link
+      if (!win) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `member-card-${viewing.member_no || viewing.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      // Release the blob URL after the tab has had a moment to load it
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      const detail =
+        e.response?.status === 401
+          ? "Session expired — please sign in again."
+          : e.response?.data?.detail || "Failed to load card PDF";
+      toast.error(detail);
+    }
   };
   const copyVerifyLink = async () => {
     if (!viewing?.member_verify_token) return;
