@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 28 — Member Card PDF Auth Fix)
+**Last updated:** 2026-02 (Iteration 29 — Client Photo URL Deployment Fix)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -284,6 +284,23 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
   - `URL.revokeObjectURL` cleanup after 60s to release memory.
 - Backend endpoint unchanged — still protected via `Depends(require_module('clients'))`.
 - **Testing agent verdict** (report iter_26): **100% pass, 0 issues, retest_needed: false**. Verified with a real admin session on `FP-2026-0001`: PDF opens correctly, payments-row PDF anchor still works, 401 toast path also verified.
+
+
+## Iteration 29 (2026-02) — Client Photo Deployment Fix (Storage-Key URLs + Public Verify)
+- **Bug** (user report from deployment): Client photos not displayed. `photo_url` DB field stores storage keys like `fatin-penhores/uploads/<id>/<uuid>.jpg`, but the frontend was doing `${API_BASE}/files/${photo_url}` which only works for that exact shape — absolute URLs and `/api/files/...` paths broke.
+- **Frontend fix** — `/app/frontend/src/lib/api.js` new export `fileUrl(pathOrKey)`:
+  - Absolute URL (`https://...`) → returned as-is
+  - `/api/...` path → prefixed with `BACKEND_URL`
+  - `/files/...` path → prefixed with `${API_BASE}`
+  - Anything else (storage key) → returns `${API_BASE}/files/<key>`
+  - Applied in `Clients.js` (list thumbnail + details modal image) and `VerifyMember.js` (public card preview).
+- **Deployment issue #2 discovered by testing agent** (iter_27): the `/api/files/{path}` endpoint requires auth, so anonymous QR-scan visitors on `/verify/:token` always saw a broken image, and ReportLab's HTTP-fetch inside the server for embedding the photo in the Member Card PDF also failed.
+- **Fixes** (iter_29):
+  - New endpoint `GET /api/public/verify/{token}/photo` — no auth — streams object-storage bytes for the token's active card via `objstore.get_object(storage_key)`. Absolute URLs get a 307 redirect. 404 for unknown/short tokens.
+  - `GET /api/public/verify/{token}` now returns `photo_url` as a full public URL pointing at the new public photo endpoint (`${PUBLIC_BASE_URL}/api/public/verify/<token>/photo`) so anonymous visitors never hit the auth-protected `/api/files/`.
+  - `member_card_pdf` endpoint now loads `photo_bytes` directly via `objstore.get_object(storage_key)` when `photo_url` is a storage key / `/api/files/...` path, and passes them to `build_member_card_pdf(..., photo_bytes=...)`. Absolute URLs still fetched via HTTP as before.
+  - `build_member_card_pdf` accepts new optional `photo_bytes` kwarg that short-circuits the urllib fetch.
+- **Testing agent verdict** (report iter_28): **100% pass (backend 13/13, frontend 100%), 0 issues, retest_needed: false**. Verified in incognito: /verify/:token renders the photo without auth cookies. Admin thumbnails still work same-origin. Member Card PDF now embeds the actual photo (byte-delta confirmed).
 
 
 ## Prioritized Backlog
