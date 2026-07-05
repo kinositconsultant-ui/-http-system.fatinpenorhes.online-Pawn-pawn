@@ -32,14 +32,8 @@ from services import _recompute_contract_status  # noqa: E402
 from deps import new_id, utcnow_iso  # noqa: E402
 
 
-async def _seed_and_recompute(loan, rate, contract_date_iso, due_date_iso, payments):
-    """Insert a contract + its payments and return the recomputed contract.
-
-    Uses a fresh Motor client bound to the CURRENT event loop so each pytest
-    test can create/tear down independently (Motor collections are loop-bound).
-    We ALSO override `services.db` for the duration of the call so
-    _recompute_contract_status reads from the same client.
-    """
+async def _seed_and_recompute(loan, rate, contract_date_iso, due_date_iso, payments, interest_rule="M1"):
+    """Insert a contract + its payments and return the recomputed contract."""
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])
     _db = client[os.environ["DB_NAME"]]
 
@@ -60,6 +54,7 @@ async def _seed_and_recompute(loan, rate, contract_date_iso, due_date_iso, payme
             "contract_date": contract_date_iso,
             "due_date": due_date_iso,
             "status": "active",
+            "interest_rule": interest_rule,
             "created_at": utcnow_iso(),
         })
         for p in payments:
@@ -82,8 +77,10 @@ async def _seed_and_recompute(loan, rate, contract_date_iso, due_date_iso, payme
         client.close()
 
 
-def _seed(loan, rate, contract_date_iso, due_date_iso, payments):
-    return asyncio.run(_seed_and_recompute(loan, rate, contract_date_iso, due_date_iso, payments))
+def _seed(loan, rate, contract_date_iso, due_date_iso, payments, interest_rule="M1"):
+    return asyncio.run(_seed_and_recompute(
+        loan, rate, contract_date_iso, due_date_iso, payments, interest_rule,
+    ))
 
 
 class TestRuleBHybridInterest:
@@ -93,6 +90,7 @@ class TestRuleBHybridInterest:
             contract_date_iso="2026-01-10",
             due_date_iso=date.today().isoformat(),
             payments=[],
+            interest_rule="M2",
         )
         expected = round(50 * c["months_elapsed"], 2)
         assert c["interest_amount"] == expected, c
@@ -103,6 +101,7 @@ class TestRuleBHybridInterest:
             contract_date_iso="2026-01-10",
             due_date_iso="2026-02-10",
             payments=[{"amount": 200, "type": "partial", "date": "2026-01-20"}],
+            interest_rule="M2",
         )
         billed = c["per_month_billed"]
         assert billed[0] == 50.0, f"month 1 must be $50 (Rule B anchor), got {billed[0]}"
@@ -115,6 +114,7 @@ class TestRuleBHybridInterest:
             contract_date_iso="2026-01-10",
             due_date_iso="2026-02-10",
             payments=[{"amount": 200, "type": "partial", "date": "2026-02-20"}],
+            interest_rule="M2",
         )
         billed = c["per_month_billed"]
         assert billed[0] == 50.0
@@ -129,6 +129,7 @@ class TestRuleBHybridInterest:
             contract_date_iso="2026-01-10",
             due_date_iso="2026-02-10",
             payments=[{"amount": 200, "type": "partial", "date": "2026-01-20"}],
+            interest_rule="M2",
         )
         billed = c["per_month_billed"]
         assert c["per_month_interest"] == billed[-1]
@@ -139,6 +140,7 @@ class TestRuleBHybridInterest:
             contract_date_iso="2026-01-10",
             due_date_iso="2026-02-10",
             payments=[{"amount": 200, "type": "partial", "date": "2026-01-20"}],
+            interest_rule="M2",
         )
         assert c["per_month_interest_next"] == 30.0, c
 
@@ -151,6 +153,7 @@ class TestRuleBHybridInterest:
                 {"amount": 200, "type": "partial", "date": "2026-01-20"},
                 {"amount": 100, "type": "partial", "date": "2026-02-15"},
             ],
+            interest_rule="M2",
         )
         billed = c["per_month_billed"]
         assert billed[0] == 50.0

@@ -807,6 +807,10 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
     doc["id"] = new_id()
     doc["contract_number"] = contract_number
     doc["status"] = "active"
+    # Contracts created from Feb 2026 onward use Rule M1 (interest first, then
+    # principal) so partial payments correctly reduce next-month interest.
+    # Legacy contracts (pre-refactor) default to M2 via services.py logic.
+    doc["interest_rule"] = "M1"
     doc["created_at"] = utcnow_iso()
     await db.contracts.insert_one(doc)
     # mark item as pawned

@@ -114,25 +114,40 @@ async def _decrypted_settings() -> dict:
 async def _recompute_contract_status(contract: dict) -> dict:
     """Compute live status, principal/interest split, penalty, and next milestone dates.
 
-    Interest model (Article 4 — Rule B: Hybrid, Feb 2026):
-    - The first monthly billing period is ALWAYS charged on the ORIGINAL loan
-      amount (this keeps Rule A's guarantee: minimum 1 month interest).
-    - From month 2 onward, each month's interest is computed on the PRINCIPAL
-      REMAINING at that month's start date, so a partial payment reduces the
-      NEXT month's interest.
-    - Rule A calendar-month + 1-day-grace timing is unchanged (`_months_billed`).
+    Two interest-calculation rules coexist so we can grandfather old contracts
+    (per business owner's Feb 2026 decision):
 
-    Examples ($500 loan @ 10% = $50/mo original, contract start Jan 10):
-    - Only 1 month elapsed → interest = $50 (unchanged from Rule A).
-    - Client pays $200 partial on Jan 20 (still month 1). Two months elapsed
-      to Feb 11 → month 1: $50, month 2: ($500-$200) × 10% = $30 → total $80.
-    - Same partial paid Feb 20 → paid AFTER Feb 11 anniversary, so it does NOT
-      reduce Feb's interest ($50). If a 3rd month starts Mar 11, month 3 uses
-      remaining principal → ($500-$200) × 10% = $30. Total = $50+$50+$30 = $130.
+    - Rule "M2" (legacy — pre-Feb-2026 contracts):
+        * Partial payment reduces PRINCIPAL only.
+        * Month N interest = principal remaining at Month N anchor × rate%.
+        * Month 1 always uses the original loan amount.
+
+    - Rule "M1" (new contracts from Feb 2026 onward — recommended):
+        * Partial payment allocation: INTEREST FIRST, then principal (standard
+          lending accounting practice).
+        * Month N interest = principal remaining at Month N anchor × rate%.
+          (Same declining-balance shape as M2, but because M1 pays down interest
+          first, the principal drops later — leading to slightly different
+          principal snapshots at anchors.)
+        * Month 1 always uses the original loan amount.
+        * NO compounding on pure delinquency: if the client pays nothing,
+          Month 2 interest is still 10% × original principal, NOT 10% ×
+          (principal + unpaid interest).
+
+    Business owner's example — $3,000 loan @ 10% (M1 rule):
+        Loan $3,000 → M1 interest = $300 (accrues at Jan 10 anchor)
+        Client pays $1,000 partial on Jan 20 (still Month 1):
+          M1 allocation: $300 → interest paid, $700 → principal paid
+          Principal remaining = $2,300
+        On Feb 10 anchor: Month 2 interest = 10% × $2,300 = $230
+        Client's total if unpaid to Mar 10: $2,300 + $230 = $2,530.
     """
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
     rate = float(contract["interest_rate"])
+    # Legacy contracts default to M2 (their historical rule); new contracts
+    # explicitly set "M1" at creation time.
+    interest_rule = contract.get("interest_rule", "M2")
 
     today_iso = _today_iso()
     try:
@@ -145,117 +160,128 @@ async def _recompute_contract_status(contract: dict) -> dict:
     effective_end = max(due, today_dt)
     months_elapsed = _months_billed(contract_start, effective_end)
 
-    # ---- Hybrid Rule B interest ----
-    # For each billing month m (1..months_elapsed), the "principal used for
-    # this month" = loan - sum of principal-reducing payments dated strictly
-    # BEFORE this month's anniversary date. Month 1 always uses the original
-    # loan (per business decision).
-    sorted_payments = sorted(
-        payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))
-    )
+    is_overdue = contract.get("due_date", today_iso) < today_iso
+    full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
 
-    def _principal_paid_before(d_iso: str) -> float:
-        """Sum of amounts that had reduced principal before the given date.
-
-        Only `partial` (all→principal) is considered for month-boundary
-        purposes. `full`/`overdue_full` are close-out payments that arrive last
-        and don't create future billing months; `interest_only` overflow is
-        rare and negligible for the boundary snapshot.
-        """
-        total = 0.0
-        for p in sorted_payments:
-            if not p.get("date"):
-                continue
-            if p["date"] >= d_iso:
-                continue
-            if p.get("type") == "partial":
-                total += float(p.get("amount", 0))
-        return total
-
-    interest = 0.0
-    per_month_billed: list[float] = []
+    # ---- Event-driven chronological walk ----
+    # For correctness under both M1 and M2, we merge month-anchor events with
+    # payment events and walk them in date order. This lets us know precisely
+    # how much principal has been paid down at every point in time.
+    anchors: list[tuple[date, str, int]] = []
     for m in range(1, months_elapsed + 1):
-        if m == 1:
-            principal_for_month = loan
-        else:
-            month_start_iso = (contract_start + relativedelta(months=m - 1)).isoformat()
-            principal_for_month = max(0.0, loan - _principal_paid_before(month_start_iso))
-        month_int = round(principal_for_month * rate / 100.0, 2)
-        interest += month_int
-        per_month_billed.append(month_int)
+        anchor_date = contract_start + relativedelta(months=m - 1)
+        anchors.append((anchor_date, "anchor", m))
 
-    interest = round(interest, 2)
+    sorted_pmts = sorted(
+        payments,
+        key=lambda p: (p.get("date", ""), p.get("created_at", "")),
+    )
+    payment_events: list[tuple[date, str, dict]] = []
+    for p in sorted_pmts:
+        d = p.get("date", "")
+        if not d:
+            continue
+        try:
+            payment_events.append((date.fromisoformat(d), "payment", p))
+        except Exception:
+            continue
 
-    # For display: `per_month_interest` is the CURRENT-month rate — this is
-    # what the receipt PDF, disbursement column and WhatsApp reminders show
-    # when they answer "how much interest per month?"
+    # Sort: same-date events resolve anchor BEFORE payment so the anchor's
+    # interest is billed first, then a same-day partial pays it down.
+    events = sorted(anchors + payment_events,
+                    key=lambda e: (e[0], 0 if e[1] == "anchor" else 1))
+
+    principal_remaining = loan
+    interest_owed = 0.0
+    interest_paid = 0.0
+    principal_paid = 0.0
+    penalty_paid = 0.0
+    per_month_billed: list[float] = []
+
+    def _apply_int_first(amt: float) -> None:
+        nonlocal interest_paid, principal_paid, principal_remaining
+        remaining_int = max(0.0, interest_owed - interest_paid)
+        take_int = min(amt, remaining_int)
+        interest_paid += take_int
+        take_prin = min(amt - take_int, principal_remaining)
+        principal_paid += take_prin
+        principal_remaining -= take_prin
+
+    def _apply_all_to_principal(amt: float) -> None:
+        nonlocal principal_paid, principal_remaining
+        take_prin = min(amt, principal_remaining)
+        principal_paid += take_prin
+        principal_remaining -= take_prin
+
+    for evt_date, evt_type, payload in events:
+        if evt_type == "anchor":
+            m = payload
+            if m == 1:
+                # Anchor month always billed on original loan (Rule A safety net).
+                month_int = round(loan * rate / 100.0, 2)
+            else:
+                # Declining balance — 10% of principal remaining at this anchor.
+                month_int = round(principal_remaining * rate / 100.0, 2)
+            per_month_billed.append(month_int)
+            interest_owed += month_int
+            continue
+
+        # It's a payment.
+        p = payload
+        amt = float(p.get("amount", 0))
+        ptype = p.get("type", "partial")
+        if ptype == "disbursement":
+            continue
+
+        if ptype == "partial":
+            if interest_rule == "M1":
+                _apply_int_first(amt)
+            else:  # M2 legacy — partial goes entirely to principal
+                _apply_all_to_principal(amt)
+        elif ptype == "interest_only":
+            # Cover as much unpaid interest as possible; excess to principal.
+            _apply_int_first(amt)
+        elif ptype == "full":
+            # Redemption — interest first, then principal.
+            _apply_int_first(amt)
+        elif ptype == "overdue_full":
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            _apply_int_first(amt - take_pen)
+        elif ptype == "overdue_interest_pen":
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+            rem = amt - take_pen
+            remaining_int = max(0.0, interest_owed - interest_paid)
+            interest_paid += min(rem, remaining_int)
+        elif ptype == "overdue_penalty_only":
+            pen_remaining = max(0.0, full_penalty - penalty_paid)
+            penalty_paid += min(amt, pen_remaining)
+
+    interest = round(interest_owed, 2)
+
+    # Display: current-month rate (last month billed) & next-month prediction.
     if per_month_billed:
         per_month_interest = per_month_billed[-1]
     else:
         per_month_interest = round(loan * rate / 100.0, 2)
+    per_month_interest_next = round(principal_remaining * rate / 100.0, 2)
 
     # Next-month-kick-in date (Rule A timing preserved).
     next_interest_date = contract_start + relativedelta(months=months_elapsed) + timedelta(days=1)
     while next_interest_date <= today_dt:
         next_interest_date = next_interest_date + relativedelta(months=1)
 
-    # Estimated NEXT month's interest (for the receipt "Next Payment" block).
-    # It uses the principal-remaining AT the next-month anniversary.
-    next_month_anchor = (contract_start + relativedelta(months=months_elapsed)).isoformat()
-    next_month_principal = max(0.0, loan - _principal_paid_before(next_month_anchor))
-    per_month_interest_next = round(next_month_principal * rate / 100.0, 2)
-
-    is_overdue = contract.get("due_date", today_iso) < today_iso
-    full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
-
-    interest_paid = 0.0
-    principal_paid = 0.0
-    penalty_paid = 0.0
-    for p in sorted_payments:
-        amt = float(p.get("amount", 0))
-        ptype = p.get("type", "partial")
-        if ptype == "disbursement":
-            continue
-        if ptype == "interest_only":
-            take = min(amt, max(0.0, interest - interest_paid))
-            interest_paid += take
-            extra = amt - take
-            if extra > 0:
-                principal_paid += extra
-        elif ptype == "partial":
-            principal_paid += amt
-        elif ptype == "full":
-            take = max(0.0, interest - interest_paid)
-            interest_paid += min(amt, take)
-            principal_paid += max(0.0, amt - take)
-        elif ptype == "overdue_full":
-            pen_remaining = max(0.0, full_penalty - penalty_paid)
-            take_pen = min(amt, pen_remaining)
-            penalty_paid += take_pen
-            rem = amt - take_pen
-            take_int = min(rem, max(0.0, interest - interest_paid))
-            interest_paid += take_int
-            rem -= take_int
-            principal_paid += max(0.0, rem)
-        elif ptype == "overdue_interest_pen":
-            pen_remaining = max(0.0, full_penalty - penalty_paid)
-            take_pen = min(amt, pen_remaining)
-            penalty_paid += take_pen
-            rem = amt - take_pen
-            take_int = min(rem, max(0.0, interest - interest_paid))
-            interest_paid += take_int
-        elif ptype == "overdue_penalty_only":
-            pen_remaining = max(0.0, full_penalty - penalty_paid)
-            penalty_paid += min(amt, pen_remaining)
-
     principal_paid = min(principal_paid, loan)
     interest_paid = min(interest_paid, interest)
     penalty_paid = min(penalty_paid, full_penalty)
-    principal_remaining = round(max(0.0, loan - principal_paid), 2)
+    principal_remaining_rounded = round(max(0.0, loan - principal_paid), 2)
     interest_remaining = round(max(0.0, interest - interest_paid), 2)
     penalty_remaining = round(max(0.0, full_penalty - penalty_paid), 2)
 
-    redeemed = (principal_remaining + interest_remaining + penalty_remaining) <= 0.01
+    redeemed = (principal_remaining_rounded + interest_remaining + penalty_remaining) <= 0.01
     penalty = penalty_remaining
 
     days_overdue = 0
@@ -265,7 +291,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
         except Exception:
             days_overdue = 0
 
-    total_due = round(principal_remaining + interest_remaining + penalty, 2)
+    total_due = round(principal_remaining_rounded + interest_remaining + penalty, 2)
 
     if contract.get("status") == "auction":
         status = "auction"
@@ -287,12 +313,12 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["paid_amount"] = round(principal_paid + interest_paid, 2)
     contract["principal_paid"] = round(principal_paid, 2)
     contract["interest_paid"] = round(interest_paid, 2)
-    contract["principal_remaining"] = principal_remaining
+    contract["principal_remaining"] = principal_remaining_rounded
     contract["interest_remaining"] = interest_remaining
     contract["interest_amount"] = interest
     contract["per_month_interest"] = per_month_interest
     contract["per_month_interest_next"] = per_month_interest_next
-    contract["per_month_billed"] = per_month_billed  # ordered list, useful for PDF math block
+    contract["per_month_billed"] = per_month_billed
     contract["months_elapsed"] = months_elapsed
     contract["next_interest_date"] = next_interest_date.isoformat()
     contract["penalty"] = penalty
@@ -301,6 +327,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["days_overdue"] = days_overdue
     contract["total_due"] = total_due
     contract["remaining_balance"] = total_due
+    contract["interest_rule"] = interest_rule  # so UI/PDF can label it
     return contract
 
 

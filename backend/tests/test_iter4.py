@@ -189,6 +189,10 @@ class TestPaymentMath:
         return r.json(), today
 
     def test_partial_reduces_principal(self, admin_session):
+        """Under Rule M1 (Method 1 allocation — iter27), a $1000 partial on a
+        $3000 loan with $300 accrued interest → $300 clears interest, $700
+        reduces principal. Principal remaining = $2300. total_due = $2300.
+        """
         ctr, today = self._setup(admin_session)
         r = admin_session.post(f"{API}/payments", json={
             "contract_id": ctr["id"], "amount": 1000, "type": "partial",
@@ -196,11 +200,13 @@ class TestPaymentMath:
         })
         assert r.status_code == 200, r.text
         c = r.json()["contract"]
-        assert c["principal_paid"] == 1000
-        assert c["principal_remaining"] == 2000
-        assert c["interest_remaining"] == 300
+        # M1: interest first, then principal
+        assert c["interest_paid"] == 300
+        assert c["principal_paid"] == 700
+        assert c["principal_remaining"] == 2300
+        assert c["interest_remaining"] == 0
         assert c["interest_amount"] == 300
-        # total_due = 2300 + penalty (0 because not overdue)
+        # total_due = 2300 principal + 0 interest + 0 penalty
         assert c["total_due"] == 2300
 
     def test_interest_only_then_partial(self, admin_session):
