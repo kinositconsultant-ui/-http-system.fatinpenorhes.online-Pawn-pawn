@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, API_BASE, fileUrl } from "../lib/api";
+import { api, API_BASE } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -26,6 +26,23 @@ import { Plus, Trash2, Pencil, Eye, FileText, IdCard, RefreshCw, Ban, Download, 
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
+
+/**
+ * Return a photo URL that the browser can actually GET without cookies.
+ *
+ * We PREFER the public per-member endpoint because `/api/files/*` requires
+ * auth and browsers strip httpOnly cookies from <img src> in some cross-site
+ * scenarios (e.g. deployed prod). When the client hasn't been issued a
+ * Member Card yet, `member_verify_token` is absent — return null so the
+ * caller renders the placeholder avatar.
+ */
+function clientPhotoSrc(client) {
+  if (!client) return null;
+  if (client.member_verify_token) {
+    return `${API_BASE}/public/verify/${client.member_verify_token}/photo`;
+  }
+  return null;
+}
 
 const blank = {
   full_name: "",
@@ -333,15 +350,20 @@ export default function Clients() {
             {filtered.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                 <Td>
-                  {r.photo_url ? (
-                    <img
-                      alt=""
-                      src={fileUrl(r.photo_url)}
-                      className="w-10 h-10 rounded-full object-cover border border-stone-200"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-stone-100 border border-stone-200" />
-                  )}
+                  {(() => {
+                    const src = clientPhotoSrc(r);
+                    return src ? (
+                      <img
+                        alt=""
+                        src={src}
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        className="w-10 h-10 rounded-full object-cover border border-stone-200"
+                        data-testid={`client-thumb-${r.id}`}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-stone-100 border border-stone-200" />
+                    );
+                  })()}
                 </Td>
                 <Td className="font-medium whitespace-nowrap max-w-[200px] truncate" title={r.full_name}>{r.full_name}</Td>
                 <Td className="whitespace-nowrap">
@@ -407,17 +429,22 @@ export default function Clients() {
           {viewing && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-6">
-                {viewing.photo_url ? (
-                  <img
-                    alt=""
-                    src={fileUrl(viewing.photo_url)}
-                    className="w-40 h-40 rounded-md object-cover border border-stone-200"
-                  />
-                ) : (
-                  <div className="w-40 h-40 rounded-md bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-400">
-                    {t("no_items")}
-                  </div>
-                )}
+                {(() => {
+                  const src = clientPhotoSrc(viewing);
+                  return src ? (
+                    <img
+                      alt=""
+                      src={src}
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      className="w-40 h-40 rounded-md object-cover border border-stone-200"
+                      data-testid="client-detail-photo"
+                    />
+                  ) : (
+                    <div className="w-40 h-40 rounded-md bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-400 text-xs text-center px-2">
+                      {viewing.photo_url ? "Issue a Member Card to display the photo publicly" : t("no_items")}
+                    </div>
+                  );
+                })()}
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <Info label={t("id_type")} value={viewing.id_type} />
                   <Info label={t("id_number")} value={viewing.id_number} />
