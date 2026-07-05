@@ -963,7 +963,7 @@ DEFAULT_TNC_TET = """1. Kliente entrega sasán ne'ebé deskreve iha leten nudar 
 # =====================================================================
 # Member ID Card (CR80 credit-card size: 85.6 × 54 mm, front + back on A4)
 # =====================================================================
-def build_member_card_pdf(client: dict, verify_url: str) -> bytes:
+def build_member_card_pdf(client: dict, verify_url: str, photo_bytes: bytes | None = None) -> bytes:
     """Generate a printable Member ID Card PDF for a client.
 
     Front (navy, credit-card sized): brand mark, name, member no, dates,
@@ -1049,7 +1049,15 @@ def build_member_card_pdf(client: dict, verify_url: str) -> bytes:
     c.setFillColor(colors.white)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=1, stroke=0)
     drew_photo = False
-    if photo_url:
+    if photo_bytes:
+        try:
+            img = ImageReader(BytesIO(photo_bytes))
+            c.drawImage(img, photo_x, photo_y, width=photo_w, height=photo_h,
+                        preserveAspectRatio=True, mask="auto")
+            drew_photo = True
+        except Exception:
+            drew_photo = False
+    if not drew_photo and photo_url:
         try:
             with urllib.request.urlopen(photo_url, timeout=5) as resp:
                 img_bytes = resp.read()

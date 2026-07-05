@@ -1,0 +1,37 @@
+{
+  "summary": "Retest of iter_27 photo fix. Both previously-failing issues are now RESOLVED. Backend: new public endpoint `GET /api/public/verify/{token}/photo` streams object-storage bytes (no auth) for storage-key photo_url, 307-redirects to absolute URLs, returns 404 for unknown/short tokens. `member_card_pdf` now loads bytes directly via objstore.get_object() so photos are actually embedded in the PDF (delta > 200B confirmed). `/api/public/verify/{token}` now returns photo_url pointing at the new public photo endpoint. Frontend verified in incognito (cookies cleared): /verify/:token renders the client photo with naturalWidth=64, no auth cookies present. Admin client list still shows thumbnails via same-origin /api/files/... with cookie auth. All 13 pytest tests pass (was 8/9 in iter_27).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter27_photo_url.py",
+    "/app/test_reports/pytest/iter28.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:410-442 (member_card_pdf) — good: normalises storage key by stripping known prefixes and passes raw bytes to build_member_card_pdf, bypassing HTTP entirely. Silent Exception catch (line 433-434) still swallows storage errors — consider logging so future breakage is visible.",
+    "server.py:445-468 (public_verify_member_photo) — correctly gates on token length>=8, redirects absolute URLs (307), streams storage bytes for keys. Consider adding Cache-Control headers (e.g. private, max-age=300) so QR scanners don't refetch on every render.",
+    "server.py:483-486 — PUBLIC_BASE_URL is read at request time; if unset falls back to relative path. Reasonable but if PUBLIC_BASE_URL ever becomes wrong (e.g. after domain change) the anonymous verify page will break silently. Consider using request.base_url as fallback.",
+    "pdf_utils.py:1052-1069 — good separation of photo_bytes (in-process) vs photo_url (HTTP fetch). urllib.request.urlopen fallback still has no auth and will still 401 for `/api/files/...` shaped URLs, but that path is no longer used for storage keys (they get bytes injected upstream). Consider removing the urlopen branch entirely for anything looking like /api/files/... to make failure modes explicit.",
+    "server.py file is ~2898 lines — refactor into feature modules (auth, clients, files, verify, pdf) on next iteration to stay maintainable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter27_photo_url.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13)",
+    "frontend": "100%"
+  },
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "Uploaded a 64x64 red PNG via /api/upload, created TEST_UI_Photo_* and TEST_Photo_* clients for pytest & UI check. All TEST_* clients deleted post-run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter27_photo_url.py now has 13 tests covering all photo_url shapes, PDF embedding (delta>200B), new public verify-photo endpoint (200 with image bytes for keys, 307 redirect for absolute URLs, 404 for unknown/short tokens), and the public verify JSON now returns absolute URL to /api/public/verify/{token}/photo. All 13 pass. UI: anonymous /verify/:token in incognito successfully renders photo (naturalWidth=64) with zero auth cookies; admin /clients list thumbnails still load with cookie auth. Card PDF is 52,973 bytes with embedded photo (vs ~45KB initials-only baseline).",
+  "rca of the issue": "iter_27 root cause was that /api/files/{path} required cookie auth, breaking (a) anonymous /verify photo rendering and (b) in-process ReportLab urllib fetch for PDF embedding. iter_28 mitigation: (a) new public endpoint /api/public/verify/{token}/photo that authorises by the verify token itself (no cookies) and streams objstore bytes; (b) /api/public/verify/{token} now hands out URLs pointing at (a) instead of /api/files/...; (c) member_card_pdf loads bytes via objstore.get_object() and passes photo_bytes into build_member_card_pdf, skipping HTTP entirely. Verified end-to-end in this iteration."
+}

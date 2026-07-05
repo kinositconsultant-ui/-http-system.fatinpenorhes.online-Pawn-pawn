@@ -31,6 +31,8 @@ TINY_PNG = bytes.fromhex(
     "0000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082"
 )
 
+PUBLIC_BASE = os.environ.get("PUBLIC_BASE_URL", BASE_URL).rstrip("/")
+
 
 @pytest.fixture(scope="module")
 def admin():
@@ -129,9 +131,11 @@ class TestCardPdfPhotoNormalisation:
 
 
 class TestPublicVerifyPhoto:
-    """Public verify endpoint should return photo_url as-stored (frontend fileUrl handles rendering)."""
+    """Public verify endpoint should return photo_url pointing at the new public
+    photo endpoint (`/api/public/verify/{token}/photo`) so anonymous QR-scan
+    visitors don't need auth cookies."""
 
-    def test_verify_returns_stored_photo_url(self, admin, uploaded_photo_key):
+    def test_verify_returns_public_photo_url(self, admin, uploaded_photo_key):
         cid = _create_client(admin, uploaded_photo_key, "verify")
         r = admin.post(f"{API}/clients/{cid}/issue-card", timeout=15)
         assert r.status_code == 200
@@ -142,9 +146,58 @@ class TestPublicVerifyPhoto:
         assert pub.status_code == 200, pub.text
         data = pub.json()
         assert data.get("valid") is True
-        assert data.get("photo_url") == uploaded_photo_key, (
-            f"expected storage-key shape to round-trip, got {data.get('photo_url')!r}"
+        photo_url = data.get("photo_url") or ""
+        expected_suffix = f"/api/public/verify/{token}/photo"
+        assert photo_url.endswith(expected_suffix), (
+            f"expected photo_url to point at public verify-photo endpoint, got {photo_url!r}"
         )
+        # Should be an absolute URL for anonymous browsers
+        assert photo_url.startswith("http"), f"expected absolute URL, got {photo_url!r}"
+
+
+class TestPublicVerifyPhotoEndpoint:
+    """New: `/api/public/verify/{token}/photo` — no auth — streams client photo."""
+
+    def test_photo_bytes_returned_for_storage_key(self, admin, uploaded_photo_key):
+        cid = _create_client(admin, uploaded_photo_key, "pubphotokey")
+        r = admin.post(f"{API}/clients/{cid}/issue-card", timeout=15)
+        assert r.status_code == 200
+        token = r.json()["member_verify_token"]
+
+        # Anonymous fetch — brand new session, no cookies
+        r = requests.get(f"{API}/public/verify/{token}/photo", timeout=15)
+        assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
+        assert r.headers.get("content-type", "").startswith("image/"), (
+            f"expected image/*, got {r.headers.get('content-type')!r}"
+        )
+        assert r.content[:8] == b"\x89PNG\r\n\x1a\n", (
+            f"expected PNG magic bytes, got {r.content[:16]!r}"
+        )
+
+    def test_photo_redirect_for_absolute_url(self, admin):
+        abs_url = "https://example.com/photo.jpg"
+        cid = _create_client(admin, abs_url, "pubphotoabs")
+        r = admin.post(f"{API}/clients/{cid}/issue-card", timeout=15)
+        assert r.status_code == 200
+        token = r.json()["member_verify_token"]
+
+        # Anonymous fetch — do NOT follow redirect
+        r = requests.get(f"{API}/public/verify/{token}/photo", timeout=15, allow_redirects=False)
+        assert r.status_code in (301, 302, 303, 307, 308), (
+            f"expected redirect for absolute-URL photo, got {r.status_code}: {r.text[:200]}"
+        )
+        assert r.headers.get("location") == abs_url, (
+            f"expected Location: {abs_url}, got {r.headers.get('location')!r}"
+        )
+
+    def test_photo_404_for_unknown_token(self):
+        # Long enough to pass the >=8 length check, but not a valid token
+        r = requests.get(f"{API}/public/verify/notavalidtoken12345/photo", timeout=15)
+        assert r.status_code == 404, f"expected 404 for unknown token, got {r.status_code}"
+
+    def test_photo_404_for_short_token(self):
+        r = requests.get(f"{API}/public/verify/short/photo", timeout=15)
+        assert r.status_code == 404, f"expected 404 for short token, got {r.status_code}"
 
 
 class TestPhotoEmbeddedInPdf:

@@ -12,7 +12,7 @@ from math import ceil
 from typing import List, Optional, Literal
 
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Form, Query, Header
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from io import BytesIO
@@ -416,27 +416,56 @@ async def member_card_pdf(cid: str, _: dict = Depends(require_module("clients"))
         raise HTTPException(status_code=400, detail="No card issued yet — issue first")
     # Reflect live status in the PDF (expired/revoked banner)
     client["member_status"] = _card_status(client)
-    # Normalise photo_url so ReportLab can fetch it via HTTP. Storage keys like
-    # "fatin-penhores/uploads/<id>/foo.jpg" get expanded to a full ${API_BASE}/files/... URL.
+    # Load the photo bytes directly from object storage if `photo_url` is a
+    # storage key or `/api/files/...` path — the PDF generator can't call the
+    # protected `/api/files` endpoint from inside the process (no cookie).
+    photo_bytes: bytes | None = None
     photo = (client.get("photo_url") or "").strip()
     if photo and not photo.lower().startswith(("http://", "https://")):
-        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
-        if base:
-            if photo.startswith("/api/"):
-                client["photo_url"] = f"{base}{photo}"
-            elif photo.startswith("/files/"):
-                client["photo_url"] = f"{base}/api{photo}"
-            else:
-                key = photo.lstrip("/")
-                client["photo_url"] = f"{base}/api/files/{key}"
+        storage_key = photo
+        for prefix in ("/api/files/", "/files/", "/api/"):
+            if storage_key.startswith(prefix):
+                storage_key = storage_key[len(prefix):]
+                break
+        storage_key = storage_key.lstrip("/")
+        try:
+            photo_bytes, _ct = objstore.get_object(storage_key)
+        except Exception:
+            photo_bytes = None
     verify_url = _public_verify_url(client["member_verify_token"])
-    pdf = build_member_card_pdf(client, verify_url)
+    pdf = build_member_card_pdf(client, verify_url, photo_bytes=photo_bytes)
     safe_no = (client["member_no"] or "card").replace("/", "-")
     return StreamingResponse(
         BytesIO(pdf),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="member-card-{safe_no}.pdf"'},
     )
+
+
+@api.get("/public/verify/{token}/photo")
+async def public_verify_member_photo(token: str):
+    """Public — streams the client's photo for the given verify token so QR-scan
+    visitors (anonymous) can see the member photo without needing auth."""
+    if not token or len(token) < 8:
+        raise HTTPException(status_code=404, detail="Not found")
+    client = await db.clients.find_one({"member_verify_token": token}, {"_id": 0})
+    if not client or not client.get("photo_url"):
+        raise HTTPException(status_code=404, detail="No photo")
+    photo = str(client["photo_url"]).strip()
+    if photo.lower().startswith(("http://", "https://")):
+        # Absolute URL — redirect the browser to it
+        return RedirectResponse(url=photo, status_code=307)
+    storage_key = photo
+    for prefix in ("/api/files/", "/files/", "/api/"):
+        if storage_key.startswith(prefix):
+            storage_key = storage_key[len(prefix):]
+            break
+    storage_key = storage_key.lstrip("/")
+    try:
+        data, content_type = objstore.get_object(storage_key)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Photo not accessible")
+    return Response(content=data, media_type=content_type or "image/jpeg")
 
 
 @api.get("/public/verify/{token}")
@@ -448,12 +477,19 @@ async def public_verify_member(token: str):
     if not client:
         return {"valid": False, "status": "not_found"}
     status = _card_status(client)
+    # For QR-scan visitors (no auth), always link the photo through the public
+    # verify-photo endpoint. This works for both absolute URLs (redirects) and
+    # storage keys (streamed via objstore) without requiring auth cookies.
+    photo_public = ""
+    if client.get("photo_url"):
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        photo_public = f"{base}/api/public/verify/{token}/photo" if base else f"/api/public/verify/{token}/photo"
     return {
         "valid": status == "active",
         "status": status,
         "member_no": client.get("member_no"),
         "full_name": client.get("full_name"),
-        "photo_url": client.get("photo_url", ""),
+        "photo_url": photo_public,
         "issued_at": client.get("member_issued_at"),
         "expires_at": client.get("member_expires_at"),
         "company": "FATIN PENHORES UNIPESSOAL, LDA",
