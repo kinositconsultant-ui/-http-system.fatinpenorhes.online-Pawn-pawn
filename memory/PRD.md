@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 29 — Client Photo URL Deployment Fix)
+**Last updated:** 2026-02 (Iteration 30 — Payments UX + Rule A Interest Math)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -301,6 +301,25 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
   - `member_card_pdf` endpoint now loads `photo_bytes` directly via `objstore.get_object(storage_key)` when `photo_url` is a storage key / `/api/files/...` path, and passes them to `build_member_card_pdf(..., photo_bytes=...)`. Absolute URLs still fetched via HTTP as before.
   - `build_member_card_pdf` accepts new optional `photo_bytes` kwarg that short-circuits the urllib fetch.
 - **Testing agent verdict** (report iter_28): **100% pass (backend 13/13, frontend 100%), 0 issues, retest_needed: false**. Verified in incognito: /verify/:token renders the photo without auth cookies. Admin thumbnails still work same-origin. Member Card PDF now embeds the actual photo (byte-delta confirmed).
+
+
+## Iteration 30 (2026-02) — Payments UX + Rule A Interest Math
+- **Business rule change** (Article 4): Interest is billed per **strict calendar month with a 1-day grace**. First month always billed (min 1). Payment on the monthly anniversary of the start date = same month. Payment 1 day past = new full month kicks in.
+  - Examples: Jul 10 → Aug 10 = 1 month · Jul 10 → Aug 11 = 2 · Jul 20 → Aug 20 = 1 · Jul 20 → Aug 21 = 2 · Jul 1 → Jul 15 = 1.
+  - Replaces the older `ceil(days_elapsed / 30)` rule.
+- **Backend changes** (`/app/backend/server.py`):
+  - New import `from dateutil.relativedelta import relativedelta`.
+  - New helper `_months_billed(start, payment_date)` — implements Rule A.
+  - `_recompute_contract_status` uses `_months_billed(...)` for `months_elapsed`; `next_interest_date = contract_start + relativedelta(months=months_elapsed) + timedelta(days=1)` (points at the day the next month kicks in).
+- **Frontend changes** (`/app/frontend/src/pages/Payments.js`):
+  - **New Payment dialog** summary card is now 4 metrics wide: **Interest Left** (new), Total Due, Paid, Remaining Balance. New testids: `np-interest-remaining`, `np-total-due`, `np-paid`, `np-remaining`.
+  - **Disbursements table** got 2 new columns (data-appears only on the disbursement tab): **Interest / month** (`loan × rate/100`) with a `(10%)` or `(15%)` rate badge, and **Due date**. Non-disbursement tables (Payments, Overdue) unchanged.
+  - Payment types (Full / Partial / Interest only) and manual Amount field unchanged — already met spec.
+- **i18n**: new key `interest_per_month` (EN: "Interest / month", TET: "Juru / fulan").
+- **Tests**:
+  - NEW `/app/backend/tests/test_iter22_interest_rule.py` — 12 unit tests for `_months_billed` covering all edge cases (same-day, first-month, anniversary, one-day-past, end-of-month starts, leap year, payment-before-start).
+  - UPDATED `/app/backend/tests/test_iter20_monthly_interest.py` — `TestArticle4MonthsElapsed` and `TestNextInterestDate` now assert Rule A instead of the old `ceil(days/30)`; canary test derives the expected value dynamically so it stays green as time moves forward.
+- **Testing agent verdict** (report iter_29): **100% pass — backend 47/47 (12 unit + 5 integration + 30 regression), frontend 100%, retest_needed: false**. Final local run: 27/27 pytest tests green.
 
 
 ## Prioritized Backlog

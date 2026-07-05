@@ -14,8 +14,9 @@ Scope:
 
 import os
 import io
-import math
-from datetime import date, datetime
+import math  # noqa: F401 — historical import, retained for future date-math tests
+from dateutil.relativedelta import relativedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 import requests
@@ -89,12 +90,27 @@ class TestContractNewFields:
 # ---------- Article 4 rule: months_elapsed = max(1, ceil(days/30)) ----------
 
 class TestArticle4MonthsElapsed:
+    """Article 4 monthly-interest rule.
+
+    Historical note (iter 20): the original implementation used
+    `ceil(days_elapsed / 30)`. In iter 22 the business owner corrected the
+    rule to **Rule A — Strict calendar month + 1 grace day** (see
+    `test_iter22_interest_rule.py`). This class now asserts Rule A.
+    """
+
     def _compute_expected_months(self, contract_date_iso: str, due_date_iso: str) -> int:
         cs = date.fromisoformat(contract_date_iso)
         du = date.fromisoformat(due_date_iso)
         eff = max(du, date.today())
-        days = max(0, (eff - cs).days)
-        return max(1, math.ceil(days / 30)) if days > 0 else 1
+        # Rule A — strict calendar month + 1 grace day. Min 1.
+        if eff <= cs:
+            return 1
+        months = 1
+        anniv = cs + relativedelta(months=1)
+        while eff > anniv:
+            months += 1
+            anniv = anniv + relativedelta(months=1)
+        return months
 
     def test_fresh_contract_months_is_one(self, contracts):
         # A contract with days_elapsed < 30 -> months = 1
@@ -112,16 +128,23 @@ class TestArticle4MonthsElapsed:
                 wrong.append((c.get("contract_number"),
                               c["contract_date"], c["due_date"],
                               c["months_elapsed"], expected))
-        assert not wrong, f"months_elapsed formula mismatches: {wrong[:5]}"
+        assert not wrong, f"months_elapsed formula mismatches (Rule A): {wrong[:5]}"
 
-    def test_ctr_2026_0115_matches_expected_31_months(self, contracts):
+    def test_ctr_2026_0115_matches_expected_months(self, contracts):
         # Main agent's canary: CTR-2026-0115, loan $500, rate 15%, contract 2024-01-01
         c = next((x for x in contracts if x.get("contract_number") == "CTR-2026-0115"), None)
         if c is None:
             pytest.skip("CTR-2026-0115 not present")
-        assert c["months_elapsed"] == 31, f"expected 31, got {c['months_elapsed']}"
+        # Under Rule A, months elapsed from 2024-01-01 to today follows the
+        # anniversary+1-grace formula. Just re-derive it here so this test
+        # continues to pass as time moves forward.
+        expected_months = self._compute_expected_months(c["contract_date"], c["due_date"])
+        assert c["months_elapsed"] == expected_months, (
+            f"expected {expected_months} (Rule A), got {c['months_elapsed']}"
+        )
+        # per-month interest is still 500 × 15% = 75
         assert abs(float(c["per_month_interest"]) - 75.0) < 0.01
-        assert abs(float(c["interest_amount"]) - 2325.0) < 0.01
+        assert abs(float(c["interest_amount"]) - 75.0 * expected_months) < 0.01
 
 
 # ---------- next_interest_date is strictly future and month-aligned ----------
@@ -136,15 +159,27 @@ class TestNextInterestDate:
                 bad.append((c.get("contract_number"), c["next_interest_date"]))
         assert not bad, f"next_interest_date not in future for: {bad[:5]}"
 
-    def test_next_date_multiple_of_30_from_contract_start(self, contracts):
+    def test_next_date_aligned_to_monthly_anniversary(self, contracts):
+        """Rule A: next_interest_date is the day AFTER a monthly anniversary
+        of contract_date, so it's always contract_date + N months + 1 day for
+        some N ≥ 1."""
         bad = []
         for c in contracts:
             cs = date.fromisoformat(c["contract_date"])
             n = date.fromisoformat(c["next_interest_date"])
-            diff = (n - cs).days
-            if diff <= 0 or diff % 30 != 0:
-                bad.append((c.get("contract_number"), c["contract_date"], c["next_interest_date"], diff))
-        assert not bad, f"next_interest_date not on 30-day boundary: {bad[:5]}"
+            if n <= cs:
+                bad.append((c.get("contract_number"), c["contract_date"], c["next_interest_date"], "not-future"))
+                continue
+            # Compute N (months since start) and verify n == cs + N months + 1 day
+            months_diff = (n.year - cs.year) * 12 + (n.month - cs.month)
+            # n.day should be 2 if cs.day was 1, i.e. anniversary+1
+            candidate = cs + relativedelta(months=months_diff) + timedelta(days=1)
+            if n != candidate:
+                # try months_diff - 1 in case day-of-month wrap-around
+                candidate2 = cs + relativedelta(months=max(1, months_diff - 1)) + timedelta(days=1)
+                if n != candidate2:
+                    bad.append((c.get("contract_number"), c["contract_date"], c["next_interest_date"]))
+        assert not bad, f"next_interest_date not aligned to Rule A anniversary+1: {bad[:5]}"
 
 
 # ---------- Idempotency + penalty regression ----------
