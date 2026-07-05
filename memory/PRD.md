@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 31 — Interest Calc Explainer on Receipts)
+**Last updated:** 2026-02 (Iteration 32 — WhatsApp Reminders with Rule A Math)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -333,6 +333,22 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - Wrapped in try/except so a bad field never breaks receipt generation.
 - Skipped on disbursement receipts (already gated by `not is_disbursement`).
 - Verified: PDF now embeds the block; AI-inspection of a real receipt confirmed all 5 rows render correctly on the indigo panel with the bilingual explainer paragraph below.
+
+
+## Iteration 32 (2026-02) — WhatsApp Overdue Reminders now include interest math
+- **Extended templates** `_MSG_EN` and `_MSG_TET` in `/app/backend/reminders.py` to include the same Rule A interest math the receipt PDF shows:
+  - Line 1: brand
+  - Line 2: `Hello {name}` / `Ola {name}`
+  - Line 3: `Contract {short_number} is {days} days overdue.`
+  - Line 4: `Owed today: ${loan} + {months}×${per_month} interest = ${total_due}.`
+  - Line 5: `On {next_month_date} interest rises to ${next_interest_total}.`
+  - Line 6: `Please pay within {days_left} more days to avoid auction.`
+  - Line 7: WhatsApp footer
+  - Both languages stay ≈ 250 chars, well under WhatsApp's 1024 free-form limit.
+- **Refactor** — extracted `_months_billed` into `deps.py` as `months_billed(start, payment_date)` so both `server.py` and `reminders.py` share the same Rule A math (no circular import). `server.py` still exposes the old alias `_months_billed` for internal callers/tests.
+- **Reminder scheduler** loads `contract_date` in its DB projection and calls the shared helper. `days_left` calc unchanged (max(0, 10 - days)).
+- **Tests** — NEW `/app/backend/tests/test_iter23_reminder_body.py` (5 tests): EN body math, TET body math + language, length ≤ 500 chars, `_short_contract` helper, business-owner concrete scenario (Jul 10 → Aug 5 = 1×$50=$550, next 2026-08-11 = $100).
+- **Testing agent verdict** (report iter_30): **100% pass — backend 62/62 (5 iter23 unit + 12 iter22 unit + 15 iter20 unit + 3 iter30 integration + 27 iter17 regression), 0 issues, retest_needed: false**. Scheduler boots cleanly. Admin `POST /api/reminders/run?force=true` returns a valid summary. Rule A math validated end-to-end via GET /api/contracts/{id}.
 
 
 ## Prioritized Backlog
