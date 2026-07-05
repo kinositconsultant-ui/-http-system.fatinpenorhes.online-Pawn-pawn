@@ -815,6 +815,43 @@ def build_invoices_list_pdf(invoices: list[dict]) -> bytes:
     return buf.getvalue()
 
 
+def build_audit_log_pdf(rows: list[dict], filters: dict | None = None) -> bytes:
+    """Branded PDF export of the audit log with active filter summary at the top."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    filters = filters or {}
+    active = [f"{k}={v}" for k, v in filters.items() if v]
+    filter_line = "Filters: " + " · ".join(active) if active else "Filters: (none — showing latest entries)"
+    story = [
+        _branded_header(s),
+        Paragraph("Audit Log · Rejistu Atividade", s["DocTitle"]),
+        Paragraph(f"Entries: <b>{len(rows)}</b> — {filter_line}", s["Body"]),
+        Spacer(1, 0.3 * cm),
+    ]
+    data_rows = []
+    for r in rows:
+        details = r.get("details") or {}
+        if isinstance(details, dict):
+            det = ", ".join(f"{k}={v}" for k, v in list(details.items())[:4])
+        else:
+            det = str(details)[:80]
+        data_rows.append([
+            (r.get("created_at") or "")[:19].replace("T", " "),
+            r.get("actor_email") or r.get("actor_id") or "—",
+            r.get("action", ""),
+            r.get("resource", ""),
+            (r.get("resource_id") or "")[:24],
+            det[:60],
+        ])
+    story.append(_data_table(
+        ["When (UTC)", "Actor", "Action", "Resource", "ID", "Details"],
+        data_rows,
+        col_widths=[3.6 * cm, 4.5 * cm, 3 * cm, 2.4 * cm, 3.5 * cm, 7.2 * cm],
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_capital_sources_pdf(sources: list[dict]) -> bytes:
     """List of capital sources with totals."""
     s = _styles()
