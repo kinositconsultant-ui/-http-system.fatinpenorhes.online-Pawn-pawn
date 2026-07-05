@@ -92,6 +92,7 @@ export default function Payments() {
     const c = contracts.find((x) => x.id === id);
     return c ? shortContract(c.contract_number) : id;
   };
+  const contractById = (id) => contracts.find((x) => x.id === id) || null;
   const selectedContract = contracts.find((c) => c.id === form.contract_id);
   const overdueContracts = useMemo(
     () => contracts.filter((c) => c.status === "overdue" || c.status === "auction_ready"),
@@ -201,22 +202,28 @@ export default function Payments() {
                   </Select>
                 </Field>
                 {selectedContract && (
-                  <div className="md:col-span-2 grid grid-cols-3 gap-3 text-sm bg-stone-50 border border-stone-100 rounded-md p-3">
+                  <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm bg-stone-50 border border-stone-100 rounded-md p-3">
+                    <div>
+                      <div className="text-eyebrow">{t("interest_left")}</div>
+                      <div className="font-display text-lg text-amber-700" data-testid="np-interest-remaining">
+                        ${Number(selectedContract.interest_remaining || 0).toLocaleString()}
+                      </div>
+                    </div>
                     <div>
                       <div className="text-eyebrow">{t("total_due")}</div>
-                      <div className="font-display text-lg">
+                      <div className="font-display text-lg" data-testid="np-total-due">
                         ${Number(selectedContract.total_due || 0).toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div className="text-eyebrow">{t("paid_amount")}</div>
-                      <div className="font-display text-lg">
+                      <div className="font-display text-lg" data-testid="np-paid">
                         ${Number(selectedContract.paid_amount || 0).toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div className="text-eyebrow">{t("remaining_balance")}</div>
-                      <div className="font-display text-lg text-[#C17767]">
+                      <div className="font-display text-lg text-[#C17767]" data-testid="np-remaining">
                         ${Number(selectedContract.remaining_balance || 0).toLocaleString()}
                       </div>
                     </div>
@@ -291,7 +298,7 @@ export default function Payments() {
           <PaymentsTable rows={overduePayments} contractLabel={contractLabel} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} />
         </TabsContent>
         <TabsContent value="disbursements">
-          <PaymentsTable rows={disbursements} contractLabel={contractLabel} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} />
+          <PaymentsTable rows={disbursements} contractLabel={contractLabel} contractById={contractById} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} />
         </TabsContent>
       </Tabs>
 
@@ -408,7 +415,7 @@ export default function Payments() {
   );
 }
 
-function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete }) {
+function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete }) {
   const typeBadge = (type) => {
     const map = {
       full: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -436,12 +443,19 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
             <Th>{t("contract_number")}</Th>
             <Th>{t("payment_type")}</Th>
             <Th right>{t("amount")}</Th>
+            {disbursement && <Th right>{t("interest_per_month")}</Th>}
+            {disbursement && <Th>{t("due_date")}</Th>}
             <Th>{t("date")}</Th>
             <Th right>{t("actions")}</Th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {rows.map((r) => {
+            const contract = contractById ? contractById(r.contract_id) : null;
+            const perMonth = contract
+              ? Number(contract.per_month_interest ?? (Number(contract.loan_amount || 0) * Number(contract.interest_rate || 0) / 100)) || 0
+              : 0;
+            return (
             <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
               <Td className="font-medium whitespace-nowrap" title={r.receipt_number}>{shortReceipt(r.receipt_number)}</Td>
               <Td className="whitespace-nowrap">{contractLabel(r.contract_id)}</Td>
@@ -451,6 +465,15 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
                 </span>
               </Td>
               <Td right className="whitespace-nowrap font-medium">${Number(r.amount).toLocaleString()}</Td>
+              {disbursement && (
+                <Td right className="whitespace-nowrap text-amber-800" title={contract ? `${Number(contract.loan_amount).toLocaleString()} × ${contract.interest_rate}%` : ""}>
+                  ${perMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {contract ? <span className="ml-1 text-[10px] text-stone-500">({contract.interest_rate}%)</span> : null}
+                </Td>
+              )}
+              {disbursement && (
+                <Td className="whitespace-nowrap text-xs">{contract?.due_date || "—"}</Td>
+              )}
               <Td className="whitespace-nowrap">{r.date}</Td>
               <Td right>
                 <div className="flex justify-end gap-1.5">
@@ -478,10 +501,11 @@ function PaymentsTable({ rows, contractLabel, t, testid, overdue = false, disbur
                 </div>
               </Td>
             </tr>
-          ))}
+            );
+          })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan="6" className="p-8 text-center text-stone-500">
+              <td colSpan={disbursement ? 8 : 6} className="p-8 text-center text-stone-500">
                 No payments
               </td>
             </tr>

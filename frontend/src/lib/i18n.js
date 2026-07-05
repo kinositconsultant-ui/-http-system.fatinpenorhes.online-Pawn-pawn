@@ -67,6 +67,7 @@ const dict = {
     // Payments extras
     principal_left: "Principal Left",
     interest_left: "Interest Left",
+    interest_per_month: "Interest / month",
     amount_to_collect: "Amount to collect",
     receipt: "Receipt",
     // Client
@@ -358,6 +359,7 @@ const dict = {
     // Payments extras
     principal_left: "Principal Restu",
     interest_left: "Juru Restu",
+    interest_per_month: "Juru / fulan",
     amount_to_collect: "Montante atu simu",
     receipt: "Resibu",
     full_name: "Naran Kompletu",

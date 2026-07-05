@@ -1,0 +1,47 @@
+{
+  "summary": "Iter29 — Payments module changes verified. Rule A interest math (strict calendar month + 1 grace day) works via unit + integration tests. Disbursements tab shows 8 columns (added Interest/month with rate badge + Due date). New Payment dialog shows 4 metrics side-by-side. All 12 unit tests + 5 new integration tests + 30 regression tests pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "New Payment dialog", "issues": ["Console warning: 'Missing Description or aria-describedby for DialogContent' — accessibility a11y warning, non-blocking. Consider adding a DialogDescription to shadcn Dialog."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter22_interest_rule.py",
+    "/app/backend/tests/test_iter29_rule_a_integration.py",
+    "/app/test_reports/pytest/iter29_interest_rule.xml",
+    "/app/test_reports/pytest/iter29_integration.xml",
+    "/app/test_reports/pytest/iter29_regression.xml"
+  ],
+  "action_items": [
+    "Optional: add DialogDescription (aria-describedby) to New Payment dialog to silence Radix a11y warning.",
+    "Note: prior test file test_iter20_monthly_interest.py encodes the OLD ceil(days/30) rule (see class TestArticle4MonthsElapsed) — it will report mismatches now that Rule A is live. Consider updating or archiving that file to reflect Rule A. Not run in this iteration as request explicitly listed only iter21 & iter7 for regression."
+  ],
+  "critical_code_review_comments": [
+    "server.py `_months_billed` (line 781) implementation is clean, well-documented, and correctly uses dateutil.relativedelta which handles end-of-month edge cases (Jul 31 → Aug 31, Feb 29 leap year) via automatic day-of-month capping.",
+    "server.py `_recompute_contract_status` (line 805) computes `next_interest_date = start + relativedelta(months=months_elapsed) + timedelta(days=1)` then advances by 1 month until strictly future — this correctly models the '+1 grace day' rule.",
+    "Payments.js line 456: fallback formula `Number(contract.loan_amount || 0) * Number(contract.interest_rate || 0) / 100` — safe if per_month_interest is missing; interest rate badge shown as `({rate}%)`.",
+    "Payments.js line 508: empty-state colspan is dynamic (disbursement ? 8 : 6) — matches new column count.",
+    "Payments.js: interest cell shows `$50.00(10%)` — spacing between amount and badge could use a hair more spacing (small visual polish, not blocking).",
+    "server.py is now 2929 lines — approaching the 700-line 'split module' guideline. Consider extracting Payments/Contracts logic into separate routers, but this is not new tech debt introduced by iter29.",
+    "server.py uses deprecated FastAPI `@app.on_event('startup'/'shutdown')` — should migrate to lifespan event handlers per FastAPI docs. Pre-existing, not introduced by this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter29_rule_a_integration.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (47/47 tests: 12 unit + 5 integration + 30 regression)",
+    "frontend": "100% (Payments tab, disbursements columns, New Payment dialog all validated)"
+  },
+  "test_credentials": "Admin: admin@fatinpenhores.tl / admin123 (loaded from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created TEST_-prefixed clients, car items, and 5 test contracts (CT-2026-121..126 range approx.) during integration tests. Items are attached to contracts so cannot be re-used; no DB cleanup needed as data is clearly marked TEST_ in notes/full_name.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rule A (strict calendar month + 1 grace day) is live in server._months_billed. Contract term is capped at 2 months in the create-contract validator, so 3+ month integration scenarios can only be tested via the unit test file test_iter22_interest_rule.py (which asserts directly on _months_billed). test_iter20_monthly_interest.py contains a stale check (TestArticle4MonthsElapsed) that still expects ceil(days/30) — it was not run this iteration; recommend the main agent update or delete it. The Payments New Payment dialog data-testids (np-interest-remaining, np-total-due, np-paid, np-remaining) and disbursements-table 8-col layout are stable and validated.",
+  "rca of the issue": "N/A — no bug in scope. All requested behaviour verified working: unit tests (12/12), integration tests (5/5 excluding the 3-month case blocked by 2-month term cap), regression (iter21+iter7 = 30/30), UI (disbursements 8 cols + New Payment 4 metrics)."
+}

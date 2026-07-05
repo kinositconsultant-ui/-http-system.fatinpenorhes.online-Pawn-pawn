@@ -8,6 +8,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import logging
 from datetime import datetime, timezone, date, timedelta
+from dateutil.relativedelta import relativedelta
 from math import ceil
 from typing import List, Optional, Literal
 
@@ -777,11 +778,43 @@ def _today_iso() -> str:
     return date.today().isoformat()
 
 
+def _months_billed(start: date, payment_date: date) -> int:
+    """Rule A — Strict calendar month + 1 grace day.
+
+    - The first monthly billing period is ALWAYS charged (min 1).
+    - On the monthly anniversary of the start date, still same month.
+    - One day past the anniversary → a new full month kicks in.
+
+    Examples (start=Jul 10):
+        payment=Jul 15 → 1
+        payment=Aug 10 → 1  (anniversary)
+        payment=Aug 11 → 2  (day after anniversary)
+        payment=Sep 10 → 2
+        payment=Sep 11 → 3
+    """
+    if payment_date <= start:
+        return 1
+    months = 1
+    anniv = start + relativedelta(months=1)
+    while payment_date > anniv:
+        months += 1
+        anniv = anniv + relativedelta(months=1)
+    return months
+
+
 async def _recompute_contract_status(contract: dict) -> dict:
     """Compute live status, principal/interest split, penalty, and next milestone dates.
 
-    Interest model (Article 4): billed per calendar month (30 days). "Contract past
-    day 1 counts as month 1" — so any partial month rolls up to a full month.
+    Interest model (Article 4 — Rule A: Strict calendar month + 1 grace day):
+    - The first monthly billing period is ALWAYS charged (minimum 1 month interest).
+    - Payment on the monthly anniversary of the start date → same month is billed.
+    - Payment 1 day after the anniversary → a new full month kicks in.
+    - Examples:
+        start=Jul 10, paid=Jul 15  → 1 month
+        start=Jul 10, paid=Aug 10 → 1 month  (anniversary itself)
+        start=Jul 10, paid=Aug 11 → 2 months (one day past anniversary)
+        start=Jul 10, paid=Sep 10 → 2 months
+        start=Jul 10, paid=Sep 11 → 3 months
     """
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
@@ -799,17 +832,15 @@ async def _recompute_contract_status(contract: dict) -> dict:
         due = date.today()
     today_dt = date.today()
     effective_end = max(due, today_dt)
-    days_elapsed = max(0, (effective_end - contract_start).days)
-    # Article 4 rule: 1 day past = counts as another full month.
-    # Baseline: at least 1 month billed on any contract that runs even 1 day.
-    months_elapsed = max(1, ceil(days_elapsed / 30)) if days_elapsed > 0 else 1
+    months_elapsed = _months_billed(contract_start, effective_end)
     interest = round(per_month_interest * months_elapsed, 2)
 
-    # Next interest bump date — the date on which one more month of interest is added
-    next_interest_date = contract_start + timedelta(days=months_elapsed * 30)
+    # Next interest bump date — the calendar day on which one more month kicks in
+    # (Rule A: anniversary of the start date + 1 day).
+    next_interest_date = contract_start + relativedelta(months=months_elapsed) + timedelta(days=1)
     # Ensure it's always strictly in the future (for clarity on the receipt)
     while next_interest_date <= today_dt:
-        next_interest_date = next_interest_date + timedelta(days=30)
+        next_interest_date = next_interest_date + relativedelta(months=1)
 
     is_overdue = contract.get("due_date", today) < today
     full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
