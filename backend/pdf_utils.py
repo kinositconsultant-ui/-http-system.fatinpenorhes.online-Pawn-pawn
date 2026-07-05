@@ -395,13 +395,27 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     # Client-friendly "Next Payment" reminder — plain-language block that removes surprises
     # about when interest bumps up next. Skipped on disbursement receipts (no repayment context).
     next_date = contract.get("next_interest_date") or ""
+    # Under Rule M1 the NEXT month's interest is computed on principal REMAINING
+    # (not the current-month rate which was anchored on the original loan).
+    # Fall back to per_month_interest for legacy contracts that don't emit
+    # per_month_interest_next.
     per_month = float(contract.get("per_month_interest", 0) or 0)
+    per_month_next = float(
+        contract.get("per_month_interest_next", per_month) or per_month
+    )
+    principal_remaining_val = float(contract.get("principal_remaining", 0) or 0)
+    interest_rate_val = float(contract.get("interest_rate", 0) or 0)
     # Defensive: use contract.remaining_balance if caller passed a stale `remaining`
     live_remaining = float(contract.get("remaining_balance", remaining) or remaining or 0)
     already_paid = live_remaining <= 0.01
-    if not is_disbursement and next_date and per_month > 0 and not already_paid:
+    if not is_disbursement and next_date and per_month_next > 0 and not already_paid:
         current_total = live_remaining
-        projected_next = round(current_total + per_month, 2)
+        projected_next = round(current_total + per_month_next, 2)
+        # Human-readable formula so the client can verify: "10% × $2,300 = $230"
+        calc_hint = (
+            f"{interest_rate_val:g}% × ${principal_remaining_val:,.2f} "
+            f"= ${per_month_next:,.2f}"
+        )
         story.append(Spacer(1, 0.4 * cm))
         story.append(Paragraph(
             "Pagamentu Tuir Mai · Next Payment",
@@ -413,7 +427,7 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         note_box = Table([
             ["Next payment date", next_date],
             ["Current balance", _money(current_total)],
-            ["Next month interest", f"+ {_money(per_month)}"],
+            ["Next month interest", f"+ {_money(per_month_next)}  ({calc_hint})"],
             ["If unpaid by that date, new total", _money(projected_next)],
         ], colWidths=[6.5 * cm, 10.5 * cm])
         note_box.setStyle(TableStyle([
@@ -428,8 +442,10 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         story.append(note_box)
         story.append(Spacer(1, 0.15 * cm))
         story.append(Paragraph(
-            f"Favor selu iha loron {next_date} atu evita interese fulan tan (${per_month:,.2f}). · "
-            f"Please pay by {next_date} to avoid another month of interest.",
+            f"Favor selu iha loron {next_date} atu evita interese fulan tan "
+            f"(${per_month_next:,.2f} = {interest_rate_val:g}% × saldu remanesenti). · "
+            f"Please pay by {next_date} to avoid another month of interest "
+            f"(${per_month_next:,.2f} = {interest_rate_val:g}% × remaining balance).",
             ParagraphStyle(
                 "NextPayHint", parent=s["Body"], fontSize=8.5,
                 textColor=MUTED, alignment=0,
