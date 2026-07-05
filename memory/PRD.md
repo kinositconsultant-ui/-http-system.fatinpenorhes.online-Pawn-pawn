@@ -365,27 +365,77 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Tests** — NEW `/app/backend/tests/test_iter24_whatsapp_adhoc.py` (6 tests): EN preview shape + Rule A math verified against a 45-day-old contract (months=2, total_due=$600), TET preview language check, unknown-contract 404, auth required, mocked adhoc-send round-trip, empty-body rejection. **All 6 PASS.** Combined regression: iter22 + iter23 + iter20 unit tests → 32/32 PASS.
 
 
-## Prioritized Backlog
-### P1 — Stability / Architecture
-- **Refactor `server.py`** (now ~2422 lines) into per-domain routers: auth, clients, items, contracts, payments, auctions, invoices, reports, finance, settings, whatsapp, backups, public.
-- Daily scheduled WhatsApp reminders (creds wired; cron job pending).
-- Performance: move contract status recompute out of report GET into a background job.
+## Iteration 34 (2026-02) — Phase 2 Refactor + Audit Log UI + Resend Email + Auth Extras + PWA
+This is a big batch of P0/P2 backlog items shipped together. Broken down:
 
-### P2 — UI Polish
+### P0 — Backend refactor Phase 2 (server.py split into routers)
+- `services.py` NEW (~276 lines) — cross-domain helpers: `_recompute_contract_status` (Rule A interest math), `_fetch_item`, `get_settings_doc`, `_decrypted_settings`, `_send_reminder_for_contract`, `_wa_template_name`, `_wa_lang_code`, `_today_iso`, `_ym_from_iso`, `_apply_date_filter`, `DEFAULT_SETTINGS`, `ITEM_KINDS`. Prevents circular imports between routers.
+- `routes/reports.py` NEW (~470 lines) — v1 + v2 endpoints, KPI aggregations, CSV/XLSX/PDF exports, all `_report_*` builders.
+- `routes/finance.py` NEW (~360 lines) — funding sources CRUD + repayments + operating expenses + finance summary + 3 PDF exports.
+- `routes/public.py` NEW (~149 lines) — public auction items, warehouse password gate, contact form.
+- `routes/whatsapp.py` NEW (~222 lines) — WhatsApp send / preview / adhoc-send / test / logs / reminders/run.
+- `routes/admin.py` NEW (~212 lines) — backup list/generate/download + health + enhanced audit log endpoints.
+- `routes/auth_extra.py` NEW (~173 lines) — forgot-password / reset-password / admin manual reset.
+- `server.py` shrunk from **2905 lines → 1555 lines** (~46% reduction). All API paths and behaviour unchanged.
+- `models.py` deferred (keeping Pydantic models close to their handlers turned out cleaner).
+
+### P2 — Audit Log Viewer UI (admin sees who changed what)
+- Backend enhancements to `GET /api/audit-log`: added filters `action`, `actor_email` (case-insensitive substring), `date_from`, `date_to`. Added indexes on `resource`, `action`, `actor_email`.
+- NEW `GET /api/audit-log/export/csv` — respects filters, returns text/csv attachment.
+- NEW `GET /api/audit-log/export/pdf` — branded landscape PDF via `build_audit_log_pdf` in `pdf_utils.py` with filter summary + table.
+- Full frontend rewrite `/app/frontend/src/pages/AuditLog.js` — filter bar (Resource / Action / Actor email / From / To / Limit), Reset + Apply buttons, coloured CSV / PDF export buttons, live row count in header.
+
+### P2 — Email reminders via Resend (fallback when client has no phone)
+- `resend==2.32.2` installed.
+- NEW `email_svc.py` — Resend SDK wrapper with **graceful mocked fallback** (matches WhatsApp UX). Uses `asyncio.to_thread` for non-blocking sends. Two ready-made HTML templates: `render_overdue_reminder` (bilingual Rule A math body) + `render_password_reset`.
+- New env vars: `RESEND_API_KEY=""` and `SENDER_EMAIL="onboarding@resend.dev"` (sandbox — verified domain later).
+- Reminder scheduler (`reminders.py`) now: (a) prefers WhatsApp when phone present + WA configured, (b) **falls back to email only when client has no phone number** (per admin choice), (c) records `channel` and `recipient` in the send summary so admin can distinguish.
+- MOCKED — will remain mocked until admin drops the Resend API key into `.env`.
+
+### P2 — "Remember me" + Forgot password flow + PWA
+- `auth.py` — `create_refresh_token(user_id, remember=False)` and `set_auth_cookies(..., remember=False)` now support the "Remember me" 30-day path (was hardcoded 7d). `POST /api/auth/refresh` preserves the `remember` claim from the current refresh token.
+- `LoginIn` gained `remember: bool = False` — the /login endpoint honours it.
+- NEW `POST /api/auth/forgot-password` — always returns generic 200 (email enumeration safe). When email exists, mints a 15-min single-use `secrets.token_urlsafe(48)`, wipes any prior unused tokens for that user, stores in `password_reset_tokens`, fires the reset link email.
+- NEW `GET /api/auth/reset-token-info?token=…` — public preflight for the /reset-password page; returns masked email + expiry.
+- NEW `POST /api/auth/reset-password` — consumes the token exactly once, bcrypt-hashes new password, marks `used_at`.
+- NEW `POST /api/users/{id}/reset-password` — admin-only manual reset. Also invalidates any outstanding self-service tokens for that user.
+- Frontend:
+  - Login page: **Remember me** checkbox + **Forgot password?** link (both fully bilingual EN/TET).
+  - NEW `/forgot-password` public page — email form → success card.
+  - NEW `/reset-password?token=…` public page — token preflight → new password + confirm → success → auto-redirect to /login.
+  - Users page: **KeyRound** (amber) icon button per row (admin-only) → `window.prompt` → `/users/{id}/reset-password`.
+- PWA installability:
+  - NEW `public/manifest.json` — Fatin Penhores metadata, navy theme, standalone display, `/dashboard` start URL, logo as maskable icon.
+  - NEW `public/service-worker.js` — minimal install/activate handler + shell cache. **Never** caches `/api/*` — financial data always live.
+  - `index.html`: `<link rel="manifest">`, apple-touch-icon, apple-mobile-web-app-* meta tags, navy `theme-color`.
+  - `index.js`: SW registered only in `NODE_ENV=production` (no stale-cache annoyance in dev).
+- New i18n keys (EN + TET): `remember_me`, `forgot_password`, `reset_password`, `reset_password_desc`, `reset_password_sent`, `reset_new_password`, `reset_confirm`, `reset_password_success`, `reset_link_expired`, `passwords_dont_match`, `back_to_login`.
+
+### Tests
+- NEW `tests/test_iter25_auth_extras_and_audit.py` — 8 tests covering: Remember-me 30d cookie, default 7d cookie, forgot→reset→login cycle, token single-use (410), admin manual reset happy + RBAC path, audit CSV export MIME/format, audit PDF export MIME + %PDF magic + minimum size. **All 8 PASS.**
+- Regression: 350 pytest tests PASS after the refactor. 6 pre-existing failures (public auction/warehouse gates + iter2 defaults + iter27 photo sizing) are unrelated and were already failing before this session.
+
+### Backlog cleared
+- ~~P0: Refactor server.py Phase 2~~ ✅
+- ~~P2: Audit log viewer UI~~ ✅
+- ~~P2: Email reminders via Resend~~ ✅ (mocked until API key provided)
+- ~~P2: PWA install + Remember me + Forgot password~~ ✅
+
+
+## Prioritized Backlog
+### P2 — UI Polish (still open)
 - Color-coded tabs on Reports page (match Items/Finance).
-- Shorten Receipt (RC-2026-N) and Invoice (INV-2026-N) numbers in tables.
-- Photo thumbnails (40×40) in admin Items table for quick scanning.
-- Auction Public page with colored cards + password gate (like Warehouse).
-- Pezadu category filter in Reports → Inventory.
-- Recharts ResponsiveContainer width(-1) warning on Dashboard/Finance — wrap charts with `min-h-[300px]`.
+- Recharts `ResponsiveContainer` width(-1) warning on Dashboard/Finance — wrap charts with `min-h-[300px]`.
 
 ### P3 — Enhancements
 - Home page hero redesign (full Tetum match: hero copy, category mosaic, 4-step process, testimonials).
-- Audit log viewer UI (who changed what & when).
-- Email reminders via Resend (needs key).
+- Verify a real domain on Resend and switch `SENDER_EMAIL` away from the sandbox so we can email any client (not just the account owner).
 - Tighten backend Pezadu category validation with `Literal[...]` enum.
 - Hard-fail Settings PUT when `WHATSAPP_ENCRYPTION_KEY` missing (avoid silent plaintext storage).
+- Split `server.py` further (auth + users + clients + items + contracts + payments + auctions) — the remaining 1555 lines are still substantial. Second refactor pass when a low-risk window opens.
+- Move contract status recompute out of report GET into a background job for perf.
 
 ## Credentials
 - Admin: `admin@fatinpenhores.tl` / `admin123` (see `/app/memory/test_credentials.md`).
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
+- Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.

@@ -1,0 +1,21 @@
+{
+  "short_name": "Fatin Penhores",
+  "name": "Fatin Penhores Pawn Console",
+  "description": "Pawn shop management console for Fatin Penhores Unipessoal, Lda.",
+  "icons": [
+    {
+      "src": "brand/logo.jpg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1B2D5C",
+  "background_color": "#F5F4F1",
+  "categories": ["business", "finance", "productivity"],
+  "lang": "en"
+}

@@ -21,6 +21,8 @@ import FAQ from "@/pages/public/FAQ";
 import VerifyMember from "@/pages/public/VerifyMember";
 
 import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import Clients from "@/pages/Clients";
 import Items from "@/pages/Items";
@@ -54,6 +56,8 @@ function App() {
 
               {/* Auth */}
               <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
               {/* Public member card verification (opened from QR scan on physical card) */}
               <Route path="/verify/:token" element={<VerifyMember />} />

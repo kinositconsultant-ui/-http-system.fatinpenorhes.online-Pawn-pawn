@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, Pencil, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Pencil, ShieldCheck, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 const MODULE_LABELS = {
@@ -131,6 +131,23 @@ export default function Users() {
     try {
       await api.delete(`/users/${id}`);
       load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+
+  const resetPassword = async (row) => {
+    const pwd = window.prompt(
+      `Set a new password for ${row.email}. Minimum 8 characters. This is logged.`,
+    );
+    if (!pwd) return;
+    if (pwd.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    try {
+      await api.post(`/users/${row.id}/reset-password`, { new_password: pwd });
+      toast.success(`Password reset for ${row.email}`);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     }
@@ -358,6 +375,14 @@ export default function Users() {
                         title={t("edit")}
                       >
                         <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => resetPassword(r)}
+                        data-testid={`user-reset-${r.id}`}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                        title="Reset password"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => remove(r.id)}

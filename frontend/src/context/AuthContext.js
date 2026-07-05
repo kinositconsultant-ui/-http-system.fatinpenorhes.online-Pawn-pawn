@@ -20,10 +20,10 @@ export function AuthProvider({ children }) {
     fetchMe();
   }, [fetchMe]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, remember = false) => {
     setError("");
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const { data } = await api.post("/auth/login", { email, password, remember });
       setUser(data);
       return true;
     } catch (e) {

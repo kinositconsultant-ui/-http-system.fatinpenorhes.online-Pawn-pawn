@@ -21,3 +21,14 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Register PWA service worker (progressive enhancement — silently no-op on
+// browsers without SW support). Only runs in production builds to avoid
+// stale-cache annoyances during dev.
+if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .catch((err) => console.warn("SW registration failed:", err));
+  });
+}

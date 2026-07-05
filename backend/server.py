@@ -87,6 +87,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    remember: bool = False  # "Remember me" → 30-day refresh cookie
 
 
 class UserOut(BaseModel):
@@ -104,8 +105,8 @@ async def auth_login(payload: LoginIn, response: Response):
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     access = create_access_token(user["id"], user["email"], user["role"])
-    refresh = create_refresh_token(user["id"])
-    set_auth_cookies(response, access, refresh)
+    refresh = create_refresh_token(user["id"], remember=payload.remember)
+    set_auth_cookies(response, access, refresh, remember=payload.remember)
     return {
         "id": user["id"],
         "email": user["email"],
@@ -137,9 +138,10 @@ async def auth_refresh(request: Request, response: Response):
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    remember = bool(payload.get("remember", False))
     access = create_access_token(user["id"], user["email"], user["role"])
-    refresh = create_refresh_token(user["id"])
-    set_auth_cookies(response, access, refresh)
+    refresh = create_refresh_token(user["id"], remember=remember)
+    set_auth_cookies(response, access, refresh, remember=remember)
     return {"ok": True}
 
 
@@ -1455,11 +1457,13 @@ from routes.finance import router as finance_router  # noqa: E402
 from routes.public import router as public_router  # noqa: E402
 from routes.whatsapp import router as whatsapp_router  # noqa: E402
 from routes.admin import router as admin_router  # noqa: E402
+from routes.auth_extra import router as auth_extra_router  # noqa: E402
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(auth_extra_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1482,6 +1486,11 @@ async def on_startup():
     await db.payments.create_index("id", unique=True)
     await db.payments.create_index("receipt_number", unique=True)
     await db.audit_log.create_index("created_at")
+    await db.audit_log.create_index("resource")
+    await db.audit_log.create_index("action")
+    await db.audit_log.create_index("actor_email")
+    await db.password_reset_tokens.create_index("token", unique=True)
+    await db.password_reset_tokens.create_index("user_id")
     await db.files.create_index("id", unique=True)
     await db.files.create_index("storage_path")
     await db.invoices.create_index("id", unique=True)

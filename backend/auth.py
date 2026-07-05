@@ -8,6 +8,7 @@ from fastapi import Request, HTTPException, Depends
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MIN = 60 * 8  # 8 hours for staff convenience
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+REFRESH_TOKEN_REMEMBER_DAYS = 30  # "Remember me" checkbox — long-lived session
 
 
 def get_jwt_secret() -> str:
@@ -35,16 +36,19 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, remember: bool = False) -> str:
+    days = REFRESH_TOKEN_REMEMBER_DAYS if remember else REFRESH_TOKEN_EXPIRE_DAYS
     payload = {
         "sub": user_id,
         "type": "refresh",
-        "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        "remember": bool(remember),
+        "exp": datetime.now(timezone.utc) + timedelta(days=days),
     }
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
+def set_auth_cookies(response, access_token: str, refresh_token: str, remember: bool = False) -> None:
+    refresh_days = REFRESH_TOKEN_REMEMBER_DAYS if remember else REFRESH_TOKEN_EXPIRE_DAYS
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -60,7 +64,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=True,
         samesite="none",
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        max_age=refresh_days * 86400,
         path="/",
     )
 

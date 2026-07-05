@@ -20,6 +20,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { login, error } = useAuth();
   const { t } = useLang();
@@ -28,7 +29,7 @@ export default function Login() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    const ok = await login(email.trim(), password);
+    const ok = await login(email.trim(), password, remember);
     setSubmitting(false);
     if (ok) navigate("/dashboard");
   };
@@ -254,6 +255,26 @@ export default function Login() {
               <span>{error}</span>
             </div>
           ) : null}
+
+          <div className="flex items-center justify-between mb-4 -mt-1">
+            <label className="inline-flex items-center gap-2 text-sm text-stone-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 rounded border-stone-300 text-[#1B2D5C] focus:ring-[#1B2D5C]/40"
+                data-testid="login-remember"
+              />
+              <span>{t("remember_me")}</span>
+            </label>
+            <Link
+              to="/forgot-password"
+              className="text-sm text-[#1B2D5C] font-medium hover:underline"
+              data-testid="login-forgot-link"
+            >
+              {t("forgot_password")}
+            </Link>
+          </div>
 
           <Button
             type="submit"

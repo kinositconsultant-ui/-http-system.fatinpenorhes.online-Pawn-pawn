@@ -19,6 +19,7 @@ from dateutil.relativedelta import relativedelta
 
 from deps import db, utcnow_iso, new_id, months_billed
 import whatsapp as wapp
+import email_svc
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +187,11 @@ async def run_daily_reminders() -> dict:
             summary["skipped"] += 1
             continue
 
-        client = await db.clients.find_one({"id": c["client_id"]}, {"_id": 0, "full_name": 1, "phone": 1})
-        if not client or not client.get("phone"):
+        client = await db.clients.find_one(
+            {"id": c["client_id"]},
+            {"_id": 0, "full_name": 1, "phone": 1, "email": 1},
+        )
+        if not client:
             summary["skipped"] += 1
             continue
 
@@ -195,23 +199,61 @@ async def run_daily_reminders() -> dict:
         info = build_reminder_body(c, client.get("full_name", ""), lang, today=today)
         body = info["body"]
 
+        phone = (client.get("phone") or "").strip()
+        email_addr = (client.get("email") or "").strip()
+
+        # Preferred channel: WhatsApp (matches business habits & is cheaper).
+        # Fallback: email — only fires when phone is missing (per admin choice).
         try:
-            if not wapp.is_configured(settings):
-                # No creds — record as skipped, not error (so admin sees the reason)
-                await _mark_sent(c["id"], days, client["phone"], False, "whatsapp_not_configured")
-                summary["skipped"] += 1
-                continue
-            result = await wapp.send_text(client["phone"], body, settings)
-            ok = result.get("status") == "sent"
-            await _mark_sent(c["id"], days, client["phone"], ok, None if ok else str(result))
-            if ok:
-                summary["sent"] += 1
-                summary["attempted"].append({"contract": c.get("contract_number"), "days": days, "phone": client["phone"]})
+            if phone and wapp.is_configured(settings):
+                result = await wapp.send_text(phone, body, settings)
+                ok = result.get("status") == "sent"
+                await _mark_sent(c["id"], days, phone, ok, None if ok else str(result))
+                if ok:
+                    summary["sent"] += 1
+                    summary["attempted"].append({
+                        "contract": c.get("contract_number"),
+                        "days": days,
+                        "channel": "whatsapp",
+                        "recipient": phone,
+                    })
+                else:
+                    summary["errors"] += 1
+            elif not phone and email_addr:
+                # Email fallback — client has no phone number on file.
+                subject, html = email_svc.render_overdue_reminder(
+                    client_name=client.get("full_name", ""),
+                    contract_number=c.get("contract_number", ""),
+                    days_overdue=days,
+                    total_due=info["total_due"],
+                    per_month_interest=info["per_month"],
+                    months=info["months"],
+                    next_month_date=info["next_month_date"],
+                    days_left=max(0, 10 - days),
+                )
+                result = await email_svc.send_email(email_addr, subject, html)
+                ok = result.get("status") == "sent"
+                await _mark_sent(c["id"], days, email_addr, ok, None if ok else str(result))
+                if ok:
+                    summary["sent"] += 1
+                    summary["attempted"].append({
+                        "contract": c.get("contract_number"),
+                        "days": days,
+                        "channel": "email",
+                        "recipient": email_addr,
+                    })
+                elif result.get("status") == "mocked":
+                    summary["skipped"] += 1
+                else:
+                    summary["errors"] += 1
             else:
-                summary["errors"] += 1
+                # No usable channel — record so admin can see why nothing sent.
+                reason = "no_phone_or_email" if not (phone or email_addr) else "whatsapp_not_configured"
+                await _mark_sent(c["id"], days, phone or email_addr or "—", False, reason)
+                summary["skipped"] += 1
         except Exception as e:  # noqa: BLE001
             logger.exception("[reminders] send failed for %s", c.get("contract_number"))
-            await _mark_sent(c["id"], days, client.get("phone", ""), False, str(e))
+            await _mark_sent(c["id"], days, phone or email_addr, False, str(e))
             summary["errors"] += 1
 
     await _write_run_summary(summary)
