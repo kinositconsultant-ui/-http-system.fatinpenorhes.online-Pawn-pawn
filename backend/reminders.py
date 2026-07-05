@@ -15,8 +15,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone, date, timedelta
+from dateutil.relativedelta import relativedelta
 
-from deps import db, utcnow_iso, new_id
+from deps import db, utcnow_iso, new_id, months_billed
 import whatsapp as wapp
 
 logger = logging.getLogger(__name__)
@@ -24,21 +25,34 @@ logger = logging.getLogger(__name__)
 # Overdue days that trigger a reminder (day 7 = first warning, day 9 = final)
 REMINDER_DAYS = [7, 9]
 
-# Message templates — kept short to fit WhatsApp free-form limits + Timor mobile screens
+# Message templates — kept short to fit WhatsApp free-form limits + Timor mobile screens.
+# Placeholder tokens:
+#   {name}, {contract_number}, {days} — how many days past the due date
+#   {days_left} — days remaining before the item goes to auction
+#   {loan}, {per_month} — loan amount and per-month interest ($)
+#   {months} — billing months owed today (Rule A)
+#   {interest_total} — {months} × {per_month}
+#   {total_due} — {loan} + {interest_total}
+#   {next_month_date} — when the next month of interest kicks in
+#   {next_interest_total} — {interest_total} + {per_month}
 _MSG_EN = (
     "Fatin Penhores — Overdue Notice\n"
     "Hello {name},\n"
-    "Your contract {contract_number} is {days} days overdue.\n"
-    "Please pay penalty of ${penalty} within {days_left} more days to avoid your item going to auction.\n"
-    "Contact us on WhatsApp: +670 78372678"
+    "Contract {contract_number} is {days} days overdue.\n"
+    "Owed today: ${loan} + {months}×${per_month} interest = ${total_due}.\n"
+    "On {next_month_date} interest rises to ${next_interest_total}.\n"
+    "Please pay within {days_left} more days to avoid auction.\n"
+    "WhatsApp: +670 78372678"
 )
 
 _MSG_TET = (
     "Fatin Penhores — Notifikasaun Atrazu\n"
     "Ola {name},\n"
-    "Ita-nia kontratu {contract_number} atrazu ona loron {days}.\n"
-    "Favor selu pena ${penalty} iha loron {days_left} tan atu evita sasán bá leilão.\n"
-    "Kontaktu WhatsApp: +670 78372678"
+    "Kontratu {contract_number} atrazu ona loron {days}.\n"
+    "Osan tenke selu ohin: ${loan} + {months}×${per_month} juru = ${total_due}.\n"
+    "Iha loron {next_month_date} juru sae ba ${next_interest_total}.\n"
+    "Favor selu iha loron {days_left} tan atu evita leilão.\n"
+    "WhatsApp: +670 78372678"
 )
 
 
@@ -97,7 +111,7 @@ async def run_daily_reminders() -> dict:
     contracts = await db.contracts.find(
         {"status": {"$in": ["overdue", "active"]}},
         {"_id": 0, "id": 1, "contract_number": 1, "client_id": 1, "due_date": 1,
-         "loan_amount": 1, "interest_rate": 1},
+         "contract_date": 1, "loan_amount": 1, "interest_rate": 1},
     ).to_list(2000)
 
     lang = (settings.get("lang") or "en").lower()
@@ -123,13 +137,33 @@ async def run_daily_reminders() -> dict:
             summary["skipped"] += 1
             continue
 
-        penalty = round(float(c.get("loan_amount", 0)) * 0.10, 2)
+        # Compute the same interest math the receipt PDF shows.
+        loan = float(c.get("loan_amount", 0))
+        rate = float(c.get("interest_rate", 0))
+        per_month = round(loan * rate / 100.0, 2)
+        try:
+            start = date.fromisoformat(c["contract_date"])
+        except Exception:
+            start = today
+        months = months_billed(start, today)
+        interest_total = round(per_month * months, 2)
+        total_due = round(loan + interest_total, 2)
+        # Next month kicks in the day AFTER the current billing anniversary.
+        next_month_date = (start + relativedelta(months=months) + timedelta(days=1)).isoformat()
+        next_interest_total = round(interest_total + per_month, 2)
+
         body = tmpl.format(
             name=client.get("full_name", ""),
             contract_number=_short_contract(c.get("contract_number")),
             days=days,
-            penalty=f"{penalty:,.2f}",
             days_left=max(0, 10 - days),
+            loan=f"{loan:,.2f}",
+            per_month=f"{per_month:,.2f}",
+            months=months,
+            interest_total=f"{interest_total:,.2f}",
+            total_due=f"{total_due:,.2f}",
+            next_month_date=next_month_date,
+            next_interest_total=f"{next_interest_total:,.2f}",
         )
 
         try:

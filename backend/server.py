@@ -58,6 +58,7 @@ from deps import (
     require_roles,
     require_not_cashier,
     write_audit,
+    months_billed as _months_billed,
 )
 
 app = FastAPI(title="Fatin Penhores Pawn System")
@@ -776,30 +777,6 @@ async def _generate_contract_number() -> str:
 
 def _today_iso() -> str:
     return date.today().isoformat()
-
-
-def _months_billed(start: date, payment_date: date) -> int:
-    """Rule A — Strict calendar month + 1 grace day.
-
-    - The first monthly billing period is ALWAYS charged (min 1).
-    - On the monthly anniversary of the start date, still same month.
-    - One day past the anniversary → a new full month kicks in.
-
-    Examples (start=Jul 10):
-        payment=Jul 15 → 1
-        payment=Aug 10 → 1  (anniversary)
-        payment=Aug 11 → 2  (day after anniversary)
-        payment=Sep 10 → 2
-        payment=Sep 11 → 3
-    """
-    if payment_date <= start:
-        return 1
-    months = 1
-    anniv = start + relativedelta(months=1)
-    while payment_date > anniv:
-        months += 1
-        anniv = anniv + relativedelta(months=1)
-    return months
 
 
 async def _recompute_contract_status(contract: dict) -> dict:

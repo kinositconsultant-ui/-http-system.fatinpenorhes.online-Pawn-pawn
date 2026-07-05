@@ -1,0 +1,45 @@
+{
+  "summary": "Iter30 — WhatsApp overdue reminder templates now include the Rule A interest math. All 62 relevant tests pass: 5 new iter23 template unit tests, 12 iter22 Rule A math tests, 15 iter20 monthly-interest tests, 3 new iter30 integration tests, and 27 iter17 reminders/refactor regression tests. Scheduler boots cleanly (job 'run_daily_reminders_sync' added; no import errors from deps.py in backend logs). Admin can trigger POST /api/reminders/run and gets a summary dict with scanned/sent/skipped/errors. Rule A math on GET /api/contracts/{id} confirmed: contract_date=today-32d + loan=$500 + rate=10% → months_elapsed=2, per_month_interest=$50, interest_amount=$100.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A — pre-existing", "issue": "DeprecationWarning: FastAPI on_event('startup'/'shutdown') at server.py:2835/2896. Should migrate to lifespan event handlers. Not introduced by this iteration."},
+      {"endpoint": "/reports/*", "issue": "DeprecationWarning: server.py:1841 uses `regex=` in Query — should be `pattern=`. Pre-existing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter23_reminder_body.py",
+    "/app/backend/tests/test_iter30_reminders_integration.py (new)",
+    "/app/test_reports/pytest/iter30_unit.xml",
+    "/app/test_reports/pytest/iter30_integration.xml",
+    "/app/test_reports/pytest/iter30_full.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "deps.months_billed extracted cleanly from server._months_billed; docstring documents Rule A intent and shared use. server.py imports it as `months_billed as _months_billed` (line 61), preserving the existing internal alias — no math regression.",
+    "reminders.py builds body per-contract using the SAME months_billed helper, so receipt PDF and WhatsApp body cannot drift.",
+    "reminders.py line 152: `next_month_date = (start + relativedelta(months=months) + timedelta(days=1))` correctly reflects the +1 grace day rule (matches server._recompute_contract_status).",
+    "reminders.py uses upsert=True in _write_run_summary — safe because settings is a singleton doc.",
+    "Message length verified <500 chars for both EN and TET including a long client name — well under WhatsApp's 1024 free-form limit.",
+    "Note: /api/whatsapp/reminders/run (server.py:2609, referenced in review request URL) is a legacy endpoint that returns {count, sent: [...]}. The NEW summary dict {scanned, sent, skipped, errors} is served by /api/reminders/run (server.py:2691). If E1 intended the ?force=true query param on the /whatsapp/reminders/run endpoint, that path is unrelated to the new reminders.run_daily_reminders and does not accept ?force. Tested the correct endpoint (/api/reminders/run) which is the one calling the refactored reminders.py.",
+    "server.py is still ~2906 lines — flagged in iter29 for splitting; unchanged this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter30_reminders_integration.py (new — 3 integration tests: manual reminder run, unauth guard, Rule A E2E via API)"
+  ],
+  "success_rate": {
+    "backend": "100% (62/62 pytest — 5 iter23 unit + 12 iter22 unit + 15 iter20 unit + 3 iter30 integration + 27 iter17 regression)",
+    "frontend": "N/A — testing_type=backend only"
+  },
+  "test_credentials": "Admin: admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "One TEST_-prefixed client + car item + contract created in the Rule A integration test to verify server-side math. Data is clearly marked TEST_ in full_name/notes; no cleanup required.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "deps.months_billed is now the single source of truth for Rule A months-billed math (server.py imports it as _months_billed alias, reminders.py imports directly). Any future changes to interest math must update deps.months_billed and re-run iter22/iter23/iter30 suites. Reminder scheduler cron is UTC 00:00 (Timor 09:00). Manual trigger endpoint is POST /api/reminders/run (admin-only) — the returned summary has {scanned, sent, skipped, errors, attempted[]}. WhatsApp not configured in test env → skipped counter increments (reason='whatsapp_not_configured' recorded in reminder_log). ",
+  "rca of the issue": "N/A — no bug in scope. All requested behaviour verified working."
+}

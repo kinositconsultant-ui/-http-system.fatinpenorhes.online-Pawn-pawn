@@ -8,7 +8,8 @@ from __future__ import annotations
 import os
 import uuid
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+from dateutil.relativedelta import relativedelta
 from typing import List, Optional
 
 from fastapi import Request, HTTPException, Depends
@@ -35,6 +36,26 @@ def utcnow_iso() -> str:
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+def months_billed(start: date, payment_date: date) -> int:
+    """Rule A — Strict calendar month + 1 grace day. Min 1.
+
+    - The first monthly billing period is ALWAYS charged.
+    - Payment on the monthly anniversary of the start date → same month.
+    - One day past the anniversary → new full month begins.
+
+    Shared with `server._months_billed` so backend + reminders always agree
+    on the money math.
+    """
+    if payment_date <= start:
+        return 1
+    months = 1
+    anniv = start + relativedelta(months=1)
+    while payment_date > anniv:
+        months += 1
+        anniv = anniv + relativedelta(months=1)
+    return months
 
 
 # ---------------------------------------------------------------------
