@@ -365,6 +365,66 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Tests** — NEW `/app/backend/tests/test_iter24_whatsapp_adhoc.py` (6 tests): EN preview shape + Rule A math verified against a 45-day-old contract (months=2, total_due=$600), TET preview language check, unknown-contract 404, auth required, mocked adhoc-send round-trip, empty-body rejection. **All 6 PASS.** Combined regression: iter22 + iter23 + iter20 unit tests → 32/32 PASS.
 
 
+## Iteration 35 (2026-02) — Rule M1 (Method 1 payment allocation)
+The business owner clarified that partial payments should follow Method 1
+(interest-first, then principal) — standard lending accounting practice. This
+correctly rewards clients for early partial payments by lowering next-month
+interest on the remaining balance.
+
+### Business rule (verified against owner examples)
+- **Payment allocation (Method 1):** Interest Paid = MIN(payment, unpaid_interest);
+  Principal Paid = MAX(payment − unpaid_interest, 0).
+- **Month 1 interest** = 10% × original loan (Rule A anchor — one full month
+  always guaranteed).
+- **Month N > 1 interest** = 10% × Remaining Principal at Month N anchor
+  (declining balance — never compounds unpaid interest per owner's
+  "no aggressive compound" instruction).
+- **No compounding on delinquency:** If client pays nothing, next month's
+  interest is still 10% × Principal (not 10% × Outstanding).
+
+### Business owner examples (all verified end-to-end)
+- **Example 1 — $3,000 loan, $1,000 partial:**
+  - Interest paid: $300, Principal paid: $700, Principal remaining: $2,300
+  - Next month interest: **$230** (10% × $2,300) ✅
+  - Total if unpaid: $2,300 + $230 = $2,530
+- **Example 2 — $3,000 loan, $300 interest-only:**
+  - Interest paid: $300, Principal paid: $0, Principal remaining: $3,000
+  - Next month interest: **$300** ✅
+- **No-payment case:** Next month interest: **$300** (NOT $330 — no compound) ✅
+
+### Implementation
+- New field `interest_rule` on the `contracts` collection:
+  - `"M1"` (default for new contracts) → interest-first allocation
+  - `"M2"` (legacy default when field absent) → all-to-principal allocation
+- `services.py._recompute_contract_status` — rewritten with event-driven
+  chronological walk. Merges month-anchor events with payment events, walks in
+  date order, and applies the M1/M2 allocation rule per contract.
+- Contract creation (`POST /api/contracts`) sets `interest_rule="M1"` on all
+  new contracts. Existing contracts remain on legacy M2 semantics — no
+  retroactive impact.
+- `pdf_utils.py` receipt "How your interest was calculated" block now shows
+  the per-month itemized breakdown (e.g. `$300 + $230 + $230 + ...`) when the
+  hybrid declining-balance rates apply.
+- `reminders.py.build_reminder_body` prefers the recomputed contract's
+  values so WhatsApp/email reminders show the correct M1 totals.
+- Frontend `Payments.js` disbursement tooltip updated: "Current-month interest
+  (Rule M1: interest-first allocation, principal-remaining base)."
+
+### Tests (all passing)
+- NEW `tests/test_iter27_rule_m1.py` (5 tests):
+  - Example 1: partial $1000 → interest paid=$300, principal paid=$700, next month=$230 ✅
+  - Example 2: interest-only $300 → next month=$300 ✅
+  - No compounding on delinquency: next month=$300 (not $330) ✅
+  - Legacy M2 contracts: partial=principal-only, next month=$200 (backwards-compat) ✅
+  - Two partials stack: month 2=$280 (10% × $2,800), month 3=$258 (10% × $2,580) ✅
+- Adjusted `tests/test_iter4.py::test_partial_reduces_principal` to reflect
+  M1 semantics (was asserting old M2 all-to-principal).
+- Adjusted `tests/test_iter26_rule_b_hybrid.py` to explicitly pass
+  `interest_rule="M2"` for backwards-compat verification.
+- **Total regression: 361/367 tests pass** (6 pre-existing failures unrelated
+  to this iteration — public warehouse gates + settings defaults).
+
+
 ## Iteration 34 (2026-02) — Phase 2 Refactor + Audit Log UI + Resend Email + Auth Extras + PWA
 This is a big batch of P0/P2 backlog items shipped together. Broken down:
 
