@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "../components/ui/dialog";
 import { FileText, Trash2 } from "lucide-react";
@@ -172,6 +173,9 @@ export default function Auctions() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("mark_sold")}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Record the auction sale price, tax, buyer name and optional interest fee split.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

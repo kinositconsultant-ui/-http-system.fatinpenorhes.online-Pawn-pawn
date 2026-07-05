@@ -65,6 +65,61 @@ def _short_contract(number: str | None) -> str:
     return f"CT-{m.group(1)}-{m.group(2)}" if m else number
 
 
+def build_reminder_body(contract: dict, client_name: str, language: str, today: date | None = None) -> dict:
+    """Build the WhatsApp reminder message body for a contract using Rule A math.
+
+    Returns dict with `body`, plus metadata (days, months, total_due, next_month_date)
+    that the UI can display alongside the preview.
+
+    Used by:
+    - Daily scheduler (run_daily_reminders)
+    - Ad-hoc "Preview & Send" endpoint (whatsapp/preview / whatsapp/adhoc-send)
+    """
+    today = today or datetime.now(timezone.utc).date()
+    tmpl = _MSG_TET if (language or "en").lower() == "tet" else _MSG_EN
+
+    loan = float(contract.get("loan_amount", 0) or 0)
+    rate = float(contract.get("interest_rate", 0) or 0)
+    per_month = round(loan * rate / 100.0, 2)
+    try:
+        start = date.fromisoformat(contract["contract_date"])
+    except Exception:
+        start = today
+    try:
+        due = date.fromisoformat(contract.get("due_date") or start.isoformat())
+    except Exception:
+        due = start
+    days = max(0, (today - due).days)
+    months = months_billed(start, today)
+    interest_total = round(per_month * months, 2)
+    total_due = round(loan + interest_total, 2)
+    next_month_date = (start + relativedelta(months=months) + timedelta(days=1)).isoformat()
+    next_interest_total = round(interest_total + per_month, 2)
+
+    body = tmpl.format(
+        name=client_name or "",
+        contract_number=_short_contract(contract.get("contract_number")),
+        days=days,
+        days_left=max(0, 10 - days),
+        loan=f"{loan:,.2f}",
+        per_month=f"{per_month:,.2f}",
+        months=months,
+        interest_total=f"{interest_total:,.2f}",
+        total_due=f"{total_due:,.2f}",
+        next_month_date=next_month_date,
+        next_interest_total=f"{next_interest_total:,.2f}",
+    )
+    return {
+        "body": body,
+        "days": days,
+        "months": months,
+        "per_month": per_month,
+        "total_due": total_due,
+        "next_month_date": next_month_date,
+        "language": (language or "en").lower(),
+    }
+
+
 async def _sent_today(contract_id: str, day_bucket: int) -> bool:
     """Return True if a reminder for this contract & bucket was already sent this cycle."""
     today = datetime.now(timezone.utc).date().isoformat()
@@ -115,7 +170,6 @@ async def run_daily_reminders() -> dict:
     ).to_list(2000)
 
     lang = (settings.get("lang") or "en").lower()
-    tmpl = _MSG_TET if lang == "tet" else _MSG_EN
 
     for c in contracts:
         summary["scanned"] += 1
@@ -138,33 +192,8 @@ async def run_daily_reminders() -> dict:
             continue
 
         # Compute the same interest math the receipt PDF shows.
-        loan = float(c.get("loan_amount", 0))
-        rate = float(c.get("interest_rate", 0))
-        per_month = round(loan * rate / 100.0, 2)
-        try:
-            start = date.fromisoformat(c["contract_date"])
-        except Exception:
-            start = today
-        months = months_billed(start, today)
-        interest_total = round(per_month * months, 2)
-        total_due = round(loan + interest_total, 2)
-        # Next month kicks in the day AFTER the current billing anniversary.
-        next_month_date = (start + relativedelta(months=months) + timedelta(days=1)).isoformat()
-        next_interest_total = round(interest_total + per_month, 2)
-
-        body = tmpl.format(
-            name=client.get("full_name", ""),
-            contract_number=_short_contract(c.get("contract_number")),
-            days=days,
-            days_left=max(0, 10 - days),
-            loan=f"{loan:,.2f}",
-            per_month=f"{per_month:,.2f}",
-            months=months,
-            interest_total=f"{interest_total:,.2f}",
-            total_due=f"{total_due:,.2f}",
-            next_month_date=next_month_date,
-            next_interest_total=f"{next_interest_total:,.2f}",
-        )
+        info = build_reminder_body(c, client.get("full_name", ""), lang, today=today)
+        body = info["body"]
 
         try:
             if not wapp.is_configured(settings):

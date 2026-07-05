@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
 } from "../components/ui/dialog";
@@ -247,6 +248,9 @@ export default function Clients() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{editingId ? t("edit") : t("new")} — {t("clients")}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Create or edit a client profile including ID, address and photo.
+                </DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label={t("full_name")}>
@@ -396,6 +400,9 @@ export default function Clients() {
             <DialogTitle data-testid="client-detail-title">
               {viewing?.full_name} · {t("view_details")}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Client photo, contact info, member card status and full payment history.
+            </DialogDescription>
           </DialogHeader>
           {viewing && (
             <div className="space-y-6">

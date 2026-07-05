@@ -4,11 +4,13 @@ import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
 } from "../components/ui/dialog";
@@ -117,15 +119,79 @@ export default function Contracts() {
     }
   };
 
-  const sendWhatsApp = async (id, language) => {
+  // WhatsApp Preview & Send modal state
+  const [waOpen, setWaOpen] = useState(false);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waSending, setWaSending] = useState(false);
+  const [waContract, setWaContract] = useState(null);
+  const [waLanguage, setWaLanguage] = useState("en");
+  const [waBody, setWaBody] = useState("");
+  const [waPhone, setWaPhone] = useState("");
+  const [waMeta, setWaMeta] = useState({});
+
+  const loadPreview = async (contractId, language) => {
+    setWaLoading(true);
     try {
-      const { data } = await api.post("/whatsapp/send", { contract_id: id, language });
-      const note = data.status === "mocked"
-        ? "WhatsApp (mocked — set token in Settings)"
-        : `WhatsApp ${data.status}`;
-      toast.success(note);
+      const { data } = await api.post("/whatsapp/preview", {
+        contract_id: contractId,
+        language,
+      });
+      setWaBody(data.body || "");
+      setWaPhone(data.phone || "");
+      setWaMeta({
+        client_name: data.client_name,
+        contract_number: data.contract_number,
+        days: data.days,
+        months: data.months,
+        total_due: data.total_due,
+        next_month_date: data.next_month_date,
+      });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to build preview");
+    } finally {
+      setWaLoading(false);
+    }
+  };
+
+  const sendWhatsApp = async (id, language) => {
+    setWaContract(id);
+    setWaLanguage(language);
+    setWaOpen(true);
+    await loadPreview(id, language);
+  };
+
+  const regeneratePreview = async () => {
+    if (!waContract) return;
+    await loadPreview(waContract, waLanguage);
+  };
+
+  const changeWaLanguage = async (lang) => {
+    setWaLanguage(lang);
+    if (waContract) await loadPreview(waContract, lang);
+  };
+
+  const submitWhatsApp = async () => {
+    if (!waContract) return;
+    if (!waBody.trim()) {
+      toast.error("Message body is empty");
+      return;
+    }
+    setWaSending(true);
+    try {
+      const { data } = await api.post("/whatsapp/adhoc-send", {
+        contract_id: waContract,
+        language: waLanguage,
+        body: waBody,
+        to_phone: waPhone || undefined,
+      });
+      toast.success(
+        data.status === "mocked" ? t("whatsapp_mocked") : t("whatsapp_sent"),
+      );
+      setWaOpen(false);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
+    } finally {
+      setWaSending(false);
     }
   };
 
@@ -199,6 +265,9 @@ export default function Contracts() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{t("new_contract")}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Create a new pawn contract linking a client and pawn item with loan amount, rate and due date.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label={t("client")}>
@@ -530,11 +599,96 @@ export default function Contracts() {
         </table>
       </div>
 
+      {/* WhatsApp Preview & Send dialog */}
+      <Dialog open={waOpen} onOpenChange={setWaOpen}>
+        <DialogContent className="max-w-lg" data-testid="wa-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800">
+              <MessageCircle className="w-5 h-5" />
+              {t("whatsapp_preview_title")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("whatsapp_preview_desc")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {waMeta.contract_number && (
+              <div className="rounded-md border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-stone-700 grid grid-cols-2 gap-y-1">
+                <div><span className="text-stone-500">Contract:</span> <span className="font-medium">{waMeta.contract_number}</span></div>
+                <div><span className="text-stone-500">Client:</span> <span className="font-medium">{waMeta.client_name || "—"}</span></div>
+                <div><span className="text-stone-500">Days overdue:</span> <span className="font-medium">{waMeta.days ?? "—"}</span></div>
+                <div><span className="text-stone-500">Total due:</span> <span className="font-medium">${Number(waMeta.total_due || 0).toLocaleString()}</span></div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr,140px] gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-stone-500">{t("whatsapp_to")}</Label>
+                <Input
+                  value={waPhone}
+                  onChange={(e) => setWaPhone(e.target.value)}
+                  placeholder="+670..."
+                  data-testid="wa-to-phone"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-stone-500">{t("whatsapp_language")}</Label>
+                <Select value={waLanguage} onValueChange={changeWaLanguage}>
+                  <SelectTrigger data-testid="wa-lang"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="tet">Tetum</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs uppercase tracking-wider text-stone-500">{t("whatsapp_message")}</Label>
+                <button
+                  type="button"
+                  onClick={regeneratePreview}
+                  className="text-xs text-emerald-700 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                  disabled={waLoading || !waContract}
+                  data-testid="wa-regenerate"
+                >
+                  <RefreshCw className="w-3 h-3" /> {t("whatsapp_regenerate")}
+                </button>
+              </div>
+              <Textarea
+                value={waBody}
+                onChange={(e) => setWaBody(e.target.value)}
+                rows={8}
+                className="font-mono text-xs"
+                data-testid="wa-body"
+                disabled={waLoading}
+              />
+              <div className="text-xs text-stone-500 text-right">{waBody.length} chars</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWaOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              onClick={submitWhatsApp}
+              disabled={waLoading || waSending || !waBody.trim() || !waPhone.trim()}
+              className="bg-emerald-700 hover:bg-emerald-800"
+              data-testid="wa-send"
+            >
+              {waSending ? "…" : t("whatsapp_send")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Reactivate dialog */}
       <Dialog open={reactOpen} onOpenChange={setReactOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("reactivate_contract")}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Extend the contract due date up to the 62-day maximum from the original start date.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-stone-600">

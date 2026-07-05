@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogFooter,
 } from "../components/ui/dialog";
@@ -180,6 +181,9 @@ export default function Payments() {
             <DialogContent className="max-w-xl">
               <DialogHeader>
                 <DialogTitle>{t("new_payment")}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Record a new client payment against an active or overdue contract.
+                </DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Field label={t("contract_number")} full>
@@ -287,7 +291,7 @@ export default function Payments() {
           </TabsTrigger>
           <TabsTrigger value="disbursements" data-testid="tab-disbursements">
             <Banknote className="w-3.5 h-3.5 mr-1 text-emerald-700" />
-            {t("disbursements") || "Disbursements"} <span className="ml-1 text-xs text-stone-500">({disbursements.length})</span>
+            {t("disbursements")} <span className="ml-1 text-xs text-stone-500">({disbursements.length})</span>
           </TabsTrigger>
         </TabsList>
 
@@ -310,6 +314,9 @@ export default function Payments() {
               <AlertTriangle className="w-5 h-5 text-amber-700" />
               {t("overdue_payment")}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Record an overdue-contract payment covering penalty, interest and/or principal.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -461,7 +468,7 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
               <Td className="whitespace-nowrap">{contractLabel(r.contract_id)}</Td>
               <Td className="whitespace-nowrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${typeBadge(r.type)}`}>
-                  {r.type.replace(/_/g, " ")}
+                  {t(r.type) || r.type.replace(/_/g, " ")}
                 </span>
               </Td>
               <Td right className="whitespace-nowrap font-medium">${Number(r.amount).toLocaleString()}</Td>

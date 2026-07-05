@@ -351,6 +351,20 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
 - **Testing agent verdict** (report iter_30): **100% pass — backend 62/62 (5 iter23 unit + 12 iter22 unit + 15 iter20 unit + 3 iter30 integration + 27 iter17 regression), 0 issues, retest_needed: false**. Scheduler boots cleanly. Admin `POST /api/reminders/run?force=true` returns a valid summary. Rule A math validated end-to-end via GET /api/contracts/{id}.
 
 
+## Iteration 33 (2026-02) — A11y + TET Translation Polish + Ad-hoc WhatsApp Preview & Send
+- **A11y fix** — Added `<DialogDescription className="sr-only">` (or visible where appropriate) to every admin Dialog to resolve Radix's `aria-describedby` console warning. Files touched: `Payments.js` (New Payment + Overdue Payment), `Clients.js` (Create/Edit + Details), `Auctions.js` (Mark Sold), `Contracts.js` (New Contract + Reactivate + new WA Preview modal).
+- **TET translation gap on Payments**:
+  - Type badges in Payments/Overdue/Disbursement tables now render via `t(r.type)` instead of the raw enum string — so `full`, `partial`, `interest_only`, `disbursement`, `overdue_full`, `overdue_interest_pen`, `overdue_penalty_only` all switch to the Tetum labels (Kompletu / Parsiál / Juru Deit / Entrega Empréstimu / etc.).
+  - New i18n keys added in both EN and TET blocks in `i18n.js` for badge labels and the `disbursements` tab title. Tab now displays `Entrega Empréstimu (15)` under TET.
+- **Ad-hoc "Preview & Send" WhatsApp reminder** — cashiers/staff can now review + edit the Rule A math message body before sending, rather than firing the templated message blindly. Lives on the Contracts page per-contract action button (both pre-auction table `pa-whatsapp-{id}` and main table `contract-whatsapp-{id}`).
+  - **Backend** — `/app/backend/reminders.py` gained `build_reminder_body(contract, client_name, language, today=None)` which returns `{body, days, months, per_month, total_due, next_month_date, language}`. Both the daily scheduler and the new ad-hoc endpoints reuse it, so the message math never drifts.
+  - Two new endpoints (both authenticated):
+    - `POST /api/whatsapp/preview` — returns the rendered body + client name/phone + Rule A metadata for the given `contract_id` + `language` (`en`/`tet`).
+    - `POST /api/whatsapp/adhoc-send` — sends a free-form (optionally edited) body to `to_phone` (defaulting to client's phone) via `wapp.send_text`. Falls back to `mocked` when Meta creds aren't configured. Writes an audit log + a `whatsapp_log` row with `template="adhoc_text"`.
+  - **Frontend** (`Contracts.js`) — `sendWhatsApp` no longer fires-and-forgets; it opens a new `wa-preview-dialog` modal that fetches `/whatsapp/preview`, shows a meta pill (Contract#, Client, Days overdue, Total due), lets the user tweak the `To` phone, switch language (EN/TET dropdown), edit the message body in a `Textarea`, hit `Regenerate` to reset from the template, and finally `Send` via `/whatsapp/adhoc-send`. Character counter + disabled Send while empty. New testids: `wa-preview-dialog`, `wa-to-phone`, `wa-lang`, `wa-body`, `wa-regenerate`, `wa-send`.
+- **Tests** — NEW `/app/backend/tests/test_iter24_whatsapp_adhoc.py` (6 tests): EN preview shape + Rule A math verified against a 45-day-old contract (months=2, total_due=$600), TET preview language check, unknown-contract 404, auth required, mocked adhoc-send round-trip, empty-body rejection. **All 6 PASS.** Combined regression: iter22 + iter23 + iter20 unit tests → 32/32 PASS.
+
+
 ## Prioritized Backlog
 ### P1 — Stability / Architecture
 - **Refactor `server.py`** (now ~2422 lines) into per-domain routers: auth, clients, items, contracts, payments, auctions, invoices, reports, finance, settings, whatsapp, backups, public.

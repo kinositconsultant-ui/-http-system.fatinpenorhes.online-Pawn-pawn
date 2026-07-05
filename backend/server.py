@@ -2606,6 +2606,78 @@ async def whatsapp_send(payload: WhatsAppSendIn, user: dict = Depends(get_curren
     return result
 
 
+class WhatsAppPreviewIn(BaseModel):
+    contract_id: str
+    language: Literal["en", "tet"] = "en"
+
+
+@api.post("/whatsapp/preview")
+async def whatsapp_preview(payload: WhatsAppPreviewIn, user: dict = Depends(get_current_user)):
+    """Return the rendered ad-hoc WhatsApp reminder body (Rule A math) without sending.
+
+    Used by the Contracts UI "Preview & Send" modal so the cashier can review /
+    edit the message before it goes out.
+    """
+    from reminders import build_reminder_body
+    c = await db.contracts.find_one({"id": payload.contract_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
+    client_doc = await db.clients.find_one({"id": c["client_id"]}, {"_id": 0}) or {}
+    info = build_reminder_body(c, client_doc.get("full_name", ""), payload.language)
+    info.update({
+        "phone": client_doc.get("phone", ""),
+        "client_name": client_doc.get("full_name", ""),
+        "contract_number": c.get("contract_number", ""),
+    })
+    return info
+
+
+class WhatsAppAdhocSendIn(BaseModel):
+    contract_id: str
+    language: Literal["en", "tet"] = "en"
+    body: str
+    to_phone: Optional[str] = None
+
+
+@api.post("/whatsapp/adhoc-send")
+async def whatsapp_adhoc_send(payload: WhatsAppAdhocSendIn, user: dict = Depends(get_current_user)):
+    """Send a free-form (optionally edited) WhatsApp reminder body to the client.
+
+    The frontend calls /whatsapp/preview first to get the templated Rule A math body,
+    optionally edits it, then posts it back here to actually send via Meta Cloud API.
+    Falls back to `mocked` when WhatsApp isn't configured.
+    """
+    c = await db.contracts.find_one({"id": payload.contract_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    client_doc = await db.clients.find_one({"id": c["client_id"]}, {"_id": 0}) or {}
+    phone = (payload.to_phone or client_doc.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Client has no phone number")
+    body = (payload.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body is empty")
+    settings = await _decrypted_settings()
+    result = await wapp.send_text(phone, body, settings)
+    await db.whatsapp_log.insert_one({
+        "id": new_id(),
+        "contract_id": c["id"],
+        "contract_number": c.get("contract_number", ""),
+        "client_id": client_doc.get("id"),
+        "client_phone": phone,
+        "language": payload.language,
+        "template": "adhoc_text",
+        "parameters": [],
+        "body": body,
+        "result": result,
+        "actor_id": user.get("id"),
+        "created_at": utcnow_iso(),
+    })
+    await write_audit(user, "whatsapp_adhoc_send", "contract", c["id"], {"result_status": result.get("status")})
+    return result
+
+
 @api.post("/whatsapp/reminders/run")
 async def whatsapp_reminders_run(language: str = Query("en"), user: dict = Depends(require_not_cashier)):
     """Send reminders to all contracts due in N days or overdue (not yet redeemed/auctioned)."""

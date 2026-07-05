@@ -1,13 +1,13 @@
 # Fatin Penhores — Migration Backup
 
-Snapshot taken: **20260704-1057 UTC**
+Snapshot taken: **20260705-0935 UTC**
 
 ## Files in this folder
 
 | File | Purpose |
 |---|---|
-| `mongodb-backup-20260704-1057.zip` | Full `mongodump` of the `test_database` database |
-| `uploads-backup-20260704-1057.zip` | All client documents & item photos (with `MANIFEST.json`) |
+| `mongodb-backup-20260705-0935.zip` | Full `mongodump` of the `test_database` database |
+| `uploads-backup-20260705-0935.zip` | All client documents & item photos (with `MANIFEST.json`) |
 | `env-template.txt` | Structure of the production `.env` — fill in secrets before use |
 | `collections.txt` | Counts of every collection at backup time |
 
@@ -15,8 +15,8 @@ Snapshot taken: **20260704-1057 UTC**
 
 ```bash
 # 1. MongoDB
-unzip mongodb-backup-20260704-1057.zip -d ./
-mongorestore --uri="mongodb://localhost:27017" --db=test_database ./mongodump-20260704-1057/test_database
+unzip mongodb-backup-20260705-0935.zip -d ./
+mongorestore --uri="mongodb://localhost:27017" --db=test_database ./mongodump-20260705-0935/test_database
 
 # 2. Verify
 mongosh
