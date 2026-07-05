@@ -436,6 +436,59 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
             ),
         ))
 
+        # Inline calculation example — explains WHY the interest is what it is (Rule A).
+        # Great for defusing "why 2 months?" disputes at the counter.
+        try:
+            months = int(contract.get("months_elapsed", 1) or 1)
+            paid_date = payment.get("date", "")
+            start_date = contract.get("contract_date", "")
+            interest_total = round(per_month * months, 2)
+            months_word_en = "month" if months == 1 else "months"
+            months_word_tet = "fulan"
+            calc_expr = f"{months} × ${per_month:,.2f} = ${interest_total:,.2f}"
+            story.append(Spacer(1, 0.35 * cm))
+            story.append(Paragraph(
+                "Oinsá ami sura interese-nia · How your interest was calculated",
+                ParagraphStyle(
+                    "CalcHdr", parent=s["Sub"], fontSize=10,
+                    textColor=colors.HexColor("#1B2D5C"),
+                ),
+            ))
+            calc_rows = [
+                ["Contract Start", start_date or "—"],
+                ["Payment Date", paid_date or "—"],
+                ["Billing Months (Article 4)", f"{months} {months_word_en} · {months} {months_word_tet}"],
+                ["Rate × Loan (per month)", f"${per_month:,.2f}"],
+                ["Interest Charged", calc_expr],
+            ]
+            calc_box = Table(calc_rows, colWidths=[6.5 * cm, 10.5 * cm])
+            calc_box.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EEF2FF")),  # soft indigo
+                ("FONT", (0, 0), (-1, -1), "Helvetica", 9.5),
+                ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+                ("FONT", (1, -1), (1, -1), "Helvetica-Bold", 9.5),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#312E81")),
+                ("TEXTCOLOR", (1, -1), (1, -1), colors.HexColor("#312E81")),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            story.append(calc_box)
+            story.append(Spacer(1, 0.15 * cm))
+            story.append(Paragraph(
+                "Regra Artigo 4: interese kobra tuir fulan-kompletu. Se selu iha aniversáriu, "
+                "kobra deit fulan hanesan; se selu loron 1 liu, ami kobra fulan tuir mai. · "
+                "Article 4: interest is billed per calendar month. Paying on the monthly "
+                "anniversary charges the same month; one day past the anniversary starts a new month.",
+                ParagraphStyle(
+                    "CalcHint", parent=s["Body"], fontSize=8.5,
+                    textColor=MUTED, alignment=0,
+                ),
+            ))
+        except Exception:
+            # Never let the explainer block break receipt generation
+            pass
+
     # Pawn item description — shown on every receipt so the client/officer can verify
     # what was pledged. Extra useful on the disbursement receipt (proof of what was handed over).
     # Explicit truthiness on real fields so an empty {} passed from an orphaned contract skips cleanly.

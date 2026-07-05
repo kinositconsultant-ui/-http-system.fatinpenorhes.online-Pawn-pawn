@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 30 — Payments UX + Rule A Interest Math)
+**Last updated:** 2026-02 (Iteration 31 — Interest Calc Explainer on Receipts)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -320,6 +320,19 @@ Flow: Client → Pawn Item → Contract → Payment → Redeem / Reactivate / Au
   - NEW `/app/backend/tests/test_iter22_interest_rule.py` — 12 unit tests for `_months_billed` covering all edge cases (same-day, first-month, anniversary, one-day-past, end-of-month starts, leap year, payment-before-start).
   - UPDATED `/app/backend/tests/test_iter20_monthly_interest.py` — `TestArticle4MonthsElapsed` and `TestNextInterestDate` now assert Rule A instead of the old `ceil(days/30)`; canary test derives the expected value dynamically so it stays green as time moves forward.
 - **Testing agent verdict** (report iter_29): **100% pass — backend 47/47 (12 unit + 5 integration + 30 regression), frontend 100%, retest_needed: false**. Final local run: 27/27 pytest tests green.
+
+
+## Iteration 31 (2026-02) — Interest Calculation Explainer on Receipt PDF
+- `build_receipt_pdf` now renders a soft-indigo "Oinsá ami sura interese-nia · How your interest was calculated" block right after the amber Next Payment note.
+- Content (bilingual EN/TET):
+  - Contract Start · Payment Date
+  - Billing Months (Article 4) — e.g. "2 months · 2 fulan"
+  - Rate × Loan (per month) — e.g. $150.00
+  - Interest Charged — inline expression like `2 × $150.00 = $300.00`
+  - Explainer footer explaining Rule A (anniversary = same month, +1 day = new month).
+- Wrapped in try/except so a bad field never breaks receipt generation.
+- Skipped on disbursement receipts (already gated by `not is_disbursement`).
+- Verified: PDF now embeds the block; AI-inspection of a real receipt confirmed all 5 rows render correctly on the indigo panel with the bilingual explainer paragraph below.
 
 
 ## Prioritized Backlog
