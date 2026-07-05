@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, API_BASE } from "../lib/api";
+import { api, API_BASE, fileUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -332,7 +332,7 @@ export default function Clients() {
                   {r.photo_url ? (
                     <img
                       alt=""
-                      src={`${API_BASE}/files/${r.photo_url}`}
+                      src={fileUrl(r.photo_url)}
                       className="w-10 h-10 rounded-full object-cover border border-stone-200"
                     />
                   ) : (
@@ -403,7 +403,7 @@ export default function Clients() {
                 {viewing.photo_url ? (
                   <img
                     alt=""
-                    src={`${API_BASE}/files/${viewing.photo_url}`}
+                    src={fileUrl(viewing.photo_url)}
                     className="w-40 h-40 rounded-md object-cover border border-stone-200"
                   />
                 ) : (

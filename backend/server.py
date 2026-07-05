@@ -416,6 +416,19 @@ async def member_card_pdf(cid: str, _: dict = Depends(require_module("clients"))
         raise HTTPException(status_code=400, detail="No card issued yet — issue first")
     # Reflect live status in the PDF (expired/revoked banner)
     client["member_status"] = _card_status(client)
+    # Normalise photo_url so ReportLab can fetch it via HTTP. Storage keys like
+    # "fatin-penhores/uploads/<id>/foo.jpg" get expanded to a full ${API_BASE}/files/... URL.
+    photo = (client.get("photo_url") or "").strip()
+    if photo and not photo.lower().startswith(("http://", "https://")):
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        if base:
+            if photo.startswith("/api/"):
+                client["photo_url"] = f"{base}{photo}"
+            elif photo.startswith("/files/"):
+                client["photo_url"] = f"{base}/api{photo}"
+            else:
+                key = photo.lstrip("/")
+                client["photo_url"] = f"{base}/api/files/{key}"
     verify_url = _public_verify_url(client["member_verify_token"])
     pdf = build_member_card_pdf(client, verify_url)
     safe_no = (client["member_no"] or "card").replace("/", "-")

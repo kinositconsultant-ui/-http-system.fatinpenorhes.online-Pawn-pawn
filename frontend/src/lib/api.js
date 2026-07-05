@@ -12,6 +12,25 @@ export function pdfUrl(path) {
   return `${API_BASE}${path}`;
 }
 
+/**
+ * Build a full public URL for a client-uploaded file (photo, document, etc.).
+ * Handles the shapes the backend / DB may store:
+ *   - Absolute URL:    "https://cdn.example.com/…" → returned as-is
+ *   - Full API path:   "/api/files/foo.jpg"        → prefixed with backend origin
+ *   - Relative /files: "/files/foo.jpg"            → prefixed with `${API_BASE}`
+ *   - Storage key:     "fatin-penhores/uploads/…"  → served via `${API_BASE}/files/<key>`
+ * Returns "" for null/undefined so <img> tags can conditionally render.
+ */
+export function fileUrl(pathOrKey) {
+  if (!pathOrKey) return "";
+  const s = String(pathOrKey);
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("/api/")) return `${BACKEND_URL}${s}`;
+  if (s.startsWith("/files/")) return `${API_BASE}${s}`;
+  const key = s.startsWith("/") ? s.slice(1) : s;
+  return `${API_BASE}/files/${key}`;
+}
+
 export function formatApiErrorDetail(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
   if (typeof detail === "string") return detail;

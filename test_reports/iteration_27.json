@@ -1,0 +1,59 @@
+{
+  "summary": "Tested iteration 27 photo_url rendering fix (deployment bug — client photos not displaying). Verified fileUrl helper on frontend (Clients list, Detail modal, VerifyMember page) and backend card-pdf photo normalisation. 8/9 backend tests PASS. 1 backend test FAILS (photo NOT actually embedded in PDF — falls back to initials). Verify page photo also BROKEN for anonymous users. Root cause identical: /api/files/{path} endpoint is auth-protected; anonymous browsers and backend ReportLab urlopen both get 401.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/clients/{cid}/card-pdf",
+        "issue": "Storage-key photo_url is normalised to `${PUBLIC_BASE_URL}/api/files/<key>` but that endpoint requires cookie auth. ReportLab's urllib.request.urlopen(photo_url) has no cookie → 401 → silent Exception catch → falls back to initials avatar. PDF byte-size delta between (photo_url=key) and (photo_url='') is only -106B, proving photo is NOT embedded. Fix incomplete.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "/api/files/{path}",
+        "issue": "Endpoint is auth-gated (401 for anonymous). This blocks public /verify photo rendering AND backend PDF photo embedding for any client whose photo_url is a storage-key. Consider (a) making files publicly readable, (b) signed short-lived URL with ?auth=<token>, or (c) having card-pdf/PDF code fetch bytes directly from objstore instead of HTTP.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "VerifyMember (/verify/:token)",
+        "issue": "For storage-key photo_url, fileUrl correctly builds `${API_BASE}/files/<key>` but the resulting URL requires auth. Anonymous QR-scan visitors will always see a broken image (naturalWidth=0). The whole point of the public verify page is anonymous access — photos must be reachable without cookies.",
+        "selector": "main img",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter27_photo_url.py",
+    "/app/test_reports/pytest/iter27.xml"
+  ],
+  "action_items": [
+    "Make /api/files/{path} publicly readable for image content-types, OR add a signed-URL scheme (short-lived ?auth=<token> baked into normalised photo_url) so anonymous /verify visitors AND backend ReportLab fetches can succeed.",
+    "For card-pdf embedding, prefer fetching bytes directly via storage.get_object(key) inside build_member_card_pdf instead of going through HTTP — bypasses auth entirely and is faster.",
+    "Once the file endpoint is reachable anonymously (or bytes are fetched in-process), re-run test_iter27_photo_url.py — TestPhotoEmbeddedInPdf::test_pdf_photo_larger_than_initials_only must pass with delta > 200B, and the /verify page img.naturalWidth must be > 0 for storage-key photos."
+  ],
+  "critical_code_review_comments": [
+    "fileUrl helper is correct and consistently used (Clients.js 335 & 406, VerifyMember.js 110). Restarting the frontend was required for the new helper to pick up cleanly — hot-reload had served a stale bundle earlier.",
+    "Backend server.py:421-431 normalisation of photo_url for card-pdf is logically correct but relies on an auth-protected endpoint being fetchable from the same process without auth. That will never work as-is.",
+    "pdf_utils.py:1053-1061 silently swallows all photo-fetch exceptions — should at least log a warning so this class of bug is visible in server logs.",
+    "server.py:2478 download_file supports ?auth=<access_token> query param for <img> tags — but card-pdf normalisation and VerifyMember page do NOT use this. If a signed-token approach is chosen, wire it in both places.",
+    "server.py file size is ~2862 lines — approaching the 700-line guideline breach threshold long ago. Refactor into feature modules on next iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter27_photo_url.py"
+  ],
+  "success_rate": {
+    "backend": "89%",
+    "frontend": "66%"
+  },
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "Uploaded a 1x1 test PNG via /api/upload, created ~9 TEST_Photo_* clients with varying photo_url shapes (storage-key, /api/files/, absolute URL, empty). All TEST_ clients deleted after testing.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_iter27_photo_url.py has 9 tests. Run with REACT_APP_BACKEND_URL=<preview-url> pytest ... — currently 8 pass, 1 fails (TestPhotoEmbeddedInPdf). After main agent fixes /api/files auth OR switches to in-process bytes fetch, all 9 should pass AND browser check must confirm /verify page img loads (naturalWidth > 0). Note: frontend needs supervisor restart to pick up new module exports (hot-reload was stale during initial testing).",
+  "rca of the issue": "Root cause: The photo_url fix (fileUrl helper + backend normalisation) correctly constructs URLs of shape https://.../api/files/<storage-key>. But /api/files/{path} in server.py:2478 requires cookie-based authentication (decode_token check). Two failure paths result: (1) Anonymous /verify page users have no cookie → img fetch returns 401 → broken image icon. (2) Backend card-pdf handler calls build_member_card_pdf → urllib.request.urlopen(photo_url) inside the SAME server process — but urllib has no auth context → 401 → silent exception → initials fallback. Mitigation options: make /api/files public for image mime types; OR embed a signed short-lived ?auth=<token> into the normalised URL; OR (best for PDF) have card-pdf handler pass raw bytes via storage.get_object(key) instead of a URL. Reproduction steps: upload a photo via /api/upload for any client, view /verify/<token> as anonymous — image will be broken; download /api/clients/<cid>/card-pdf and observe the initials avatar in place of the photo (or compare file size with a no-photo client, delta will be ~0)."
+}

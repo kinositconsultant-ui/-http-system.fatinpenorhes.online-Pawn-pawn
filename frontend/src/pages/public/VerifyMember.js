@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
-import { API_BASE } from "../../lib/api";
+import { API_BASE, fileUrl } from "../../lib/api";
 import { CheckCircle2, XCircle, ShieldAlert, Clock, IdCard, ExternalLink } from "lucide-react";
 
 /**
@@ -107,7 +107,7 @@ export default function VerifyMember() {
                   {data.photo_url ? (
                     <img
                       alt=""
-                      src={data.photo_url.startsWith("http") ? data.photo_url : `${API_BASE.replace("/api", "")}/files/${data.photo_url}`}
+                      src={fileUrl(data.photo_url)}
                       className="w-24 h-28 rounded-md object-cover border border-stone-200"
                     />
                   ) : (
