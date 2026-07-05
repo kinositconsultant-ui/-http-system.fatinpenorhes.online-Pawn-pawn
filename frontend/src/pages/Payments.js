@@ -473,7 +473,10 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
               </Td>
               <Td right className="whitespace-nowrap font-medium">${Number(r.amount).toLocaleString()}</Td>
               {disbursement && (
-                <Td right className="whitespace-nowrap text-amber-800" title={contract ? `${Number(contract.loan_amount).toLocaleString()} × ${contract.interest_rate}%` : ""}>
+                <Td right className="whitespace-nowrap text-amber-800"
+                    title={contract
+                      ? `Current-month interest (Rule B: hybrid). Principal remaining ×  ${contract.interest_rate}% = $${perMonth.toFixed(2)}`
+                      : ""}>
                   ${perMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   {contract ? <span className="ml-1 text-[10px] text-stone-500">({contract.interest_rate}%)</span> : null}
                 </Td>

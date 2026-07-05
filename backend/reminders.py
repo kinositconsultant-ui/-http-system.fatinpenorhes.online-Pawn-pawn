@@ -18,6 +18,7 @@ from datetime import datetime, timezone, date, timedelta
 from dateutil.relativedelta import relativedelta
 
 from deps import db, utcnow_iso, new_id, months_billed
+from services import _recompute_contract_status
 import whatsapp as wapp
 import email_svc
 
@@ -67,21 +68,21 @@ def _short_contract(number: str | None) -> str:
 
 
 def build_reminder_body(contract: dict, client_name: str, language: str, today: date | None = None) -> dict:
-    """Build the WhatsApp reminder message body for a contract using Rule A math.
+    """Build the WhatsApp reminder message body for a contract.
 
-    Returns dict with `body`, plus metadata (days, months, total_due, next_month_date)
-    that the UI can display alongside the preview.
+    Uses Rule B (hybrid) interest math when the caller supplies a recomputed
+    contract (has `interest_amount`, `per_month_interest`, `principal_remaining`,
+    `months_elapsed`). Otherwise falls back to a simple `loan × rate` approximation.
 
     Used by:
-    - Daily scheduler (run_daily_reminders)
-    - Ad-hoc "Preview & Send" endpoint (whatsapp/preview / whatsapp/adhoc-send)
+    - Daily scheduler (run_daily_reminders) — passes RECOMPUTED contract
+    - Ad-hoc "Preview & Send" endpoint (whatsapp/preview) — passes RECOMPUTED contract
     """
     today = today or datetime.now(timezone.utc).date()
     tmpl = _MSG_TET if (language or "en").lower() == "tet" else _MSG_EN
 
     loan = float(contract.get("loan_amount", 0) or 0)
     rate = float(contract.get("interest_rate", 0) or 0)
-    per_month = round(loan * rate / 100.0, 2)
     try:
         start = date.fromisoformat(contract["contract_date"])
     except Exception:
@@ -91,18 +92,40 @@ def build_reminder_body(contract: dict, client_name: str, language: str, today: 
     except Exception:
         due = start
     days = max(0, (today - due).days)
-    months = months_billed(start, today)
-    interest_total = round(per_month * months, 2)
-    total_due = round(loan + interest_total, 2)
+
+    # Prefer values from the recomputed contract (Rule B hybrid math). Fall back
+    # to a simple approximation when the caller didn't recompute.
+    has_recomputed = "interest_amount" in contract and "months_elapsed" in contract
+    if has_recomputed:
+        months = int(contract.get("months_elapsed") or 1)
+        interest_total = float(contract.get("interest_amount", 0) or 0)
+        per_month = float(contract.get("per_month_interest", 0) or 0)
+        per_month_next = float(contract.get("per_month_interest_next", per_month) or per_month)
+        principal_remaining = float(contract.get("principal_remaining", loan) or loan)
+        # Show the OUTSTANDING total (principal + accrued interest still owed),
+        # not just loan+interest — reminders should reflect what the client
+        # actually needs to pay today after any partial payments.
+        total_due = float(contract.get("total_due", loan + interest_total) or (loan + interest_total))
+        # Loan shown in the body should reflect remaining principal so the
+        # numbers add up: "$X remaining + N × $Y interest = $Z".
+        loan_display = principal_remaining
+    else:
+        months = months_billed(start, today)
+        per_month = round(loan * rate / 100.0, 2)
+        per_month_next = per_month
+        interest_total = round(per_month * months, 2)
+        total_due = round(loan + interest_total, 2)
+        loan_display = loan
+
     next_month_date = (start + relativedelta(months=months) + timedelta(days=1)).isoformat()
-    next_interest_total = round(interest_total + per_month, 2)
+    next_interest_total = round(interest_total + per_month_next, 2)
 
     body = tmpl.format(
         name=client_name or "",
         contract_number=_short_contract(contract.get("contract_number")),
         days=days,
         days_left=max(0, 10 - days),
-        loan=f"{loan:,.2f}",
+        loan=f"{loan_display:,.2f}",
         per_month=f"{per_month:,.2f}",
         months=months,
         interest_total=f"{interest_total:,.2f}",
@@ -194,6 +217,9 @@ async def run_daily_reminders() -> dict:
         if not client:
             summary["skipped"] += 1
             continue
+
+        # Recompute so Rule B (hybrid) math is applied and message text is accurate.
+        c = await _recompute_contract_status(c)
 
         # Compute the same interest math the receipt PDF shows.
         info = build_reminder_body(c, client.get("full_name", ""), lang, today=today)

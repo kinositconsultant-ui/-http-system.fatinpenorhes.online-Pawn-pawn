@@ -68,17 +68,36 @@ class TestContractNewFields:
         assert not bad, f"months_elapsed invalid on: {bad[:5]}"
 
     def test_per_month_interest_matches_loan_times_rate(self, contracts):
-        # per_month_interest == round(loan * rate / 100, 2)
+        # Under Rule B (hybrid, iter34+) `per_month_interest` reflects the
+        # CURRENT month's rate — which for contracts WITHOUT partial payments
+        # still equals `loan × rate`. Contracts that received partial payments
+        # will have a lower current rate; skip those.
+        from pymongo import MongoClient
+        import os as _os
+        mc = MongoClient(_os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
+        db = mc[_os.environ.get("DB_NAME", "test_database")]
         mismatches = []
         for c in contracts:
+            partials = db.payments.count_documents({"contract_id": c["id"], "type": "partial"})
+            if partials > 0:
+                continue  # Rule B: hybrid — current per-month may be < loan × rate
             expected = round(float(c["loan_amount"]) * float(c["interest_rate"]) / 100.0, 2)
             if abs(float(c["per_month_interest"]) - expected) > 0.01:
                 mismatches.append((c.get("contract_number"), c["per_month_interest"], expected))
         assert not mismatches, f"per_month_interest mismatches: {mismatches[:5]}"
 
     def test_interest_amount_equals_per_month_times_months(self, contracts):
+        # Under Rule B, interest_amount is a per-month SUM (not scalar × months)
+        # so this only holds when no partial payments have been made.
+        from pymongo import MongoClient
+        import os as _os
+        mc = MongoClient(_os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
+        db = mc[_os.environ.get("DB_NAME", "test_database")]
         mismatches = []
         for c in contracts:
+            partials = db.payments.count_documents({"contract_id": c["id"], "type": "partial"})
+            if partials > 0:
+                continue
             expected = round(float(c["per_month_interest"]) * int(c["months_elapsed"]), 2)
             if abs(float(c["interest_amount"]) - expected) > 0.01:
                 mismatches.append((c.get("contract_number"),

@@ -1,23 +1,23 @@
-# Collections in test_database  (snapshot: 20260705-1041 UTC)
-# Total: 20 collections, 4066 documents
+# Collections in test_database  (snapshot: 20260705-1744 UTC)
+# Total: 20 collections, 4548 documents
 
-auctions                             47 documents
-audit_log                          2348 documents
-cars                                328 documents
-clients                             305 documents
-contact_messages                     15 documents
-contracts                           269 documents
-electronics                          41 documents
-expenses                             23 documents
-files                                22 documents
+auctions                             51 documents
+audit_log                          2602 documents
+cars                                368 documents
+clients                             344 documents
+contact_messages                     16 documents
+contracts                           307 documents
+electronics                          44 documents
+expenses                             25 documents
+files                                25 documents
 funding_repayments                    0 documents
 funding_sources                       2 documents
-invoices                             30 documents
-motorcycles                          30 documents
-password_reset_tokens                 4 documents
-payments                            247 documents
+invoices                             33 documents
+motorcycles                          32 documents
+password_reset_tokens                 5 documents
+payments                            287 documents
 pezadus                               2 documents
-reminder_log                         21 documents
+reminder_log                         23 documents
 settings                              1 documents
-users                                74 documents
-whatsapp_log                        257 documents
+users                                80 documents
+whatsapp_log                        301 documents

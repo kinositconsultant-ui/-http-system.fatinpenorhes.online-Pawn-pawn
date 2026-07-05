@@ -114,15 +114,25 @@ async def _decrypted_settings() -> dict:
 async def _recompute_contract_status(contract: dict) -> dict:
     """Compute live status, principal/interest split, penalty, and next milestone dates.
 
-    Interest model (Article 4 — Rule A: Strict calendar month + 1 grace day):
-    - The first monthly billing period is ALWAYS charged (minimum 1 month interest).
-    - Payment on the monthly anniversary of the start date → same month is billed.
-    - Payment 1 day after the anniversary → a new full month kicks in.
+    Interest model (Article 4 — Rule B: Hybrid, Feb 2026):
+    - The first monthly billing period is ALWAYS charged on the ORIGINAL loan
+      amount (this keeps Rule A's guarantee: minimum 1 month interest).
+    - From month 2 onward, each month's interest is computed on the PRINCIPAL
+      REMAINING at that month's start date, so a partial payment reduces the
+      NEXT month's interest.
+    - Rule A calendar-month + 1-day-grace timing is unchanged (`_months_billed`).
+
+    Examples ($500 loan @ 10% = $50/mo original, contract start Jan 10):
+    - Only 1 month elapsed → interest = $50 (unchanged from Rule A).
+    - Client pays $200 partial on Jan 20 (still month 1). Two months elapsed
+      to Feb 11 → month 1: $50, month 2: ($500-$200) × 10% = $30 → total $80.
+    - Same partial paid Feb 20 → paid AFTER Feb 11 anniversary, so it does NOT
+      reduce Feb's interest ($50). If a 3rd month starts Mar 11, month 3 uses
+      remaining principal → ($500-$200) × 10% = $30. Total = $50+$50+$30 = $130.
     """
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
     rate = float(contract["interest_rate"])
-    per_month_interest = round(loan * rate / 100.0, 2)
 
     today_iso = _today_iso()
     try:
@@ -134,11 +144,66 @@ async def _recompute_contract_status(contract: dict) -> dict:
     today_dt = date.today()
     effective_end = max(due, today_dt)
     months_elapsed = _months_billed(contract_start, effective_end)
-    interest = round(per_month_interest * months_elapsed, 2)
 
+    # ---- Hybrid Rule B interest ----
+    # For each billing month m (1..months_elapsed), the "principal used for
+    # this month" = loan - sum of principal-reducing payments dated strictly
+    # BEFORE this month's anniversary date. Month 1 always uses the original
+    # loan (per business decision).
+    sorted_payments = sorted(
+        payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))
+    )
+
+    def _principal_paid_before(d_iso: str) -> float:
+        """Sum of amounts that had reduced principal before the given date.
+
+        Only `partial` (all→principal) is considered for month-boundary
+        purposes. `full`/`overdue_full` are close-out payments that arrive last
+        and don't create future billing months; `interest_only` overflow is
+        rare and negligible for the boundary snapshot.
+        """
+        total = 0.0
+        for p in sorted_payments:
+            if not p.get("date"):
+                continue
+            if p["date"] >= d_iso:
+                continue
+            if p.get("type") == "partial":
+                total += float(p.get("amount", 0))
+        return total
+
+    interest = 0.0
+    per_month_billed: list[float] = []
+    for m in range(1, months_elapsed + 1):
+        if m == 1:
+            principal_for_month = loan
+        else:
+            month_start_iso = (contract_start + relativedelta(months=m - 1)).isoformat()
+            principal_for_month = max(0.0, loan - _principal_paid_before(month_start_iso))
+        month_int = round(principal_for_month * rate / 100.0, 2)
+        interest += month_int
+        per_month_billed.append(month_int)
+
+    interest = round(interest, 2)
+
+    # For display: `per_month_interest` is the CURRENT-month rate — this is
+    # what the receipt PDF, disbursement column and WhatsApp reminders show
+    # when they answer "how much interest per month?"
+    if per_month_billed:
+        per_month_interest = per_month_billed[-1]
+    else:
+        per_month_interest = round(loan * rate / 100.0, 2)
+
+    # Next-month-kick-in date (Rule A timing preserved).
     next_interest_date = contract_start + relativedelta(months=months_elapsed) + timedelta(days=1)
     while next_interest_date <= today_dt:
         next_interest_date = next_interest_date + relativedelta(months=1)
+
+    # Estimated NEXT month's interest (for the receipt "Next Payment" block).
+    # It uses the principal-remaining AT the next-month anniversary.
+    next_month_anchor = (contract_start + relativedelta(months=months_elapsed)).isoformat()
+    next_month_principal = max(0.0, loan - _principal_paid_before(next_month_anchor))
+    per_month_interest_next = round(next_month_principal * rate / 100.0, 2)
 
     is_overdue = contract.get("due_date", today_iso) < today_iso
     full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
@@ -146,7 +211,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
     interest_paid = 0.0
     principal_paid = 0.0
     penalty_paid = 0.0
-    for p in sorted(payments, key=lambda x: (x.get("date", ""), x.get("created_at", ""))):
+    for p in sorted_payments:
         amt = float(p.get("amount", 0))
         ptype = p.get("type", "partial")
         if ptype == "disbursement":
@@ -226,6 +291,8 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["interest_remaining"] = interest_remaining
     contract["interest_amount"] = interest
     contract["per_month_interest"] = per_month_interest
+    contract["per_month_interest_next"] = per_month_interest_next
+    contract["per_month_billed"] = per_month_billed  # ordered list, useful for PDF math block
     contract["months_elapsed"] = months_elapsed
     contract["next_interest_date"] = next_interest_date.isoformat()
     contract["penalty"] = penalty

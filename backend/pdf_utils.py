@@ -436,16 +436,26 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
             ),
         ))
 
-        # Inline calculation example — explains WHY the interest is what it is (Rule A).
-        # Great for defusing "why 2 months?" disputes at the counter.
+        # Inline calculation example — explains WHY the interest is what it is.
+        # Under Rule B (hybrid), if the client has made partial payments the
+        # per-month breakdown is different across months, so we render an
+        # itemized month-by-month table when `per_month_billed` is present.
         try:
             months = int(contract.get("months_elapsed", 1) or 1)
             paid_date = payment.get("date", "")
             start_date = contract.get("contract_date", "")
-            interest_total = round(per_month * months, 2)
+            per_month_billed = contract.get("per_month_billed") or []
+            interest_total = float(contract.get("interest_amount") or round(per_month * months, 2))
             months_word_en = "month" if months == 1 else "months"
             months_word_tet = "fulan"
-            calc_expr = f"{months} × ${per_month:,.2f} = ${interest_total:,.2f}"
+
+            hybrid = len(per_month_billed) > 1 and len(set(per_month_billed)) > 1
+            if hybrid:
+                # Multi-rate breakdown (Rule B kicked in via partial payments)
+                calc_expr = " + ".join(f"${v:,.2f}" for v in per_month_billed) + f" = ${interest_total:,.2f}"
+            else:
+                calc_expr = f"{months} × ${per_month:,.2f} = ${interest_total:,.2f}"
+
             story.append(Spacer(1, 0.35 * cm))
             story.append(Paragraph(
                 "Oinsá ami sura interese-nia · How your interest was calculated",
@@ -458,9 +468,13 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
                 ["Contract Start", start_date or "—"],
                 ["Payment Date", paid_date or "—"],
                 ["Billing Months (Article 4)", f"{months} {months_word_en} · {months} {months_word_tet}"],
-                ["Rate × Loan (per month)", f"${per_month:,.2f}"],
-                ["Interest Charged", calc_expr],
             ]
+            if hybrid:
+                calc_rows.append(["Per-month (Rule B hybrid)",
+                                  ", ".join(f"m{i+1}=${v:,.2f}" for i, v in enumerate(per_month_billed))])
+            else:
+                calc_rows.append(["Rate × Loan (per month)", f"${per_month:,.2f}"])
+            calc_rows.append(["Interest Charged", calc_expr])
             calc_box = Table(calc_rows, colWidths=[6.5 * cm, 10.5 * cm])
             calc_box.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EEF2FF")),  # soft indigo

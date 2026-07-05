@@ -111,9 +111,11 @@ class TestWhatsAppPreview:
         assert "Hello" in data["body"], data["body"]
         assert data["language"] == "en"
         assert data["per_month"] == 50.0
-        # Rule A: 45-day contract → months=2 → interest=$100 → total=$600
+        # Rule B (hybrid) with no partial payments: 45-day contract → months=2 → interest=$100.
+        # Body now uses the RECOMPUTED contract's total_due which includes the 10% overdue
+        # penalty ($50) → $500 + $100 + $50 = $650.
         assert data["months"] == 2
-        assert data["total_due"] == 600.0
+        assert data["total_due"] == 650.0
 
     def test_preview_tetum(self, api, contract_id):
         r = api.post(
