@@ -74,6 +74,26 @@ const MONTHS_EN = [
   ["9", "September"], ["10", "October"], ["11", "November"], ["12", "December"],
 ];
 
+// Columns that should never wrap (dates, money, IDs stay on one line).
+const NO_WRAP_KEYS = new Set([
+  ...MONEY_KEYS,
+  "date", "due_date", "contract_date", "sold_at", "created_at", "start_date",
+  "contract_number", "receipt_number", "id", "interest_rate", "status",
+  "type", "kind", "item_type", "payment_method",
+]);
+// Wide text columns → allow wrapping and cap width so tables stay readable.
+const WIDE_KEYS = new Set([
+  "item", "description", "notes", "buyer_name", "paid_to",
+  "item_brand", "item_model", "brand", "model",
+]);
+
+const cellClass = (col) => {
+  const base = "px-2.5 py-2 align-top";
+  if (WIDE_KEYS.has(col)) return `${base} whitespace-normal break-words max-w-[220px]`;
+  if (NO_WRAP_KEYS.has(col)) return `${base} whitespace-nowrap`;
+  return `${base} whitespace-nowrap`;
+};
+
 export default function Reports() {
   const { t } = useLang();
   const [tab, setTab] = useState("active-contracts");
@@ -289,7 +309,7 @@ export default function Reports() {
               {!loading && (data?.rows || []).map((r, i) => (
                 <tr key={r.id || r.contract_number || i} className="border-t border-stone-100 hover:bg-stone-50/50">
                   {(data?.columns || []).map((c) => (
-                    <td key={c} className="px-2.5 py-2 whitespace-nowrap">{fmtCell(c, r[c])}</td>
+                    <td key={c} className={cellClass(c)}>{fmtCell(c, r[c])}</td>
                   ))}
                 </tr>
               ))}

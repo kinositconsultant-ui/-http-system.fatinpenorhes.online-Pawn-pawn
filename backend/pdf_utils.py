@@ -588,21 +588,77 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     return buf.getvalue()
 
 
+def _fmt_money(v) -> str:
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return str(v or "")
+    return f"${n:,.2f}"
+
+
+# Column type buckets used to compute proportional widths in report PDFs.
+# Widths are expressed as *weights*; the final width = weight / sum(weights) * usable_width.
+_MONEY_COLS = {
+    "loan_amount", "interest_amount", "amount", "paid_amount", "principal_remaining",
+    "interest_remaining", "penalty", "market_value", "starting_price", "sold_price",
+    "total_loan", "total_payments", "interest_received", "total_penalty",
+    "total_outstanding", "total_interest", "total_amount", "profit",
+    "interest_expected", "paid",
+}
+_NUMERIC_COLS = {"interest_rate", "manufacture_year"}
+_DATE_COLS = {"date", "due_date", "contract_date", "sold_at", "created_at", "start_date"}
+_SHORT_COLS = {"status", "type", "kind", "item_type", "payment_method"}
+_ID_COLS = {"contract_number", "receipt_number", "id"}
+_WIDE_COLS = {
+    "item", "description", "notes", "brand", "model", "buyer_name", "paid_to",
+    "item_brand", "item_model", "item_category", "item_location", "location",
+    "category", "sub_category",
+}
+
+
+def _col_weight(col: str) -> float:
+    if col in _MONEY_COLS:
+        return 1.1
+    if col in _NUMERIC_COLS:
+        return 0.9
+    if col in _DATE_COLS:
+        return 1.2
+    if col in _SHORT_COLS:
+        return 1.0
+    if col in _ID_COLS:
+        return 1.5
+    if col in _WIDE_COLS:
+        return 2.4
+    return 1.4
+
+
 def build_report_pdf(report_type: str, data: dict) -> bytes:
-    """Branded report PDF used by /api/reports/v2/{type}/export?format=pdf."""
+    """Branded report PDF used by /api/reports/v2/{type}/export?format=pdf.
+
+    Layout:
+    - Landscape A4 with tight margins.
+    - Column widths are calculated proportionally so long text columns (item /
+      description / notes) get more room and numeric columns stay compact.
+    - Cell values are wrapped inside a Paragraph so long strings break onto
+      multiple lines instead of blowing out the column.
+    """
     from reportlab.lib.pagesizes import landscape
     s = _styles()
     buf = BytesIO()
+    left_m = right_m = 1.0 * cm
     doc = SimpleDocTemplate(
         buf, pagesize=landscape(A4),
-        leftMargin=1.2 * cm, rightMargin=1.2 * cm,
+        leftMargin=left_m, rightMargin=right_m,
         topMargin=1.4 * cm, bottomMargin=1.6 * cm,
     )
+    page_w, _ph = landscape(A4)
+    usable_w = page_w - left_m - right_m
+
     story = [
         _branded_header(s),
         Paragraph(f"{report_type.replace('-', ' ').title()} Report", s["DocTitle"]),
     ]
-    kpi_pairs = [(k.replace("_", " ").title(), str(v))
+    kpi_pairs = [(k.replace("_", " ").title(), _fmt_money(v) if k in _MONEY_COLS else str(v))
                  for k, v in (data.get("kpis") or {}).items() if not isinstance(v, dict)]
     if kpi_pairs:
         kpi_tbl = Table([list(pair) for pair in kpi_pairs], colWidths=[5 * cm, 5 * cm])
@@ -617,24 +673,48 @@ def build_report_pdf(report_type: str, data: dict) -> bytes:
         ]))
         story.append(kpi_tbl)
         story.append(Spacer(1, 0.4 * cm))
+
     columns = data.get("columns", [])
     rows = data.get("rows", [])[:300]
     if columns:
-        tbl_data = [[c.replace("_", " ").title() for c in columns]]
+        # Proportional column widths
+        weights = [_col_weight(c) for c in columns]
+        total_w = sum(weights) or 1.0
+        col_widths = [w / total_w * usable_w for w in weights]
+
+        # Cell paragraph style — wraps long text
+        cell_style = ParagraphStyle(
+            "ReportCell", fontName="Helvetica", fontSize=7.5,
+            leading=9.5, textColor=INK,
+        )
+        head_style = ParagraphStyle(
+            "ReportHead", fontName="Helvetica-Bold", fontSize=8,
+            leading=10, textColor=colors.white, alignment=1,
+        )
+
+        def _fmt_cell(col: str, val) -> str:
+            if val is None or val == "":
+                return ""
+            if col in _MONEY_COLS:
+                return _fmt_money(val)
+            return str(val)
+
+        tbl_data = [[Paragraph(c.replace("_", " ").title(), head_style) for c in columns]]
         for r in rows:
-            tbl_data.append([str(r.get(c, "") or "") for c in columns])
-        tbl = Table(tbl_data, repeatRows=1)
+            tbl_data.append([
+                Paragraph(_fmt_cell(c, r.get(c, "")), cell_style) for c in columns
+            ])
+
+        tbl = Table(tbl_data, colWidths=col_widths, repeatRows=1)
         tbl.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
-            ("FONT", (0, 1), (-1, -1), "Helvetica", 7.5),
             ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("LINEBELOW", (0, 1), (-1, -1), 0.2, RULE),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]))
         story.append(tbl)
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
