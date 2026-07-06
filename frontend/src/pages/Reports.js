@@ -18,6 +18,9 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Filter as FilterIcon,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import MonthEndBundle from "../components/MonthEndBundle";
 
@@ -100,6 +103,8 @@ export default function Reports() {
   const [filters, setFilters] = useState({ month: "", year: "", category: "", sub_category: "" });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Client-side sort: null = server order, otherwise { key, dir: "asc" | "desc" }
+  const [sort, setSort] = useState(null);
 
   const yearOpts = useMemo(() => {
     const now = new Date().getFullYear();
@@ -128,6 +133,55 @@ export default function Reports() {
   }, [tab, buildQuery]);
 
   useEffect(() => { load(); }, [load]);
+  // Reset any active sort whenever the active tab changes (columns differ per tab)
+  useEffect(() => { setSort(null); }, [tab]);
+
+  const sortedRows = useMemo(() => {
+    const rows = data?.rows || [];
+    if (!sort) return rows;
+    const { key, dir } = sort;
+    const mul = dir === "asc" ? 1 : -1;
+    const isNumericKey = MONEY_KEYS.has(key)
+      || ["interest_rate", "manufacture_year", "total_repaid", "outstanding"].includes(key);
+    const isDateKey = ["date", "due_date", "contract_date", "sold_at", "created_at", "start_date"].includes(key);
+
+    const val = (r) => {
+      const v = r?.[key];
+      if (v == null || v === "") return null;
+      if (isNumericKey) {
+        const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+        return Number.isNaN(n) ? null : n;
+      }
+      if (isDateKey) {
+        const t = Date.parse(v);
+        return Number.isNaN(t) ? null : t;
+      }
+      return String(v).toLowerCase();
+    };
+
+    // Stable sort with nulls last
+    return rows
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => {
+        const va = val(a.r);
+        const vb = val(b.r);
+        if (va == null && vb == null) return a.i - b.i;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (va < vb) return -1 * mul;
+        if (va > vb) return 1 * mul;
+        return a.i - b.i;
+      })
+      .map((x) => x.r);
+  }, [data, sort]);
+
+  const toggleSort = (key) => {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: "asc" };
+      if (cur.dir === "asc") return { key, dir: "desc" };
+      return null; // third click → clear
+    });
+  };
 
   const resetFilters = () => setFilters({ month: "", year: "", category: "", sub_category: "" });
 
@@ -285,35 +339,55 @@ export default function Reports() {
         <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-stone-200">
           <div className="text-eyebrow">{t("detail")}</div>
           <div className="font-display text-lg mt-1 text-stone-900">
-            {t(currentTab.labelKey)} · {data?.rows?.length ?? 0} rows
+            {t(currentTab.labelKey)} · {sortedRows.length} rows
+            {sort && (
+              <button
+                onClick={() => setSort(null)}
+                className="ml-3 text-xs font-normal text-stone-500 hover:text-[#1B2D5C] underline underline-offset-2"
+                data-testid="report-sort-clear"
+              >
+                sorted by {prettify(sort.key)} ({sort.dir}) · clear
+              </button>
+            )}
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs" data-testid="report-table">
             <thead className="bg-stone-50 text-left">
               <tr>
-                {(data?.columns || []).map((c) => (
-                  <th
-                    key={c}
-                    className="px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-stone-500 font-semibold whitespace-nowrap"
-                  >
-                    {prettify(c)}
-                  </th>
-                ))}
+                {(data?.columns || []).map((c) => {
+                  const active = sort?.key === c;
+                  const Icon = active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                  return (
+                    <th
+                      key={c}
+                      onClick={() => toggleSort(c)}
+                      data-testid={`report-th-${c}`}
+                      className={`px-2.5 py-2.5 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap cursor-pointer select-none ${
+                        active ? "text-[#1B2D5C] bg-stone-100" : "text-stone-500 hover:text-stone-800"
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {prettify(c)}
+                        <Icon className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`} />
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr><td colSpan="20" className="p-8 text-center text-stone-500">Loading…</td></tr>
               )}
-              {!loading && (data?.rows || []).map((r, i) => (
+              {!loading && sortedRows.map((r, i) => (
                 <tr key={r.id || r.contract_number || i} className="border-t border-stone-100 hover:bg-stone-50/50">
                   {(data?.columns || []).map((c) => (
                     <td key={c} className={cellClass(c)}>{fmtCell(c, r[c])}</td>
                   ))}
                 </tr>
               ))}
-              {!loading && (data?.rows || []).length === 0 && (
+              {!loading && sortedRows.length === 0 && (
                 <tr><td colSpan="20" className="p-8 text-center text-stone-500">No data</td></tr>
               )}
             </tbody>
