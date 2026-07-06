@@ -170,6 +170,7 @@ function PinnedCard({ view }) {
 export default function PinnedViewsPanel() {
   const { t } = useLang();
   const [pinned, setPinned] = useState([]);
+  const [nextDigest, setNextDigest] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -179,16 +180,33 @@ export default function PinnedViewsPanel() {
       } catch {
         setPinned([]);
       }
+      try {
+        const { data: sched } = await api.get("/admin/backups/schedule");
+        setNextDigest(sched?.next_alert_digest_run_at || null);
+      } catch { /* non-admins can't see the schedule — that's fine */ }
     })();
   }, []);
 
   if (pinned.length === 0) return null;
 
+  const hasAlert = pinned.some((v) => v.alert_threshold != null);
+
   return (
     <section data-testid="pinned-views-panel">
-      <div className="flex items-center gap-2 mb-3">
-        <Pin className="w-4 h-4 text-[#1B2D5C]" />
-        <div className="text-eyebrow">{t("pinned_views")}</div>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Pin className="w-4 h-4 text-[#1B2D5C]" />
+          <div className="text-eyebrow">{t("pinned_views")}</div>
+        </div>
+        {hasAlert && nextDigest && (
+          <div
+            className="text-[10px] text-stone-500 flex items-center gap-1"
+            data-testid="pinned-views-next-digest"
+          >
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Daily alert digest · next run {new Date(nextDigest).toLocaleString()}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {pinned.map((v) => (

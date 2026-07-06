@@ -109,8 +109,17 @@ def start_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600 * 6,
     )
+    # Pinned-view alert digest — daily at 23:00 UTC (~08:00 Timor next day)
+    from routes.alerts import run_alert_digest_sync
+    _scheduler.add_job(
+        run_alert_digest_sync,
+        CronTrigger(hour=23, minute=0),
+        id="alert_digest",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     _scheduler.start()
-    logger.info("[scheduler] started — daily backup at 02:00 UTC, reminders at 00:00 UTC (09:00 Timor), month-end bundle at 02:30 UTC on day 1, keeping last %d snapshots", RETENTION)
+    logger.info("[scheduler] started — daily backup at 02:00 UTC, reminders at 00:00 UTC (09:00 Timor), month-end bundle at 02:30 UTC on day 1, alert digest at 23:00 UTC, keeping last %d snapshots", RETENTION)
     return _scheduler
 
 
@@ -128,11 +137,13 @@ def next_run_info() -> dict:
     job = _scheduler.get_job("daily_backup")
     rem_job = _scheduler.get_job("daily_reminders")
     me_job = _scheduler.get_job("monthend_bundle")
+    al_job = _scheduler.get_job("alert_digest")
     return {
         "running": True,
         "next_run_at": job.next_run_time.astimezone(timezone.utc).isoformat() if job and job.next_run_time else None,
         "next_reminders_run_at": rem_job.next_run_time.astimezone(timezone.utc).isoformat() if rem_job and rem_job.next_run_time else None,
         "next_monthend_run_at": me_job.next_run_time.astimezone(timezone.utc).isoformat() if me_job and me_job.next_run_time else None,
+        "next_alert_digest_run_at": al_job.next_run_time.astimezone(timezone.utc).isoformat() if al_job and al_job.next_run_time else None,
         "retention": RETENTION,
         "now_utc": datetime.now(timezone.utc).isoformat(),
     }

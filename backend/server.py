@@ -1484,6 +1484,7 @@ from routes.admin import router as admin_router  # noqa: E402
 from routes.auth_extra import router as auth_extra_router  # noqa: E402
 from routes.monthend import router as monthend_router  # noqa: E402
 from routes.report_views import router as report_views_router  # noqa: E402
+from routes.alerts import router as alerts_router  # noqa: E402
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
@@ -1492,6 +1493,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(auth_extra_router, prefix="/api")
 app.include_router(monthend_router, prefix="/api")
 app.include_router(report_views_router, prefix="/api")
+app.include_router(alerts_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
