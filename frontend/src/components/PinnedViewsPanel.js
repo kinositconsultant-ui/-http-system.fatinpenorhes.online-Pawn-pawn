@@ -55,6 +55,9 @@ function PinnedCard({ view }) {
 
   const rows = (data?.rows || []).slice(0, 5);
   const cols = (data?.columns || []).slice(0, 3);
+  const totalRows = data?.rows?.length ?? 0;
+  const threshold = view.alert_threshold;
+  const alerting = threshold != null && totalRows > threshold;
   // Pull the first numeric-looking KPI for headline
   const kpiEntries = Object.entries(data?.kpis || {})
     .filter(([_, v]) => !(typeof v === "object" && v !== null));
@@ -71,13 +74,26 @@ function PinnedCard({ view }) {
 
   return (
     <Card
-      className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white flex flex-col"
+      className={`p-4 md:p-5 border shadow-none rounded-lg bg-white flex flex-col transition ${
+        alerting ? "border-red-300 ring-1 ring-red-200" : "border-stone-200"
+      }`}
       data-testid={`pinned-view-card-${view.id}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <Pin className="w-3.5 h-3.5 text-[#1B2D5C] fill-[#1B2D5C]" />
+            {alerting ? (
+              <span
+                className="relative inline-flex w-2 h-2"
+                data-testid={`pinned-view-alert-${view.id}`}
+                title={`Row count ${totalRows} exceeds threshold ${threshold}`}
+              >
+                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+              </span>
+            ) : (
+              <Pin className="w-3.5 h-3.5 text-[#1B2D5C] fill-[#1B2D5C]" />
+            )}
             <div className="text-[10px] uppercase tracking-[0.18em] text-stone-500 font-semibold truncate">
               {view.tab.replace("-", " ")}
             </div>
@@ -103,10 +119,15 @@ function PinnedCard({ view }) {
       ) : (
         <>
           <div className="mt-3 flex items-baseline gap-2">
-            <div className="font-display text-3xl font-semibold text-stone-900">
-              {data?.rows?.length ?? 0}
+            <div className={`font-display text-3xl font-semibold ${alerting ? "text-red-600" : "text-stone-900"}`}>
+              {totalRows}
             </div>
             <div className="text-xs text-stone-500">rows</div>
+            {threshold != null && (
+              <div className={`text-[10px] ${alerting ? "text-red-600 font-semibold" : "text-stone-400"}`}>
+                / alert &gt; {threshold}
+              </div>
+            )}
             {kpiEntries.slice(0, 1).map(([k, v]) => (
               <div key={k} className="ml-3 text-xs text-stone-500">
                 · {prettify(k)}: <span className="text-stone-800 font-medium">

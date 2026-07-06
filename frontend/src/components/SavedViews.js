@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Bookmark, BookmarkPlus, Trash2, Check, Pin, PinOff } from "lucide-react";
+import { Bookmark, BookmarkPlus, Trash2, Check, Pin, PinOff, AlertCircle } from "lucide-react";
 
 /**
  * Per-user saved views for the Reports page.
@@ -59,6 +59,17 @@ export default function SavedViews({ tab, filters, sort, onApply }) {
       await load();
     } catch (e) {
       alert(`Pin failed: ${e?.response?.data?.detail || e.message}`);
+    }
+  };
+
+  const setThreshold = async (id, value) => {
+    const n = value === "" || value == null ? null : parseInt(value, 10);
+    if (n != null && (Number.isNaN(n) || n < 0)) return;
+    try {
+      await api.patch(`/report-views/${id}/threshold`, { alert_threshold: n });
+      await load();
+    } catch (e) {
+      alert(`Threshold failed: ${e?.response?.data?.detail || e.message}`);
     }
   };
 
@@ -123,6 +134,34 @@ export default function SavedViews({ tab, filters, sort, onApply }) {
                     : <PinOff className="w-3 h-3" />
                   }
                 </button>
+                {v.pinned && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[9px] text-stone-400"
+                    title="Show a red alert dot on the Dashboard when the row count exceeds this number. Leave blank to disable."
+                  >
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    <span>&gt;</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100000}
+                      defaultValue={v.alert_threshold ?? ""}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const cur = v.alert_threshold;
+                        const nextVal = raw === "" ? null : parseInt(raw, 10);
+                        if (nextVal === cur) return;
+                        setThreshold(v.id, raw);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.target.blur();
+                      }}
+                      className="w-9 h-4 px-1 text-[10px] rounded border border-stone-200 bg-white text-stone-700 focus:border-[#1B2D5C] focus:outline-none"
+                      placeholder="—"
+                      data-testid={`saved-view-threshold-${v.id}`}
+                    />
+                  </span>
+                )}
                 <button
                   onClick={() => remove(v.id)}
                   className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-red-600 p-0.5 rounded transition"

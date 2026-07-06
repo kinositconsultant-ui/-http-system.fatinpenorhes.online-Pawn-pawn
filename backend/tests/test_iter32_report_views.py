@@ -137,3 +137,56 @@ def test_upsert_preserves_pinned_state(api_sess):
     assert r2.status_code == 200
     assert r2.json()["id"] == vid
     assert r2.json()["pinned"] is True  # preserved
+
+
+def test_alert_threshold_set_and_clear(api_sess):
+    r = api_sess.post(f"{BASE_URL}/api/report-views", json={
+        "name": f"Thr-{uuid.uuid4().hex[:6]}", "tab": "overdue",
+    })
+    vid = r.json()["id"]
+    assert r.json().get("alert_threshold") is None
+
+    # set threshold
+    r1 = api_sess.patch(
+        f"{BASE_URL}/api/report-views/{vid}/threshold",
+        json={"alert_threshold": 25},
+    )
+    assert r1.status_code == 200
+    assert r1.json()["alert_threshold"] == 25
+
+    # clear via null
+    r2 = api_sess.patch(
+        f"{BASE_URL}/api/report-views/{vid}/threshold",
+        json={"alert_threshold": None},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["alert_threshold"] is None
+
+    # invalid (negative)
+    r3 = api_sess.patch(
+        f"{BASE_URL}/api/report-views/{vid}/threshold",
+        json={"alert_threshold": -5},
+    )
+    assert r3.status_code == 422
+
+    # 404 on missing
+    r4 = api_sess.patch(
+        f"{BASE_URL}/api/report-views/nope/threshold",
+        json={"alert_threshold": 10},
+    )
+    assert r4.status_code == 404
+
+
+def test_upsert_preserves_threshold(api_sess):
+    name = f"KeepThr-{uuid.uuid4().hex[:6]}"
+    r = api_sess.post(f"{BASE_URL}/api/report-views", json={
+        "name": name, "tab": "overdue", "alert_threshold": 40,
+    })
+    vid = r.json()["id"]
+    assert r.json()["alert_threshold"] == 40
+    # Upsert without alert_threshold field → should keep 40
+    r2 = api_sess.post(f"{BASE_URL}/api/report-views", json={
+        "name": name, "tab": "overdue", "filters": {"category": "car"},
+    })
+    assert r2.json()["id"] == vid
+    assert r2.json()["alert_threshold"] == 40

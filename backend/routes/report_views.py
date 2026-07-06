@@ -35,6 +35,11 @@ class ReportViewIn(BaseModel):
     filters: dict = Field(default_factory=dict)
     sort: Optional[SortIn] = None
     pinned: bool = False
+    alert_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
+
+
+class ThresholdIn(BaseModel):
+    alert_threshold: Optional[int] = Field(default=None, ge=0, le=100000)
 
 
 @router.get("/report-views")
@@ -61,13 +66,16 @@ async def upsert_view(payload: ReportViewIn, user: dict = Depends(get_current_us
         "filters": payload.filters or {},
         "sort": payload.sort.model_dump() if payload.sort else None,
         "pinned": bool(payload.pinned),
+        "alert_threshold": payload.alert_threshold,
         "updated_at": utcnow_iso(),
     }
     if existing:
         # Preserve existing pinned state unless explicitly set to True on this call.
-        # (A pin toggle uses PATCH /pin below, not upsert.)
         if not payload.pinned:
             doc["pinned"] = bool(existing.get("pinned", False))
+        # Preserve threshold unless caller explicitly provided one
+        if payload.alert_threshold is None and existing.get("alert_threshold") is not None:
+            doc["alert_threshold"] = existing["alert_threshold"]
         await db.report_views.update_one({"id": existing["id"]}, {"$set": doc})
         doc["id"] = existing["id"]
         doc["created_at"] = existing.get("created_at", doc["updated_at"])
@@ -93,6 +101,22 @@ async def toggle_pin(view_id: str, user: dict = Depends(get_current_user)):
         {"$set": {"pinned": new_pinned, "updated_at": utcnow_iso()}},
     )
     v["pinned"] = new_pinned
+    return v
+
+
+@router.patch("/report-views/{view_id}/threshold")
+async def set_threshold(view_id: str, payload: ThresholdIn, user: dict = Depends(get_current_user)):
+    """Set (or clear via null) the alert row-count threshold for a pinned view."""
+    v = await db.report_views.find_one(
+        {"id": view_id, "user_id": user["id"]}, {"_id": 0},
+    )
+    if not v:
+        raise HTTPException(status_code=404, detail="View not found")
+    await db.report_views.update_one(
+        {"id": view_id, "user_id": user["id"]},
+        {"$set": {"alert_threshold": payload.alert_threshold, "updated_at": utcnow_iso()}},
+    )
+    v["alert_threshold"] = payload.alert_threshold
     return v
 
 
