@@ -1,6 +1,6 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 32 — WhatsApp Reminders with Rule A Math)
+**Last updated:** 2026-02 (Iteration 33 — Month-end Compliance Bundle)
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
@@ -494,6 +494,19 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - Hard-fail Settings PUT when `WHATSAPP_ENCRYPTION_KEY` missing (avoid silent plaintext storage).
 - Split `server.py` further (auth + users + clients + items + contracts + payments + auctions) — the remaining 1555 lines are still substantial. Second refactor pass when a low-risk window opens.
 - Move contract status recompute out of report GET into a background job for perf.
+
+## Iteration 33 — Month-end Compliance Bundle (2026-02) ✅
+- **Backend router** `/app/backend/routes/monthend.py`:
+  - `GET /api/monthend/generate?month=YYYY-MM` → streams ZIP + persists a copy to `/app/backups/monthend/monthend-YYYY-MM.zip`. Contains Finance Summary PDF, Expenses PDF, Audit Log PDF, Treasury XLSX (3 sheets: Capital / Expenses / Summary), and a bilingual `README.txt`.
+  - `GET /api/monthend/archives` → list persisted bundles (newest first).
+  - `GET /api/monthend/archives/{filename}` → download persisted bundle.
+  - `DELETE /api/monthend/archives/{filename}` → admin cleanup.
+- **APScheduler job** `monthend_bundle` — runs on **day 1 of every month at 02:30 UTC**, generating & persisting the previous month's bundle. Exposed via `GET /api/admin/backups/schedule` (`next_monthend_run_at`).
+- **Frontend**: New `MonthEndBundle` component (`/app/frontend/src/components/MonthEndBundle.js`) mounted at the bottom of Reports page — month/year selector, one-click "Generate & Download", Archives table with download buttons, next-auto-run indicator.
+- **i18n**: EN + TET strings (`monthend_bundle`, `monthend_desc`, `generate_bundle`, `monthend_archives`, `next_auto_run`, `file_size`, `modified`, `download`).
+- **Security**: Admin-only routes; strict `monthend-YYYY-MM.zip` filename regex prevents path traversal.
+- **Audit**: Every generate/delete writes to `audit_log` with counts of rows included.
+- **Tests**: `/app/backend/tests/test_iter31_monthend_bundle.py` — 6 tests (ZIP structure, PDF validity, archive listing, download, invalid month, filename traversal, unauthenticated access, scheduler exposure). **All passing.**
 
 ## Credentials
 - Admin: `admin@fatinpenhores.tl` / `admin123` (see `/app/memory/test_credentials.md`).

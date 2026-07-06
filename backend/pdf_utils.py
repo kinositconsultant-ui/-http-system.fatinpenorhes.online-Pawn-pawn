@@ -845,6 +845,183 @@ def build_invoices_list_pdf(invoices: list[dict]) -> bytes:
     return buf.getvalue()
 
 
+def build_loan_terms_card_pdf(contract: dict, client: dict, item: dict) -> bytes:
+    """One-page bilingual "Terms of your Loan" card, personalized for a specific contract.
+
+    Printed alongside the contract at signing time. Contains the client's exact
+    loan amount + rate + a worked example computed from THIS contract's numbers,
+    so the client understands what "next month interest" will look like BEFORE
+    signing. Signature block at the bottom → binding evidence they understood.
+    """
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+    NAVY = colors.HexColor("#1B2D5C")
+    AMBER = colors.HexColor("#FEF3C7")
+    INDIGO = colors.HexColor("#EEF2FF")
+
+    loan = float(contract.get("loan_amount") or 0)
+    rate = float(contract.get("interest_rate") or 0)  # e.g. 10 (percent)
+    rate_frac = rate / 100.0
+    month1_interest = round(loan * rate_frac, 2)
+
+    # Simulate business-owner example USING THIS CONTRACT'S NUMBERS
+    # 33% partial (rounded to nearest $10) so the numbers stay clean.
+    sample_partial = max(50, round(loan * 0.33, -1))
+    sample_int_paid = min(sample_partial, month1_interest)
+    sample_princ_paid = max(0, sample_partial - month1_interest)
+    sample_new_princ = round(loan - sample_princ_paid, 2)
+    sample_next_int = round(sample_new_princ * rate_frac, 2)
+    sample_new_total = round(sample_new_princ + sample_next_int, 2)
+
+    client_name = client.get("full_name", "—") if client else "—"
+    contract_num = contract.get("contract_number") or "—"
+    contract_date = contract.get("contract_date") or "—"
+    due_date = contract.get("due_date") or "—"
+    item_name = (item.get("name") or item.get("brand") or "—") if item else "—"
+
+    story = [
+        _branded_header(s),
+        Paragraph(
+            "Termu Empréstimu · Terms of Your Loan",
+            ParagraphStyle("Title", parent=s["DocTitle"], fontSize=15,
+                           textColor=NAVY, alignment=1),
+        ),
+        Paragraph(
+            f"Kontratu · Contract <b>{contract_num}</b>",
+            ParagraphStyle("Sub", parent=s["Body"], fontSize=10,
+                           textColor=colors.HexColor("#78350F"), alignment=1),
+        ),
+        Spacer(1, 0.5 * cm),
+
+        # ─── Client + loan snapshot ───
+        Paragraph(
+            "1. Detalie ó nia empréstimu · Your Loan Details",
+            ParagraphStyle("H1", parent=s["Sub"], fontSize=11, textColor=NAVY),
+        ),
+        Spacer(1, 0.2 * cm),
+    ]
+    detail_box = Table(
+        [
+            ["Kliente · Client", client_name],
+            ["Item pauna · Pawn item", item_name],
+            ["Osan empréstimu · Loan amount (L)", f"${loan:,.2f}"],
+            ["Taxa fulan-fulan · Monthly rate (R)", f"{rate:g}%"],
+            ["Data hahú · Contract start", contract_date],
+            ["Data limit · Due date", due_date],
+            ["Juru Fulan 1 · Month 1 interest (L × R)", f"${month1_interest:,.2f}"],
+        ],
+        colWidths=[7 * cm, 9.5 * cm],
+    )
+    detail_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), INDIGO),
+        ("BACKGROUND", (1, 0), (1, -1), colors.white),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+        ("FONT", (1, 0), (1, -1), "Helvetica", 10),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#312E81")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#C7D2FE")),
+    ]))
+    story.append(detail_box)
+    story.append(Spacer(1, 0.4 * cm))
+
+    # ─── The rule (short) ───
+    story.append(Paragraph(
+        "2. Oinsá interese kalkula · How interest is calculated",
+        ParagraphStyle("H2", parent=s["Sub"], fontSize=11, textColor=NAVY),
+    ))
+    story.append(Spacer(1, 0.15 * cm))
+    story.append(Paragraph(
+        f"• <b>Fulan 1 · Month 1:</b> Juru = L × R = ${loan:,.2f} × {rate:g}% = <b>${month1_interest:,.2f}</b>.<br/>"
+        f"• <b>Fulan 2+ · Month 2 onward:</b> Juru = P × R (P = prinsipál rezidu · principal remaining).<br/>"
+        f"• <b>Pagamentu · Payment allocation (M1):</b> juru dahuluk, sobra ba prinsipál · interest first, remainder to principal.<br/>"
+        f"• <b>Sen ez pagamentu · No compound:</b> Juru fulan tuir mai kalkula husi prinsipál rezidu <b>deit</b> · next-month interest is 10% of the remaining <b>principal only</b>.",
+        ParagraphStyle("RuleBody", parent=s["Body"], fontSize=9.5,
+                       textColor=colors.HexColor("#374151"), leading=13),
+    ))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # ─── Personalized worked example ───
+    story.append(Paragraph(
+        f"3. Ezemplu ho ó nia numeru · Your worked example",
+        ParagraphStyle("H3", parent=s["Sub"], fontSize=11, textColor=NAVY),
+    ))
+    story.append(Spacer(1, 0.15 * cm))
+    example_box = Table(
+        [
+            ["Fulan 1 anchor",
+             f"L = ${loan:,.2f} · U = ${month1_interest:,.2f} · P = ${loan:,.2f}"],
+            [f"Selu partial C = ${sample_partial:,.2f}",
+             f"Interest paid = MIN({sample_partial:g}, {month1_interest:g}) = ${sample_int_paid:,.2f}\n"
+             f"Principal paid = MAX({sample_partial:g} − {month1_interest:g}, 0) = ${sample_princ_paid:,.2f}\n"
+             f"U = $0   ·   P = ${sample_new_princ:,.2f}"],
+            ["Fulan 2 anchor",
+             f"Juru = P × R = ${sample_new_princ:,.2f} × {rate:g}% = ${sample_next_int:,.2f}"],
+            ["Total sedauk selu · If unpaid",
+             f"${sample_new_princ:,.2f} + ${sample_next_int:,.2f} = ${sample_new_total:,.2f}"],
+        ],
+        colWidths=[6.5 * cm, 10 * cm],
+    )
+    example_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), AMBER),
+        ("BACKGROUND", (1, 0), (1, -1), colors.white),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+        ("FONT", (1, 0), (1, -1), "Helvetica", 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78350F")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#FCD34D")),
+    ]))
+    story.append(example_box)
+    story.append(Spacer(1, 0.35 * cm))
+    story.append(Paragraph(
+        "<i>Ezemplu ne'e uza porsentu ida (~33%) husi ó nia empréstimu nu'udar "
+        "pagamentu partial atu ilustra fórmula. Numero real depende ba kuandu ó selu. "
+        "· This example uses a ~33% partial payment for illustration only — your actual numbers depend on when you pay.</i>",
+        ParagraphStyle("Note", parent=s["Body"], fontSize=8.5,
+                       textColor=colors.HexColor("#78716C"), leading=11),
+    ))
+    story.append(Spacer(1, 0.5 * cm))
+
+    # ─── Signature block ───
+    story.append(Paragraph(
+        "4. Konfirmasaun · Acknowledgment",
+        ParagraphStyle("H4", parent=s["Sub"], fontSize=11, textColor=NAVY),
+    ))
+    story.append(Spacer(1, 0.15 * cm))
+    story.append(Paragraph(
+        "Hau <b>{name}</b> konfirma katak hau lee no komprende ona termu iha "
+        "papel ida ne'e no fórmula juru molok hau asina kontratu. · "
+        "I, <b>{name}</b>, confirm that I have read and understood the terms "
+        "and interest formula on this card BEFORE signing the loan contract.".format(name=client_name),
+        ParagraphStyle("Confirm", parent=s["Body"], fontSize=9.5,
+                       textColor=colors.HexColor("#374151"), leading=13),
+    ))
+    story.append(Spacer(1, 0.7 * cm))
+    sig_box = Table(
+        [
+            ["Asinatura Kliente · Client signature", "Asinatura Kasier · Cashier signature"],
+            ["", ""],
+            ["Data · Date: _______________", "Data · Date: _______________"],
+        ],
+        colWidths=[8.25 * cm, 8.25 * cm],
+        rowHeights=[0.6 * cm, 1.6 * cm, 0.6 * cm],
+    )
+    sig_box.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9),
+        ("FONT", (0, 2), (-1, 2), "Helvetica", 9),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.6, NAVY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(sig_box)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_rules_card_pdf() -> bytes:
     """One-page bilingual printable card explaining Rule M1 interest math.
 

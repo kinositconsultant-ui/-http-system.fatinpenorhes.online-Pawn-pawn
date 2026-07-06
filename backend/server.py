@@ -29,6 +29,7 @@ from auth import (
 )
 from pdf_utils import (
     build_contract_pdf,
+    build_loan_terms_card_pdf,
     build_receipt_pdf,
     build_report_pdf,
     build_invoice_pdf,
@@ -909,6 +910,25 @@ async def contract_pdf(cid: str, _: dict = Depends(get_current_user)):
     )
 
 
+@api.get("/contracts/{cid}/terms-card")
+async def contract_terms_card(cid: str, _: dict = Depends(get_current_user)):
+    """Personalized "Terms of your Loan" one-pager — printed alongside the
+    contract at signing so the client acknowledges the interest math IN
+    WRITING with their exact numbers filled in."""
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    client_doc = await db.clients.find_one({"id": c["client_id"]}, {"_id": 0}) or {}
+    item = await _fetch_item(c["item_type"], c["item_id"]) or {}
+    pdf_bytes = build_loan_terms_card_pdf(c, client_doc, item)
+    fname = f'{c.get("contract_number", "contract")}-terms.pdf'
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{fname}"'},
+    )
+
+
 # =====================================================================
 # Payments
 # =====================================================================
@@ -1462,12 +1482,14 @@ from routes.public import router as public_router  # noqa: E402
 from routes.whatsapp import router as whatsapp_router  # noqa: E402
 from routes.admin import router as admin_router  # noqa: E402
 from routes.auth_extra import router as auth_extra_router  # noqa: E402
+from routes.monthend import router as monthend_router  # noqa: E402
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(auth_extra_router, prefix="/api")
+app.include_router(monthend_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

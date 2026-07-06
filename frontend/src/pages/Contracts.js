@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 
 const blank = {

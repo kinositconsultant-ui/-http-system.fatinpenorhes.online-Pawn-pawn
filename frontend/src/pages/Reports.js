@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Filter as FilterIcon,
 } from "lucide-react";
+import MonthEndBundle from "../components/MonthEndBundle";
 
 // 6 report tabs from user spec — each with a distinct accent color
 const TABS = [
@@ -299,6 +300,9 @@ export default function Reports() {
           </table>
         </div>
       </Card>
+
+      {/* Month-end Compliance Bundle */}
+      <MonthEndBundle />
     </div>
   );
 }
