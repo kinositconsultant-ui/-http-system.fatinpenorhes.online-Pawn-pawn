@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pdfUrl } from "../lib/api";
+import { api, pdfUrl, API_BASE } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -141,7 +141,19 @@ export default function Settings() {
       </header>
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
-        <h2 className="font-display text-xl">{t("interest_defaults")}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-xl">{t("interest_defaults")}</h2>
+          <a
+            href={`${API_BASE}/rules/print-card`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1B2D5C] border border-[#1B2D5C]/30 hover:bg-[#1B2D5C] hover:text-white transition-colors px-3 py-1.5 rounded-md"
+            data-testid="settings-print-rules"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Print Cashier Rules Card (PDF)
+          </a>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Field label={`${t("car")} %`}>
             <Input

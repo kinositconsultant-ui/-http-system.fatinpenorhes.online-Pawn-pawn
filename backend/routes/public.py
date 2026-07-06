@@ -16,8 +16,26 @@ from pydantic import BaseModel, EmailStr
 
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
 from services import _fetch_item, get_settings_doc
+from pdf_utils import build_rules_card_pdf
 
 router = APIRouter()
+
+
+@router.get("/rules/print-card")
+async def rules_print_card():
+    """Public one-page bilingual PDF card explaining Rule M1 payment math.
+
+    Designed to be printed A4 and laminated at cashier stations. Public so the
+    manager can bookmark the URL and reprint any time — no auth required.
+    """
+    from fastapi import Response
+    pdf_bytes = build_rules_card_pdf()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="fatin-penhores-interest-rules.pdf"'},
+    )
+
 
 @router.get("/public/auction-items")
 async def public_auction_items(unlock_token: Optional[str] = Query(None)):

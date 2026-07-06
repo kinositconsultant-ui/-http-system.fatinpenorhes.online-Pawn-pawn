@@ -845,6 +845,232 @@ def build_invoices_list_pdf(invoices: list[dict]) -> bytes:
     return buf.getvalue()
 
 
+def build_rules_card_pdf() -> bytes:
+    """One-page bilingual printable card explaining Rule M1 interest math.
+
+    Designed to be printed A4 portrait and laminated at cashier stations —
+    the same $3,000 example that appears in receipts + WhatsApp reminders,
+    so staff can walk clients through the numbers without ambiguity.
+    """
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+    NAVY = colors.HexColor("#1B2D5C")
+    GOLD = colors.HexColor("#F4C86D")
+    AMBER = colors.HexColor("#FEF3C7")
+    INDIGO = colors.HexColor("#EEF2FF")
+    story = [
+        _branded_header(s),
+        Paragraph(
+            "Nia Interese-nia oinsá kalkula · How your Interest is calculated",
+            ParagraphStyle(
+                "RulesTitle", parent=s["DocTitle"], fontSize=15,
+                textColor=NAVY, alignment=1,  # center
+            ),
+        ),
+        Spacer(1, 0.15 * cm),
+        Paragraph(
+            "Rejra M1 — Feb 2026 · Referensia interna, prezerva iha ekipa nia mesa. "
+            "Reference card — keep at cashier station.",
+            ParagraphStyle(
+                "RulesSub", parent=s["Body"], fontSize=8.5,
+                textColor=colors.HexColor("#78350F"), alignment=1,
+            ),
+        ),
+        Spacer(1, 0.5 * cm),
+
+        # ────── Formula block ──────
+        Paragraph(
+            "1. Formula · Fórmula",
+            ParagraphStyle("H1", parent=s["Sub"], fontSize=11, textColor=NAVY),
+        ),
+        Spacer(1, 0.2 * cm),
+        Table(
+            [
+                ["Sinbolu · Symbol", "Signifika · Meaning"],
+                ["L", "Loan orijinál · Original loan amount"],
+                ["R", "Taxa fulan-fulan · Monthly interest rate (10% = 0.10)"],
+                ["P", "Prinsipál rezidu · Principal remaining"],
+                ["U", "Juru nebe seida selu · Unpaid interest"],
+                ["C", "Pagamentu klientenia · Customer payment"],
+            ],
+            colWidths=[3.5 * cm, 13 * cm],
+        ).setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9.5),
+            ("FONT", (0, 1), (0, -1), "Helvetica-Bold", 10),
+            ("FONT", (1, 1), (1, -1), "Helvetica", 9.5),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F5F4F1")),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D6D3D1")),
+        ])) or Spacer(1, 0),  # noqa: E711  (Table.setStyle mutates in-place)
+    ]
+    tbl_symbol = Table(
+        [
+            ["Sinbolu · Symbol", "Signifika · Meaning"],
+            ["L", "Loan orijinál · Original loan amount"],
+            ["R", "Taxa fulan-fulan · Monthly interest rate (10% = 0.10)"],
+            ["P", "Prinsipál rezidu · Principal remaining"],
+            ["U", "Juru nebe seida selu · Unpaid interest"],
+            ["C", "Pagamentu klientenia · Customer payment"],
+        ],
+        colWidths=[3.5 * cm, 13 * cm],
+    )
+    tbl_symbol.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9.5),
+        ("FONT", (0, 1), (0, -1), "Helvetica-Bold", 10),
+        ("FONT", (1, 1), (1, -1), "Helvetica", 9.5),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F5F4F1")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D6D3D1")),
+    ]))
+    story = [
+        _branded_header(s),
+        Paragraph(
+            "Interese-nia oinsá kalkula · How your Interest is calculated",
+            ParagraphStyle(
+                "RulesTitle", parent=s["DocTitle"], fontSize=15,
+                textColor=NAVY, alignment=1,
+            ),
+        ),
+        Spacer(1, 0.1 * cm),
+        Paragraph(
+            "Rejra M1 — Feb 2026 · Cashier reference card",
+            ParagraphStyle(
+                "RulesSub", parent=s["Body"], fontSize=8.5,
+                textColor=colors.HexColor("#78350F"), alignment=1,
+            ),
+        ),
+        Spacer(1, 0.5 * cm),
+        Paragraph("1. Sinbolu · Symbols",
+                  ParagraphStyle("H1", parent=s["Sub"], fontSize=11, textColor=NAVY)),
+        Spacer(1, 0.15 * cm),
+        tbl_symbol,
+        Spacer(1, 0.5 * cm),
+
+        # ────── The 3 formulas ──────
+        Paragraph("2. Fórmula Prinsipál · Core formulas",
+                  ParagraphStyle("H2", parent=s["Sub"], fontSize=11, textColor=NAVY)),
+        Spacer(1, 0.15 * cm),
+    ]
+
+    formula_box = Table(
+        [
+            ["Kada fulan · Each month anchor",
+             "Fulan 1: interest = L × R\nFulan 2+: interest = P × R"],
+            ["Pagamentu ne'e alokasaun · Payment allocation (M1)",
+             "Interest paid  = MIN(C, U)\nPrincipal paid = MAX(C − U, 0)"],
+            ["Fulan tuir mai · Next month forecast",
+             "Next interest = P × R\nNew total if unpaid = P + U + Next interest"],
+        ],
+        colWidths=[6.5 * cm, 10 * cm],
+    )
+    formula_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), INDIGO),
+        ("BACKGROUND", (1, 0), (1, -1), colors.white),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9.5),
+        ("FONT", (1, 0), (1, -1), "Courier-Bold", 10),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#312E81")),
+        ("TEXTCOLOR", (1, 0), (1, -1), NAVY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#C7D2FE")),
+    ]))
+    story.append(formula_box)
+    story.append(Spacer(1, 0.5 * cm))
+
+    # ────── Worked example ──────
+    story.append(Paragraph(
+        "3. Ezemplu · Worked example — Loan $3,000 @ 10%",
+        ParagraphStyle("H3", parent=s["Sub"], fontSize=11, textColor=NAVY),
+    ))
+    story.append(Spacer(1, 0.15 * cm))
+    example_box = Table(
+        [
+            ["Fulan 1 (Jan 10)", "L = $3,000 · U = $300 · P = $3,000"],
+            ["Jan 20 — Klientenia selu C = $1,000 (partial)",
+             "Interest paid = MIN(1000, 300) = $300\n"
+             "Principal paid = MAX(1000 − 300, 0) = $700\n"
+             "U = $0   ·   P = $3,000 − $700 = $2,300"],
+            ["Fulan 2 anchor (Feb 10)",
+             "Month interest = P × R = 2300 × 0.10 = $230"],
+            ["Fulan tuir mai · Next month forecast",
+             "Next interest = 2300 × 0.10 = $230\n"
+             "Total sedauk selu · Total if unpaid = $2,300 + $230 = $2,530"],
+        ],
+        colWidths=[7 * cm, 9.5 * cm],
+    )
+    example_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), AMBER),
+        ("BACKGROUND", (1, 0), (1, -1), colors.white),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+        ("FONT", (1, 0), (1, -1), "Helvetica", 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78350F")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#FCD34D")),
+    ]))
+    story.append(example_box)
+    story.append(Spacer(1, 0.5 * cm))
+
+    # ────── Payment types quick-ref ──────
+    story.append(Paragraph(
+        "4. Tipu Pagamentu · Payment types",
+        ParagraphStyle("H4", parent=s["Sub"], fontSize=11, textColor=NAVY),
+    ))
+    story.append(Spacer(1, 0.15 * cm))
+    types_box = Table(
+        [
+            ["Tipu · Type", "Alokasaun · Allocation"],
+            ["interest_only", "Juru dahuluk, sobra ba prinsipál · Interest first, excess to principal"],
+            ["partial (M1)", "Juru dahuluk, sobra ba prinsipál · Interest first, remainder to principal"],
+            ["full", "Juru dahuluk, sobra ba prinsipál — kontratu remata · Redeems contract"],
+            ["overdue_full", "Pena → Juru → Prinsipál · Penalty → Interest → Principal"],
+            ["overdue_interest_pen", "Pena → Juru deit · Penalty → Interest (no principal)"],
+            ["overdue_penalty_only", "Pena deit · Penalty only"],
+            ["disbursement", "Osan husik ba kliente · Loan handover — no allocation"],
+        ],
+        colWidths=[4.5 * cm, 12 * cm],
+    )
+    types_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9.5),
+        ("FONT", (0, 1), (0, -1), "Courier-Bold", 8.5),
+        ("FONT", (1, 1), (1, -1), "Helvetica", 8.5),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F5F4F1")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#D6D3D1")),
+    ]))
+    story.append(types_box)
+    story.append(Spacer(1, 0.4 * cm))
+
+    # Footer note
+    story.append(Paragraph(
+        "<b>Nota importante · Important:</b> Ami la aplika juru compound. "
+        "Se kliente la selu buat ida, fulan tuir mai nia interese kalkula "
+        "husi prinsipál rezidu <b>deit</b> (P × R). "
+        "· We do NOT compound interest. If a client pays nothing, next "
+        "month's interest is still computed on the remaining <b>principal</b> only.",
+        ParagraphStyle("Footer", parent=s["Body"], fontSize=8.5,
+                       textColor=colors.HexColor("#57534E")),
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_audit_log_pdf(rows: list[dict], filters: dict | None = None) -> bytes:
     """Branded PDF export of the audit log with active filter summary at the top."""
     s = _styles()
