@@ -23,6 +23,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import MonthEndBundle from "../components/MonthEndBundle";
+import SavedViews from "../components/SavedViews";
 
 // 6 report tabs from user spec — each with a distinct accent color
 const TABS = [
@@ -136,6 +137,25 @@ export default function Reports() {
   // Reset any active sort whenever the active tab changes (columns differ per tab)
   useEffect(() => { setSort(null); }, [tab]);
 
+  // Auto-apply a pending view handed off by the Dashboard "Pinned Views" panel.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("pending-report-view");
+      if (!raw) return;
+      sessionStorage.removeItem("pending-report-view");
+      const v = JSON.parse(raw);
+      if (!v?.tab) return;
+      setFilters({
+        month: v.filters?.month || "",
+        year: v.filters?.year || "",
+        category: v.filters?.category || "",
+        sub_category: v.filters?.sub_category || "",
+      });
+      setTab(v.tab);
+      setTimeout(() => setSort(v.sort || null), 0);
+    } catch { /* malformed sessionStorage value */ }
+  }, []);
+
   const sortedRows = useMemo(() => {
     const rows = data?.rows || [];
     if (!sort) return rows;
@@ -183,6 +203,24 @@ export default function Reports() {
     });
   };
 
+  const applySavedView = ({ tab: nextTab, filters: nextFilters, sort: nextSort }) => {
+    // Apply in a specific order so the effect that resets sort on tab-change
+    // doesn't wipe the sort we're trying to apply.
+    setFilters({
+      month: nextFilters?.month || "",
+      year: nextFilters?.year || "",
+      category: nextFilters?.category || "",
+      sub_category: nextFilters?.sub_category || "",
+    });
+    if (nextTab !== tab) {
+      setTab(nextTab);
+      // The [tab] effect clears sort — restore it on the next tick.
+      setTimeout(() => setSort(nextSort || null), 0);
+    } else {
+      setSort(nextSort || null);
+    }
+  };
+
   const resetFilters = () => setFilters({ month: "", year: "", category: "", sub_category: "" });
 
   const exportUrl = (format) => {
@@ -220,6 +258,9 @@ export default function Reports() {
           </button>
         ))}
       </div>
+
+      {/* Saved Views strip */}
+      <SavedViews tab={tab} filters={filters} sort={sort} onApply={applySavedView} />
 
       {/* Filter bar */}
       <Card className="p-4 border border-stone-200 shadow-none rounded-lg bg-stone-50 print:hidden">

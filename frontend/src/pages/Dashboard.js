@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
+import PinnedViewsPanel from "../components/PinnedViewsPanel";
 import {
   Users,
   FileText,
@@ -209,6 +210,8 @@ export default function Dashboard() {
           <Stat label={t("auction")} value={data?.auction_contracts} tone="text-[#C17767]" />
         </div>
       </Card>
+
+      <PinnedViewsPanel />
     </div>
   );
 }
