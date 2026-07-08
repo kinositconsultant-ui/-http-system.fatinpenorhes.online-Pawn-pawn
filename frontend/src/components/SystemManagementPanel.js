@@ -36,11 +36,41 @@ const fmtDate = (iso) => {
 };
 
 /** One-line row of a scheduler job. */
-function JobRow({ Icon, label, at, tone = "text-stone-500" }) {
+function JobRow({ Icon, label, at, lastRun }) {
+  const relTime = (iso) => {
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return null;
+    const diff = Date.now() - t;
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min}m ago`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  };
   return (
     <div className="flex items-center gap-2 py-1.5 text-xs">
-      <Icon className={`w-3.5 h-3.5 ${tone}`} />
-      <span className="text-stone-600 flex-1 truncate">{label}</span>
+      <Icon className="w-3.5 h-3.5 text-stone-500" />
+      <div className="flex-1 flex items-center gap-1.5 min-w-0">
+        <span className="text-stone-600 truncate">{label}</span>
+        {lastRun && (
+          <span
+            className={`text-[9px] px-1.5 py-0.5 rounded-full border tabular-nums ${
+              lastRun.status === "ok"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                : "bg-red-50 text-red-700 border-red-100"
+            }`}
+            title={`Last run ${relTime(lastRun.at)}${
+              lastRun.duration_ms ? ` · ${lastRun.duration_ms}ms` : ""
+            }${lastRun.status === "failed" && lastRun.details?.error ? ` · ${lastRun.details.error}` : ""}`}
+            data-testid={`sys-last-run-${lastRun.job_id}`}
+          >
+            {lastRun.status === "ok" ? "✓" : "✕"} {relTime(lastRun.at)}
+          </span>
+        )}
+      </div>
       <span className="text-stone-800 font-medium tabular-nums">{fmtDate(at)}</span>
     </div>
   );
@@ -126,10 +156,10 @@ export default function SystemManagementPanel() {
                 running
               </span>
             </div>
-            <JobRow Icon={Database} label="Daily backup" at={schedule.next_run_at} />
-            <JobRow Icon={Bell} label="WhatsApp reminders" at={schedule.next_reminders_run_at} />
-            <JobRow Icon={Package} label="Month-end bundle" at={schedule.next_monthend_run_at} />
-            <JobRow Icon={ShieldCheck} label="Alert digest" at={schedule.next_alert_digest_run_at} />
+            <JobRow Icon={Database} label="Daily backup" at={schedule.next_run_at} lastRun={schedule.last_runs?.daily_backup} />
+            <JobRow Icon={Bell} label="WhatsApp reminders" at={schedule.next_reminders_run_at} lastRun={schedule.last_runs?.daily_reminders} />
+            <JobRow Icon={Package} label="Month-end bundle" at={schedule.next_monthend_run_at} lastRun={schedule.last_runs?.monthend_bundle} />
+            <JobRow Icon={ShieldCheck} label="Alert digest" at={schedule.next_alert_digest_run_at} lastRun={schedule.last_runs?.alert_digest} />
             <div className="text-[10px] text-stone-400 mt-3">
               Retention: last {schedule.retention} backups
             </div>

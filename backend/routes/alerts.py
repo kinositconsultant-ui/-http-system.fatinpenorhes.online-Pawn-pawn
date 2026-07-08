@@ -223,13 +223,24 @@ async def run_alert_digest() -> dict:
 def run_alert_digest_sync() -> None:
     """Synchronous wrapper for APScheduler."""
     import asyncio
+    import time
+    from scheduler import _record_job_run_sync
+    t0 = time.time()
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_alert_digest())
+        summary = loop.run_until_complete(run_alert_digest())
         loop.close()
-    except Exception:
+        _record_job_run_sync("alert_digest", "ok", int((time.time() - t0) * 1000), {
+            "users_scanned": summary.get("users_scanned"),
+            "emails_sent": summary.get("emails_sent"),
+            "emails_mocked": summary.get("emails_mocked"),
+            "no_breach": summary.get("no_breach"),
+            "errors": len(summary.get("errors", [])),
+        })
+    except Exception as exc:
         log.exception("[scheduler] alert digest job crashed")
+        _record_job_run_sync("alert_digest", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})
 
 
 # ---------------------------------------------------------------------

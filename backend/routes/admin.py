@@ -73,10 +73,10 @@ async def generate_project_backup(admin: dict = Depends(require_admin)):
 
 @router.get("/admin/backups/schedule")
 async def backup_schedule(_: dict = Depends(require_admin)):
-    """Return APScheduler status for the daily backup job."""
+    """Return APScheduler status + last-run outcome for each scheduled job."""
     try:
-        from scheduler import next_run_info
-        return next_run_info()
+        from scheduler import next_run_info_with_last_runs
+        return await next_run_info_with_last_runs()
     except Exception as e:  # noqa: BLE001
         return {"running": False, "error": str(e)}
 

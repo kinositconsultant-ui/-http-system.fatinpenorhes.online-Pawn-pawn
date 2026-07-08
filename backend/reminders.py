@@ -306,8 +306,18 @@ async def _write_run_summary(summary: dict) -> None:
 
 
 def run_daily_reminders_sync() -> None:
-    """APScheduler hook — runs the async job in a fresh event loop."""
+    """APScheduler hook — runs the async job in a fresh event loop.
+    Records outcome to db.job_runs for the Dashboard Scheduler card."""
+    import time
+    from scheduler import _record_job_run_sync
+    t0 = time.time()
     try:
-        asyncio.run(run_daily_reminders())
-    except Exception:
+        summary = asyncio.run(run_daily_reminders())
+        _record_job_run_sync("daily_reminders", "ok", int((time.time() - t0) * 1000), {
+            "sent": (summary or {}).get("sent"),
+            "failed": (summary or {}).get("failed"),
+            "skipped_already_sent": (summary or {}).get("skipped_already_sent"),
+        })
+    except Exception as exc:
         logger.exception("[reminders] top-level failure")
+        _record_job_run_sync("daily_reminders", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})

@@ -19,7 +19,7 @@ export default function AppFooter() {
       </div>
       <div className="flex items-center gap-3 flex-wrap">
         <a
-          href="https://kinos.com.tl"
+          href="https://www.kinos.tl"
           target="_blank"
           rel="noreferrer"
           className="text-[10px] text-stone-400 tracking-wider hover:text-[#1B2D5C] transition-colors"

@@ -412,12 +412,19 @@ def run_monthend_job_sync() -> None:
     """Sync wrapper for APScheduler (starts its own event loop)."""
     import asyncio
     import logging
+    import time
+    from scheduler import _record_job_run_sync
     log = logging.getLogger(__name__)
+    t0 = time.time()
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         path = loop.run_until_complete(run_monthend_job_async())
         loop.close()
         log.info("[scheduler] month-end bundle saved: %s", path)
-    except Exception:
+        _record_job_run_sync("monthend_bundle", "ok", int((time.time() - t0) * 1000), {
+            "file": str(path) if path else None,
+        })
+    except Exception as exc:
         log.exception("[scheduler] month-end job crashed")
+        _record_job_run_sync("monthend_bundle", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})

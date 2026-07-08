@@ -1,16 +1,17 @@
 """Daily scheduled tasks for Fatin Penhores.
 
-Currently:
-- 02:00 UTC daily: run the migration backup script and prune anything older
-  than 7 days from /app/backups/ (keeping the latest 7 snapshots only).
+Each job records its outcome to the `job_runs` collection so the Dashboard
+Scheduler card can display "last run" status (ok/failed + timestamp).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import shutil
 import logging
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +26,57 @@ RETENTION = 7  # keep last 7 daily snapshots
 
 _scheduler: AsyncIOScheduler | None = None
 
+JOB_IDS = ("daily_backup", "daily_reminders", "monthend_bundle", "alert_digest")
+
+
+# ---------------------------------------------------------------------
+# Job-run recording — one collection, one row per execution
+# ---------------------------------------------------------------------
+async def _record_job_run_async(
+    job_id: str,
+    status: str,
+    duration_ms: int,
+    details: dict | None = None,
+) -> None:
+    """Persist a single job execution outcome. Best-effort; never raises."""
+    try:
+        from deps import db  # local import to avoid heavy deps at module import
+        await db.job_runs.insert_one({
+            "job_id": job_id,
+            "status": status,  # "ok" | "failed"
+            "at": datetime.now(timezone.utc).isoformat(),
+            "duration_ms": duration_ms,
+            "details": details or {},
+        })
+    except Exception:
+        logger.exception("[scheduler] could not record job run %s", job_id)
+
+
+def _record_job_run_sync(job_id: str, status: str, duration_ms: int, details: dict | None = None) -> None:
+    """Sync wrapper — opens its own event loop so plain sync jobs can call us."""
+    try:
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_record_job_run_async(job_id, status, duration_ms, details))
+        finally:
+            loop.close()
+    except Exception:
+        logger.exception("[scheduler] record_job_run sync wrapper crashed")
+
+
+async def _last_run(job_id: str) -> dict | None:
+    """Return the most recent run doc for a job, or None."""
+    try:
+        from deps import db
+        doc = await db.job_runs.find_one(
+            {"job_id": job_id}, {"_id": 0},
+            sort=[("at", -1)],
+        )
+        return doc
+    except Exception:
+        logger.exception("[scheduler] could not read last_run for %s", job_id)
+        return None
+
 
 def _stamp_from_name(name: str) -> str | None:
     m = re.search(r"(\d{8}-\d{4})", name)
@@ -32,8 +84,12 @@ def _stamp_from_name(name: str) -> str | None:
 
 
 def run_backup_and_prune() -> None:
-    """Synchronous job — run the backup script then prune old snapshots."""
+    """Synchronous job — run the backup script then prune old snapshots.
+    Records outcome to job_runs on exit."""
     logger.info("[scheduler] daily backup starting")
+    t0 = time.time()
+    status = "ok"
+    details: dict = {}
     try:
         env = os.environ.copy()
         proc = subprocess.run(
@@ -46,10 +102,15 @@ def run_backup_and_prune() -> None:
         )
         if proc.returncode != 0:
             logger.error("[scheduler] backup script failed: %s", proc.stderr[-1000:])
-            return
-        logger.info("[scheduler] backup script ok")
-    except Exception:
+            status = "failed"
+            details["error"] = proc.stderr[-500:]
+        else:
+            logger.info("[scheduler] backup script ok")
+    except Exception as exc:
         logger.exception("[scheduler] backup script crashed")
+        status = "failed"
+        details["error"] = str(exc)
+        _record_job_run_sync("daily_backup", status, int((time.time() - t0) * 1000), details)
         return
 
     # Group all generated files by their <stamp> suffix and keep the last RETENTION groups
@@ -61,7 +122,6 @@ def run_backup_and_prune() -> None:
         s = _stamp_from_name(f.name)
         if s:
             stamps.setdefault(s, []).append(f)
-    # Sort stamps descending (newest first)
     ordered = sorted(stamps.keys(), reverse=True)
     keep = set(ordered[:RETENTION])
     removed = 0
@@ -76,6 +136,9 @@ def run_backup_and_prune() -> None:
                 logger.exception("[scheduler] could not remove %s", f)
     if removed:
         logger.info("[scheduler] pruned %d old backup files (kept last %d snapshots)", removed, RETENTION)
+    details["snapshots_kept"] = len(keep)
+    details["files_pruned"] = removed
+    _record_job_run_sync("daily_backup", status, int((time.time() - t0) * 1000), details)
 
 
 def start_scheduler() -> AsyncIOScheduler:
@@ -147,3 +210,15 @@ def next_run_info() -> dict:
         "retention": RETENTION,
         "now_utc": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def next_run_info_with_last_runs() -> dict:
+    """Same as next_run_info() plus a `last_runs` dict {job_id: {status, at, ...}}."""
+    info = next_run_info()
+    last_runs: dict[str, dict] = {}
+    for jid in JOB_IDS:
+        doc = await _last_run(jid)
+        if doc:
+            last_runs[jid] = doc
+    info["last_runs"] = last_runs
+    return info
