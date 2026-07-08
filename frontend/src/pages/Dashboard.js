@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
 import PinnedViewsPanel from "../components/PinnedViewsPanel";
+import SystemManagementPanel from "../components/SystemManagementPanel";
 import {
   Users,
   FileText,
@@ -213,23 +214,7 @@ export default function Dashboard() {
 
       <PinnedViewsPanel />
 
-      {/* Branded footer strip */}
-      <footer
-        className="mt-6 pt-6 border-t border-stone-200 flex items-center justify-between flex-wrap gap-3 text-xs text-stone-500 print:hidden"
-        data-testid="dashboard-footer"
-      >
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#1B2D5C]"></span>
-          <span className="text-[10px] uppercase tracking-[0.22em] text-stone-500 font-semibold">
-            System Management &amp; Finance
-          </span>
-          <span className="text-stone-300">·</span>
-          <span className="font-display text-stone-700">Fatin Penhores</span>
-        </div>
-        <div className="text-[10px] text-stone-400 tracking-wider">
-          © {new Date().getFullYear()} Fatin Penhores Unipessoal, Lda
-        </div>
-      </footer>
+      <SystemManagementPanel />
     </div>
   );
 }

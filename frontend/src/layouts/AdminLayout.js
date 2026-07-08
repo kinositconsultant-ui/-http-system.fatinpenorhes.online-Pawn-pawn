@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
+import AppFooter from "../components/AppFooter";
 import {
   LayoutDashboard,
   Users,
@@ -191,6 +192,7 @@ export default function AdminLayout() {
       <main className="flex-1 overflow-x-hidden pt-14 md:pt-0">
         <div className="max-w-7xl mx-auto px-4 py-4 md:px-8 md:py-8">
           <Outlet />
+          <AppFooter />
         </div>
       </main>
     </div>
