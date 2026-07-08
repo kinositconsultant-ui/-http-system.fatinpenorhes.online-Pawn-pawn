@@ -555,6 +555,7 @@ class CarIn(BaseModel):
     market_value: float = 0.0
     location: str = ""  # warehouse / shop / off-site
     photo_url: str = ""
+    thumbnail_url: str = ""
     document_url: str = ""
 
 
@@ -572,6 +573,7 @@ class MotorcycleIn(BaseModel):
     market_value: float = 0.0
     location: str = ""
     photo_url: str = ""
+    thumbnail_url: str = ""
     document_url: str = ""
 
 
@@ -586,6 +588,7 @@ class ElectronicIn(BaseModel):
     market_value: float = 0.0
     location: str = ""
     photo_url: str = ""
+    thumbnail_url: str = ""
     document_url: str = ""
 
 
@@ -606,6 +609,7 @@ class PezaduIn(BaseModel):
     market_value: float = 0.0
     location: str = ""
     photo_url: str = ""
+    thumbnail_url: str = ""
     document_url: str = ""
 
 

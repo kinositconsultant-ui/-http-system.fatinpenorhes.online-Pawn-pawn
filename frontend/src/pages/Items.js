@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, API_BASE } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -102,6 +102,23 @@ function pezaduFields(t) {
   ];
 }
 
+// Resolve a value that may be an absolute URL, an /api/... path, or a bare
+// storage key, into a browser-loadable URL. Same convention as Clients.js.
+function resolveFileUrl(val) {
+  if (!val) return null;
+  if (val.startsWith("http")) return val;
+  if (val.startsWith("/api/")) return `${API_BASE.replace(/\/api$/, "")}${val}`;
+  return `${API_BASE}/files/${val}`;
+}
+
+// Prefer thumbnail_url (200x200) for list rendering, fall back to photo_url.
+function itemThumbSrc(r, { preferOriginal = false } = {}) {
+  if (!r) return null;
+  if (!preferOriginal && r.thumbnail_url) return resolveFileUrl(r.thumbnail_url);
+  if (r.photo_url) return resolveFileUrl(r.photo_url);
+  return null;
+}
+
 function emptyFor(kind) {
   if (kind === "electronic") {
     return {
@@ -115,6 +132,7 @@ function emptyFor(kind) {
       market_value: 0,
       location: "",
       photo_url: "",
+      thumbnail_url: "",
       document_url: "",
     };
   }
@@ -134,6 +152,7 @@ function emptyFor(kind) {
       market_value: 0,
       location: "",
       photo_url: "",
+      thumbnail_url: "",
       document_url: "",
     };
   }
@@ -149,6 +168,7 @@ function emptyFor(kind) {
     market_value: 0,
     location: "",
     photo_url: "",
+    thumbnail_url: "",
     document_url: "",
   };
 }
@@ -345,7 +365,15 @@ function ItemTable({ kind }) {
                   {f.upload ? (
                     <FileUpload
                       value={form[f.k] ?? ""}
-                      onChange={(v) => onChange(f.k, v)}
+                      onChange={(v) => {
+                        onChange(f.k, v);
+                        if (f.k === "photo_url" && !v) onChange("thumbnail_url", "");
+                      }}
+                      onThumbnail={
+                        f.k === "photo_url"
+                          ? (v) => onChange("thumbnail_url", v)
+                          : undefined
+                      }
                       accept={f.accept}
                       label={f.label}
                       testid={`item-${kind}-${f.k}`}
@@ -429,30 +457,34 @@ function ItemTable({ kind }) {
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
                 <td className="px-2 py-1.5 w-12">
-                  {r.photo_url ? (
-                    <a
-                      href={r.photo_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      data-testid={`item-${kind}-thumb-${r.id}`}
-                      className="block w-10 h-10 rounded-md overflow-hidden border border-stone-200 hover:ring-2 hover:ring-[#1B2D5C]/30 transition"
-                      title="Open full image"
-                    >
-                      <img
-                        src={r.photo_url}
-                        alt={r.name || r.brand || "item"}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                    </a>
-                  ) : (
-                    <div className={`w-10 h-10 rounded-md border border-dashed border-stone-300 ${theme.soft} flex items-center justify-center`}>
-                      <ImageIcon className="w-4 h-4 text-stone-400" />
-                    </div>
-                  )}
+                  {(() => {
+                    const thumbSrc = itemThumbSrc(r);
+                    const fullSrc = itemThumbSrc(r, { preferOriginal: true });
+                    return thumbSrc ? (
+                      <a
+                        href={fullSrc || thumbSrc}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-testid={`item-${kind}-thumb-${r.id}`}
+                        className="block w-10 h-10 rounded-md overflow-hidden border border-stone-200 hover:ring-2 hover:ring-[#1B2D5C]/30 transition"
+                        title="Open full image"
+                      >
+                        <img
+                          src={thumbSrc}
+                          alt={r.name || r.brand || "item"}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      </a>
+                    ) : (
+                      <div className={`w-10 h-10 rounded-md border border-dashed border-stone-300 ${theme.soft} flex items-center justify-center`}>
+                        <ImageIcon className="w-4 h-4 text-stone-400" />
+                      </div>
+                    );
+                  })()}
                 </td>
                 {fields
                   .filter((f) => !f.full && !f.tableHide)
