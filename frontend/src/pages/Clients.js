@@ -30,14 +30,23 @@ import { shortContract, shortReceipt } from "../lib/docNumbers";
 /**
  * Return a photo URL that the browser can actually GET without cookies.
  *
- * We PREFER the public per-member endpoint because `/api/files/*` requires
- * auth and browsers strip httpOnly cookies from <img src> in some cross-site
- * scenarios (e.g. deployed prod). When the client hasn't been issued a
- * Member Card yet, `member_verify_token` is absent — return null so the
- * caller renders the placeholder avatar.
+ * Priority:
+ * 1. `thumbnail_url` (fast, small) — set by /api/upload for new photos
+ * 2. Public per-member endpoint (fallback for older clients)
+ *
+ * Note: `/api/files/*` requires auth and browsers strip httpOnly cookies from
+ * <img src> in some cross-site scenarios, so we always route auth-free.
  */
-function clientPhotoSrc(client) {
+function clientPhotoSrc(client, { preferOriginal = false } = {}) {
   if (!client) return null;
+  // Fast path: use pre-generated thumbnail if present (unless caller wants full-size)
+  if (!preferOriginal && client.thumbnail_url) {
+    if (client.thumbnail_url.startsWith("http")) return client.thumbnail_url;
+    if (client.thumbnail_url.startsWith("/api/")) return `${API_BASE.replace(/\/api$/, "")}${client.thumbnail_url}`;
+    // Bare storage_path
+    return `${API_BASE}/files/${client.thumbnail_url}`;
+  }
+  // Fallback: public per-member endpoint (requires member_verify_token)
   if (client.member_verify_token) {
     return `${API_BASE}/public/verify/${client.member_verify_token}/photo`;
   }
@@ -55,6 +64,7 @@ const blank = {
   suco: "",
   aldeia: "",
   photo_url: "",
+  thumbnail_url: "",
   notes: "",
 };
 
@@ -310,7 +320,12 @@ export default function Clients() {
                 <Field label={t("photo")} full>
                   <FileUpload
                     value={form.photo_url}
-                    onChange={(v) => onChange("photo_url", v)}
+                    onChange={(v) => {
+                      onChange("photo_url", v);
+                      // Clear stale thumb — new upload sets a fresh one via onThumbnail.
+                      if (!v) onChange("thumbnail_url", "");
+                    }}
+                    onThumbnail={(v) => onChange("thumbnail_url", v)}
                     accept="image/*"
                     label={t("upload_photo")}
                     testid="client-photo"
@@ -430,7 +445,7 @@ export default function Clients() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-[160px,1fr] gap-6">
                 {(() => {
-                  const src = clientPhotoSrc(viewing);
+                  const src = clientPhotoSrc(viewing, { preferOriginal: true });
                   return src ? (
                     <img
                       alt=""

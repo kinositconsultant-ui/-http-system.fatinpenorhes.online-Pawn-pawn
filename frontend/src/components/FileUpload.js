@@ -8,10 +8,15 @@ import { toast } from "sonner";
  * FileUpload — uploads a file via /api/upload and returns the public path
  *   via onChange(value). Stores `storage_path` (e.g. fatin-penhores/uploads/.../uuid.png)
  *   The display uses /api/files/<path> with cookie auth.
+ *
+ * When the upload response includes a `thumbnail_storage_path` (auto-generated
+ * for image files), it's passed to the optional `onThumbnail(path)` prop so
+ * the parent can persist it alongside the original path.
  */
 export default function FileUpload({
   value,
   onChange,
+  onThumbnail,
   accept = "image/*",
   label = "Upload",
   testid,
@@ -28,6 +33,9 @@ export default function FileUpload({
         headers: { "Content-Type": "multipart/form-data" },
       });
       onChange(data.storage_path);
+      if (onThumbnail) {
+        onThumbnail(data.thumbnail_storage_path || "");
+      }
       toast.success("Uploaded");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Upload failed");

@@ -250,7 +250,17 @@ class ClientIn(BaseModel):
     suco: str = ""
     aldeia: str = ""
     photo_url: str = ""
+    thumbnail_url: str = ""
     notes: str = ""
+
+
+def _ensure_member_verify_token(doc: dict) -> None:
+    """If client has a photo but no member_verify_token, auto-issue one so
+    Clients.js list can render the thumbnail via the public photo endpoint
+    (fallback path when thumbnail_url is not yet set)."""
+    if doc.get("photo_url") and not doc.get("member_verify_token"):
+        import secrets as _s
+        doc["member_verify_token"] = _s.token_urlsafe(18)
 
 
 @api.get("/clients")
@@ -264,6 +274,7 @@ async def create_client(payload: ClientIn, user: dict = Depends(require_not_cash
     doc = payload.model_dump()
     doc["id"] = new_id()
     doc["created_at"] = utcnow_iso()
+    _ensure_member_verify_token(doc)
     await db.clients.insert_one(doc)
     await write_audit(user, "create", "client", doc["id"], {"full_name": doc["full_name"]})
     doc.pop("_id", None)
@@ -307,7 +318,15 @@ async def client_payment_history(cid: str, _: dict = Depends(get_current_user)):
 
 @api.put("/clients/{cid}")
 async def update_client(cid: str, payload: ClientIn, _: dict = Depends(get_current_user)):
-    res = await db.clients.update_one({"id": cid}, {"$set": payload.model_dump()})
+    existing = await db.clients.find_one({"id": cid}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Client not found")
+    update = payload.model_dump()
+    # Auto-issue member_verify_token if photo is uploaded and no token yet
+    if update.get("photo_url") and not existing.get("member_verify_token"):
+        import secrets as _s
+        update["member_verify_token"] = _s.token_urlsafe(18)
+    res = await db.clients.update_one({"id": cid}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
     c = await db.clients.find_one({"id": cid}, {"_id": 0})
@@ -1409,6 +1428,31 @@ ALLOWED_MIME = {
     "application/pdf", "application/octet-stream",
 }
 
+# Thumbnail generation defaults — used by /api/upload for image files.
+THUMB_MAX_SIZE = (200, 200)
+THUMB_QUALITY = 82
+
+
+def _generate_thumbnail(data: bytes) -> Optional[bytes]:
+    """Return a JPEG thumbnail (≤200x200, quality 82) of the given image bytes.
+
+    Returns None if PIL cannot decode the input (e.g., non-image / corrupt) so
+    the caller can just skip the thumbnail step.
+    """
+    try:
+        from PIL import Image  # type: ignore
+        im = Image.open(BytesIO(data))
+        im.load()
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        im.thumbnail(THUMB_MAX_SIZE, Image.LANCZOS)
+        out = BytesIO()
+        im.save(out, format="JPEG", quality=THUMB_QUALITY, optimize=True)
+        return out.getvalue()
+    except Exception:
+        logger.exception("[upload] thumbnail generation failed")
+        return None
+
 
 @api.post("/upload")
 async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
@@ -1438,6 +1482,31 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(get_cur
     record.pop("_id", None)
     # Frontend-friendly download URL (relative path)
     record["url"] = f"/api/files/{result['path']}"
+
+    # ── Thumbnail (best-effort, only for images) ──────────────────────
+    is_image = (file.content_type or "").startswith("image/")
+    if is_image:
+        thumb_bytes = _generate_thumbnail(data)
+        if thumb_bytes:
+            thumb_path = f"{app_name}/uploads/{user['id']}/thumbs/{new_id()}.jpg"
+            try:
+                objstore.put_object(thumb_path, thumb_bytes, "image/jpeg")
+                thumb_record = {
+                    "id": new_id(),
+                    "storage_path": thumb_path,
+                    "original_filename": (file.filename or "photo") + ".thumb.jpg",
+                    "content_type": "image/jpeg",
+                    "size": len(thumb_bytes),
+                    "is_deleted": False,
+                    "uploaded_by": user["id"],
+                    "created_at": utcnow_iso(),
+                    "is_thumbnail_of": result["path"],
+                }
+                await db.files.insert_one(thumb_record)
+                record["thumbnail_storage_path"] = thumb_path
+                record["thumbnail_url"] = f"/api/files/{thumb_path}"
+            except Exception:
+                logger.exception("[upload] failed to persist thumbnail (non-fatal)")
     return record
 
 
