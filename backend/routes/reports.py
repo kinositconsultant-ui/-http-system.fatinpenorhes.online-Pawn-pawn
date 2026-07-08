@@ -96,7 +96,12 @@ async def _report_active_contracts(filters: dict) -> dict:
 
 
 async def _report_payments(filters: dict) -> dict:
-    rows = await db.payments.find({}, {"_id": 0}).sort("date", -1).to_list(5000)
+    # Exclude disbursements — those are money going OUT to clients (loan issued),
+    # not payment activity coming IN. The Payments report should only reflect
+    # actual client payment collection.
+    rows = await db.payments.find(
+        {"type": {"$ne": "disbursement"}}, {"_id": 0},
+    ).sort("date", -1).to_list(5000)
     rows = await _enrich_payments_with_contract(rows)
     rows = _apply_date_filter(rows, "date", filters.get("month"), filters.get("year"))
     rows = _apply_item_filter(rows, filters.get("category"), filters.get("sub_category"))
@@ -236,7 +241,9 @@ async def _report_financial(filters: dict) -> dict:
     contracts_filtered = _apply_date_filter(contracts, "contract_date", filters.get("month"), filters.get("year"))
     contracts_filtered = _apply_item_filter(contracts_filtered, filters.get("category"), filters.get("sub_category"))
 
-    payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
+    payments = await db.payments.find(
+        {"type": {"$ne": "disbursement"}}, {"_id": 0},
+    ).to_list(5000)
     payments = await _enrich_payments_with_contract(payments)
     payments_filtered = _apply_date_filter(payments, "date", filters.get("month"), filters.get("year"))
     payments_filtered = _apply_item_filter(payments_filtered, filters.get("category"), filters.get("sub_category"))
