@@ -604,6 +604,12 @@ _MONEY_COLS = {
     "total_loan", "total_payments", "interest_received", "total_penalty",
     "total_outstanding", "total_interest", "total_amount", "profit",
     "interest_expected", "paid",
+    # Nov-2026 normalized fields
+    "original_loan_amount", "current_principal", "principal_paid",
+    "interest_charged", "interest_paid", "interest_outstanding",
+    "penalty_charged", "penalty_paid", "penalty_outstanding",
+    "old_penalty", "new_penalty", "penalty_delta",
+    "total_amount_due", "total_payments_received",
 }
 _NUMERIC_COLS = {"interest_rate", "manufacture_year"}
 _DATE_COLS = {"date", "due_date", "contract_date", "sold_at", "created_at", "start_date"}

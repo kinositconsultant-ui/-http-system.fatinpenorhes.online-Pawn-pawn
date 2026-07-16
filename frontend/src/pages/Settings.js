@@ -153,6 +153,17 @@ export default function Settings() {
             <Download className="w-3.5 h-3.5" />
             Print Cashier Rules Card (PDF)
           </a>
+          <a
+            href={`${API_BASE}/migration-audit/penalty/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 border border-amber-300 hover:bg-amber-600 hover:text-white transition-colors px-3 py-1.5 rounded-md"
+            data-testid="settings-migration-audit-pdf"
+            title="Nov-2026 spec: per-contract old vs new penalty comparison"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Penalty Migration Audit (PDF)
+          </a>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Field label={`${t("car")} %`}>
