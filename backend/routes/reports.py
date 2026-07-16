@@ -75,7 +75,9 @@ async def _report_active_contracts(filters: dict) -> dict:
         parts = [r.get("item_brand") or "", r.get("item_model") or ""]
         r["item"] = " ".join([p for p in parts if p]) or "—"
     total_contracts = len(rows)
-    total_loan = sum(float(r.get("loan_amount", 0) or 0) for r in rows)
+    # Nov-2026 spec: "Active Contracts — Total Loan = SUM of Current Principal"
+    # so the KPI shrinks as clients pay down principal (correct reality).
+    total_loan = sum(float(r.get("principal_remaining", r.get("loan_amount", 0)) or 0) for r in rows)
     tax_accumulate = sum(float(r.get("interest_amount", 0) or 0) for r in rows)
     near = today + timedelta(days=7)
     almost_expired = sum(
@@ -114,14 +116,15 @@ async def _report_payments(filters: dict) -> dict:
         amt = float(r.get("amount", 0) or 0)
         if r.get("type") == "interest_only":
             interest_received += amt
-    # Total penalty: sum of penalty on overdue contracts narrowed by the same filters
-    overdue_contracts = await db.contracts.find({"status": "overdue"}, {"_id": 0}).to_list(5000)
-    for c in overdue_contracts:
+    # Total penalty: sum of penalty ACTUALLY PAID (Nov-2026 spec: profit only
+    # recognizes penalty when it hits cash — unpaid penalty is Outstanding).
+    all_contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
+    for c in all_contracts:
         await _recompute_contract_status(c)
-    overdue_contracts = await _enrich_contracts_with_item_meta(overdue_contracts)
-    overdue_contracts = _apply_date_filter(overdue_contracts, "due_date", filters.get("month"), filters.get("year"))
-    overdue_contracts = _apply_item_filter(overdue_contracts, filters.get("category"), filters.get("sub_category"))
-    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in overdue_contracts)
+    all_contracts = await _enrich_contracts_with_item_meta(all_contracts)
+    scope = _apply_date_filter(all_contracts, "contract_date", filters.get("month"), filters.get("year"))
+    scope = _apply_item_filter(scope, filters.get("category"), filters.get("sub_category"))
+    total_penalty = sum(float(c.get("penalty_paid", 0) or 0) for c in scope)
     return {
         "kpis": {
             "total_transactions": total_transactions,
@@ -248,21 +251,26 @@ async def _report_financial(filters: dict) -> dict:
     payments_filtered = _apply_date_filter(payments, "date", filters.get("month"), filters.get("year"))
     payments_filtered = _apply_item_filter(payments_filtered, filters.get("category"), filters.get("sub_category"))
 
-    total_loan = sum(float(c.get("loan_amount", 0) or 0) for c in contracts_filtered)
+    total_loan = sum(float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0) for c in contracts_filtered)
     total_payment = sum(float(p.get("amount", 0) or 0) for p in payments_filtered)
     interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts_filtered)
-    total_penalty = sum(float(c.get("penalty", 0) or 0) for c in contracts_filtered)
-    profit = round(interest_received + total_penalty, 2)
+    # ── Nov-2026 spec: Profit uses penalty PAID (not remaining/charged). ──
+    # Penalty is only realized income once the client actually pays it.
+    penalty_paid = sum(float(c.get("penalty_paid", 0) or 0) for c in contracts_filtered)
+    penalty_outstanding = sum(float(c.get("penalty_outstanding", c.get("penalty", 0)) or 0) for c in contracts_filtered)
+    profit = round(interest_received + penalty_paid, 2)
 
     # Table rows: 1 line summary per contract
     rows = [
         {
             "contract_number": c.get("contract_number"),
-            "loan_amount": float(c.get("loan_amount", 0) or 0),
+            "original_loan_amount": float(c.get("original_loan_amount", c.get("loan_amount", 0)) or 0),
+            "loan_amount": float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0),
             "paid_amount": float(c.get("paid_amount", 0) or 0),
             "interest_received": float(c.get("interest_paid", 0) or 0),
-            "penalty": float(c.get("penalty", 0) or 0),
-            "profit": round(float(c.get("interest_paid", 0) or 0) + float(c.get("penalty", 0) or 0), 2),
+            "penalty_paid": float(c.get("penalty_paid", 0) or 0),
+            "penalty_outstanding": float(c.get("penalty_outstanding", c.get("penalty", 0)) or 0),
+            "profit": round(float(c.get("interest_paid", 0) or 0) + float(c.get("penalty_paid", 0) or 0), 2),
             "status": c.get("status"),
             "contract_date": c.get("contract_date"),
         }
@@ -274,10 +282,11 @@ async def _report_financial(filters: dict) -> dict:
             "total_payment": round(total_payment, 2),
             "interest_received": round(interest_received, 2),
             "profit": profit,
-            "total_penalty": round(total_penalty, 2),
+            "penalty_paid": round(penalty_paid, 2),
+            "penalty_outstanding": round(penalty_outstanding, 2),
         },
-        "columns": ["contract_number", "contract_date", "loan_amount", "paid_amount",
-                    "interest_received", "penalty", "profit", "status"],
+        "columns": ["contract_number", "contract_date", "original_loan_amount", "loan_amount", "paid_amount",
+                    "interest_received", "penalty_paid", "penalty_outstanding", "profit", "status"],
         "rows": rows,
     }
 

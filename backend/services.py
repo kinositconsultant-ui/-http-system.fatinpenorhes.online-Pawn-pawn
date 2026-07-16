@@ -144,7 +144,11 @@ async def _recompute_contract_status(contract: dict) -> dict:
     """
     payments = await db.payments.find({"contract_id": contract["id"]}, {"_id": 0}).to_list(500)
     loan = float(contract["loan_amount"])
+    # Preserve original loan amount as the historical/immutable value used for
+    # audit reports, PDF terms cards and receipts. Never mutated.
+    original_loan_amount = float(contract.get("original_loan_amount") or loan)
     rate = float(contract["interest_rate"])
+    penalty_rate = float(contract.get("penalty_rate", 10.0))  # 10% default
     # Legacy contracts default to M2 (their historical rule); new contracts
     # explicitly set "M1" at creation time.
     interest_rule = contract.get("interest_rule", "M2")
@@ -161,7 +165,14 @@ async def _recompute_contract_status(contract: dict) -> dict:
     months_elapsed = _months_billed(contract_start, effective_end)
 
     is_overdue = contract.get("due_date", today_iso) < today_iso
-    full_penalty = round(loan * 0.10, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
+    # Provisional penalty cap for the payment walk — uses ORIGINAL loan × rate
+    # so a client can allocate up to the original max. After the walk we
+    # recompute the true `full_penalty` based on current principal (which may
+    # be lower after partial principal payments), and derive
+    # `penalty_outstanding` from that. `penalty_paid` is never clamped down
+    # because the client actually did pay that amount.
+    penalty_walk_cap = round(loan * penalty_rate / 100.0, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
+    full_penalty = penalty_walk_cap
 
     # ---- Event-driven chronological walk ----
     # For correctness under both M1 and M2, we merge month-anchor events with
@@ -276,9 +287,20 @@ async def _recompute_contract_status(contract: dict) -> dict:
 
     principal_paid = min(principal_paid, loan)
     interest_paid = min(interest_paid, interest)
-    penalty_paid = min(penalty_paid, full_penalty)
     principal_remaining_rounded = round(max(0.0, loan - principal_paid), 2)
     interest_remaining = round(max(0.0, interest - interest_paid), 2)
+
+    # ── Penalty (Article 8) — now based on CURRENT principal, not original ──
+    # Client's Nov-2026 spec: "Penalty = Current Loan Amount × Penalty Rate"
+    # so when the client has paid down some principal, the penalty scales down
+    # proportionally. Only applied to overdue contracts that are not yet at
+    # auction status.
+    if is_overdue and contract.get("status") != "auction":
+        full_penalty = round(principal_remaining_rounded * penalty_rate / 100.0, 2)
+    else:
+        full_penalty = 0.0
+    # Do NOT clamp penalty_paid — the client actually paid that amount even if
+    # the true owed penalty is now lower because principal was paid down.
     penalty_remaining = round(max(0.0, full_penalty - penalty_paid), 2)
 
     redeemed = (principal_remaining_rounded + interest_remaining + penalty_remaining) <= 0.01
@@ -328,6 +350,20 @@ async def _recompute_contract_status(contract: dict) -> dict:
     contract["total_due"] = total_due
     contract["remaining_balance"] = total_due
     contract["interest_rule"] = interest_rule  # so UI/PDF can label it
+
+    # ── Normalized "charged / paid / outstanding" fields (Nov-2026 spec) ──
+    # These are the authoritative fields Reports/Dashboard should use. The
+    # legacy fields above are kept for backward compatibility with PDFs & UI.
+    contract["original_loan_amount"] = round(original_loan_amount, 2)
+    contract["current_principal"] = principal_remaining_rounded
+    contract["interest_charged"] = interest
+    contract["interest_outstanding"] = interest_remaining
+    contract["penalty_charged"] = round(full_penalty, 2)
+    contract["penalty_outstanding"] = penalty_remaining
+    contract["total_amount_due"] = total_due
+    contract["total_payments_received"] = round(
+        principal_paid + interest_paid + penalty_paid, 2
+    )
     return contract
 
 

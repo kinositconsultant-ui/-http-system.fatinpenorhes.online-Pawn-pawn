@@ -44,7 +44,7 @@ const TABS = [
     kpis: ["total_items", "total_amount", "active_items", "overdue_items"] },
   { key: "financial", labelKey: "financial",
     color: "#0F766E", soft: "bg-teal-100 text-teal-800",
-    kpis: ["total_loan", "total_payment", "interest_received", "profit"] },
+    kpis: ["total_loan", "total_payment", "interest_received", "profit", "penalty_paid", "penalty_outstanding"] },
   { key: "treasury", labelKey: "finance",
     color: "#8F9779", soft: "bg-[#8F9779]/15 text-[#5C6753]",
     kpis: ["capital_received", "capital_outstanding", "expenses_total", "expense_categories"] },
@@ -56,6 +56,13 @@ const MONEY_KEYS = new Set([
   "total_amount", "total_payment", "profit", "loan_amount", "amount",
   "principal_remaining", "interest_remaining", "penalty", "market_value",
   "paid_amount", "starting_price", "sold_price", "interest_amount",
+  // Nov-2026 spec: normalized fields
+  "original_loan_amount", "current_principal", "principal_paid",
+  "interest_charged", "interest_paid", "interest_outstanding",
+  "penalty_charged", "penalty_paid", "penalty_outstanding",
+  "total_amount_due", "total_payments_received",
+  // Auction split
+  "auction_capital_recovered", "auction_realized_profit", "auction_realized_loss",
 ]);
 
 const fmtMoney = (v) => {

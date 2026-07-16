@@ -1,23 +1,26 @@
-# Collections in test_database  (snapshot: 20260705-1834 UTC)
-# Total: 20 collections, 5589 documents
+# Collections in test_database  (snapshot: 20260716-1358 UTC)
+# Total: 23 collections, 6318 documents
 
-auctions                             59 documents
-audit_log                          3148 documents
-cars                                455 documents
-clients                             432 documents
-contact_messages                     18 documents
-contracts                           375 documents
-electronics                          51 documents
-expenses                             29 documents
-files                                29 documents
+alert_digests                         5 documents
+auctions                             66 documents
+audit_log                          3548 documents
+cars                                509 documents
+clients                             502 documents
+contact_messages                     19 documents
+contracts                           418 documents
+electronics                          58 documents
+expenses                             33 documents
+files                                81 documents
 funding_repayments                    0 documents
 funding_sources                       2 documents
-invoices                             39 documents
-motorcycles                          37 documents
-password_reset_tokens                 7 documents
-payments                            372 documents
+invoices                             43 documents
+job_runs                              0 documents
+motorcycles                          42 documents
+password_reset_tokens                 8 documents
+payments                            427 documents
 pezadus                               2 documents
-reminder_log                         27 documents
+reminder_log                         30 documents
+report_views                          0 documents
 settings                              1 documents
-users                                93 documents
-whatsapp_log                        413 documents
+users                               100 documents
+whatsapp_log                        424 documents

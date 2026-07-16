@@ -1172,11 +1172,26 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
     interest_fee = min(interest_fee, sold_price)  # cannot exceed sold price
     cash_portion = round(sold_price - interest_fee, 2)
 
+    # ── Nov-2026 spec: capital vs profit vs loss split ─────────────────
+    # The client's original loan amount is the "capital" that must be
+    # recovered first. Anything above that is realized profit; anything below
+    # is realized loss (both go on the finance report separately).
+    original_loan_amount = float(
+        contract.get("original_loan_amount") or contract.get("loan_amount") or 0
+    )
+    capital_recovered = round(min(sold_price, original_loan_amount), 2)
+    auction_profit = round(max(0.0, sold_price - original_loan_amount), 2)
+    realized_loss = round(max(0.0, original_loan_amount - sold_price), 2)
+
     update = {
         "status": "sold",
         "sold_price": sold_price,
         "interest_fee": interest_fee,        # NEW — separated for finance
         "cash_portion": cash_portion,        # NEW — sold_price - interest_fee
+        "original_loan_amount": round(original_loan_amount, 2),
+        "capital_recovered": capital_recovered,
+        "auction_profit": auction_profit,
+        "realized_loss": realized_loss,
         "buyer_name": payload.buyer_name,
         "buyer_phone": payload.buyer_phone,
         "buyer_email": payload.buyer_email,

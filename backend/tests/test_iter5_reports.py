@@ -178,11 +178,11 @@ class TestReportsV2:
         r = self._g(admin, "financial")
         assert r.status_code == 200
         d = r.json()
-        for k in ["total_loan", "total_payment", "interest_received", "profit", "total_penalty"]:
+        for k in ["total_loan", "total_payment", "interest_received", "profit", "penalty_paid", "penalty_outstanding"]:
             assert k in d["kpis"]
-        # profit = interest_received + total_penalty
+        # Nov-2026 spec: profit = interest_received + penalty_paid (never adds unpaid penalty)
         assert abs(
-            d["kpis"]["profit"] - round(d["kpis"]["interest_received"] + d["kpis"]["total_penalty"], 2)
+            d["kpis"]["profit"] - round(d["kpis"]["interest_received"] + d["kpis"]["penalty_paid"], 2)
         ) < 0.01
 
     def test_unknown_report_400(self, admin):

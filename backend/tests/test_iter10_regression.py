@@ -363,11 +363,21 @@ class TestAuctionSold:
         fs = admin_session.get(f"{API}/finance/summary").json()
         assert "auction_interest_profit" in fs, "Finance summary missing 'auction_interest_profit'"
         assert "auction_tax_collected" in fs, "Finance summary missing 'auction_tax_collected'"
+        # Nov-2026 auction split: capital vs realized profit
+        assert "auction_capital_recovered" in fs
+        assert "auction_realized_profit" in fs
+        assert "auction_realized_loss" in fs
         # Deltas
         assert fs["auction_interest_profit"] - fs_before.get("auction_interest_profit", 0) >= 200 - 0.01
         assert fs["auction_sales"] - fs_before.get("auction_sales", 0) >= 1000 - 0.01
         assert fs["auction_tax_collected"] - fs_before.get("auction_tax_collected", 0) >= 100 - 0.01
-        assert fs["net_profit"] - fs_before.get("net_profit", 0) >= 200 - 5  # ~200 net contribution
+        # Sold at exactly the original loan amount → capital fully recovered,
+        # no realized profit, no realized loss. Net profit for THIS sale is 0
+        # (interest_fee is now just an internal accounting split, not profit).
+        cap_delta = fs["auction_capital_recovered"] - fs_before.get("auction_capital_recovered", 0)
+        assert cap_delta >= 1000 - 0.01, f"capital_recovered delta should be ~$1000, got {cap_delta}"
+        profit_delta = fs["auction_realized_profit"] - fs_before.get("auction_realized_profit", 0)
+        assert profit_delta < 0.01, f"realized_profit delta should be 0 (sold at original), got {profit_delta}"
 
         # Invoice generated — find it
         invs = admin_session.get(f"{API}/invoices").json()

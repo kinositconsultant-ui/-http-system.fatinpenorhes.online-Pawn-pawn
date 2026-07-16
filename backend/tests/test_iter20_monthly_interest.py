@@ -223,10 +223,13 @@ class TestIdempotencyAndPenalty:
         assert overdue, "no overdue contracts in dataset"
         wrong = []
         for c in overdue:
-            expected = round(float(c["loan_amount"]) * 0.10, 2)
+            # Nov-2026 spec: penalty is based on CURRENT principal (loan minus
+            # any principal already paid), not the original loan amount.
+            base = float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0)
+            expected = round(base * 0.10, 2)
             if abs(float(c.get("penalty_full", 0)) - expected) > 0.01:
-                wrong.append((c["contract_number"], c.get("penalty_full"), expected))
-        assert not wrong, f"penalty_full != 10% loan for overdue: {wrong[:5]}"
+                wrong.append((c["contract_number"], c.get("penalty_full"), expected, base))
+        assert not wrong, f"penalty_full != 10% current principal for overdue: {wrong[:5]}"
 
 
 # ---------- PDF verification ----------

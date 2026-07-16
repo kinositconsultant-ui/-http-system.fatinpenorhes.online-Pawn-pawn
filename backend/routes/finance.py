@@ -238,6 +238,21 @@ async def finance_summary(
     auction_sales = sum(float(a.get("sold_price", 0) or 0) for a in auctions)
     # Auction interest profit (separated from cash recovery — counted as profit only)
     auction_interest_profit = sum(float(a.get("interest_fee", 0) or 0) for a in auctions)
+    # Nov-2026 auction split (falls back to computing from sold_price when
+    # legacy auction rows don't have the new fields).
+    auction_capital_recovered = 0.0
+    auction_realized_profit = 0.0
+    auction_realized_loss = 0.0
+    for a in auctions:
+        sp = float(a.get("sold_price", 0) or 0)
+        original = float(a.get("original_loan_amount", 0) or 0)
+        if not original:
+            # Legacy row — best-effort: fall back to sold_price as capital
+            auction_capital_recovered += sp
+            continue
+        auction_capital_recovered += float(a.get("capital_recovered", min(sp, original)) or 0)
+        auction_realized_profit += float(a.get("auction_profit", max(0.0, sp - original)) or 0)
+        auction_realized_loss += float(a.get("realized_loss", max(0.0, original - sp)) or 0)
     # Invoice tax collected on sold auctions
     invoices_for_tax = await db.invoices.find({}, {"_id": 0}).to_list(5000)
     auction_tax_collected = sum(float(i.get("tax_amount", 0) or 0) for i in invoices_for_tax)
@@ -265,8 +280,11 @@ async def finance_summary(
         await _recompute_contract_status(c)
     interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts)
     total_penalty = sum(float(c.get("penalty_paid", 0) or 0) for c in contracts)
-    # Net profit ALSO includes interest portion of auction proceeds (interest_fee)
-    gross_profit = interest_received + total_penalty + auction_interest_profit
+    # Nov-2026 spec: Realized profit = interest paid + penalty PAID + auction
+    # profit (sold_price above original loan) − realized auction loss. Note
+    # auction_interest_profit was the legacy pre-split concept and is now
+    # subsumed by auction_realized_profit.
+    gross_profit = interest_received + total_penalty + auction_realized_profit - auction_realized_loss
     net_profit = gross_profit - expenses_total
 
     # Invoices
@@ -283,6 +301,9 @@ async def finance_summary(
         "client_payments": round(client_payments, 2),
         "auction_sales": round(auction_sales, 2),
         "auction_interest_profit": round(auction_interest_profit, 2),
+        "auction_capital_recovered": round(auction_capital_recovered, 2),
+        "auction_realized_profit": round(auction_realized_profit, 2),
+        "auction_realized_loss": round(auction_realized_loss, 2),
         "auction_tax_collected": round(auction_tax_collected, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
