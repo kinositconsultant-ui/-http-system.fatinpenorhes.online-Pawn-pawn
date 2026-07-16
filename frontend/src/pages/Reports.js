@@ -26,6 +26,14 @@ import MonthEndBundle from "../components/MonthEndBundle";
 import SavedViews from "../components/SavedViews";
 
 // 6 report tabs from user spec — each with a distinct accent color
+// Row-count thresholds that turn a tab badge red + pulse when exceeded.
+// These are the counts at which the number becomes a "call to action" for the
+// owner. Only "overdue" is watched by default — auction ready is expected
+// to stay elevated so we don't alert on it.
+const TAB_ALERT_THRESHOLDS = {
+  overdue: 15,
+};
+
 const TABS = [
   { key: "active-contracts", labelKey: "active_contract",
     color: "#1B2D5C", soft: "bg-[#1B2D5C]/10 text-[#1B2D5C]",
@@ -263,6 +271,8 @@ export default function Reports() {
         {TABS.map((tb) => {
           const count = tabCounts[tb.key];
           const isActive = tab === tb.key;
+          const threshold = TAB_ALERT_THRESHOLDS[tb.key];
+          const alerting = threshold != null && count != null && count > threshold;
           return (
             <button
               key={tb.key}
@@ -271,17 +281,22 @@ export default function Reports() {
               style={isActive ? { backgroundColor: tb.color, color: "white" } : undefined}
               className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition shadow-sm ${
                 isActive ? "shadow-md" : `${tb.soft} hover:opacity-90`
-              }`}
+              } ${alerting && !isActive ? "ring-2 ring-red-300 ring-offset-1" : ""}`}
             >
               <span>{t(tb.labelKey)}</span>
               {count != null && (
                 <span
                   className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full ${
-                    isActive
-                      ? "bg-white/25 text-white"
-                      : "bg-white/70 text-stone-700"
+                    alerting
+                      ? isActive
+                        ? "bg-red-100 text-red-700 animate-pulse"
+                        : "bg-red-600 text-white animate-pulse"
+                      : isActive
+                        ? "bg-white/25 text-white"
+                        : "bg-white/70 text-stone-700"
                   }`}
                   data-testid={`report-tab-count-${tb.key}`}
+                  title={alerting ? `Alert: ${count} exceeds threshold ${threshold}` : undefined}
                 >
                   {count.toLocaleString()}
                 </span>
