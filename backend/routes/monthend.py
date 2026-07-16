@@ -37,6 +37,7 @@ from pdf_utils import (
     build_finance_summary_pdf,
     build_expenses_pdf,
     build_audit_log_pdf,
+    build_report_pdf,
 )
 
 router = APIRouter()
@@ -221,21 +222,24 @@ Period: {year}-{month:02d}
 Generated: {stamp}
 
 Contents (EN):
-  1. finance_summary_{year}-{month:02d}.pdf   Executive P&L, capital, cash-on-hand
-  2. expenses_{year}-{month:02d}.pdf          Operating expenses (grouped by category)
-  3. audit_log_{year}-{month:02d}.pdf         User & system activity for the month
-  4. treasury_{year}-{month:02d}.xlsx         Excel workbook: Capital / Expenses / Totals
+  1. finance_summary_{year}-{month:02d}.pdf              Executive P&L, capital, cash-on-hand
+  2. expenses_{year}-{month:02d}.pdf                     Operating expenses (grouped by category)
+  3. audit_log_{year}-{month:02d}.pdf                    User & system activity for the month
+  4. treasury_{year}-{month:02d}.xlsx                    Excel workbook: Capital / Expenses / Totals
+  5. penalty_migration_audit_{year}-{month:02d}.pdf      Nov-2026 spec: old vs new penalty per contract
 
 Konteúdu (Tetum):
-  1. finance_summary_{year}-{month:02d}.pdf   Rezumu finanseiru mensal
-  2. expenses_{year}-{month:02d}.pdf          Gastus operasionál (agrupadu por kategoria)
-  3. audit_log_{year}-{month:02d}.pdf         Rejistu atividade user no sistema
-  4. treasury_{year}-{month:02d}.xlsx         Livru Excel: Kapitál / Gastus / Totál
+  1. finance_summary_{year}-{month:02d}.pdf              Rezumu finanseiru mensal
+  2. expenses_{year}-{month:02d}.pdf                     Gastus operasionál (agrupadu por kategoria)
+  3. audit_log_{year}-{month:02d}.pdf                    Rejistu atividade user no sistema
+  4. treasury_{year}-{month:02d}.xlsx                    Livru Excel: Kapitál / Gastus / Totál
+  5. penalty_migration_audit_{year}-{month:02d}.pdf      Espesifikasaun Nov-2026: multa tuan vs foun kada kontratu
 
 Row counts:
-  - expenses_in_period: {counts.get('expenses', 0)}
-  - audit_events:       {counts.get('audit', 0)}
-  - capital_sources:    {counts.get('sources', 0)}
+  - expenses_in_period:  {counts.get('expenses', 0)}
+  - audit_events:        {counts.get('audit', 0)}
+  - capital_sources:     {counts.get('sources', 0)}
+  - penalty_migrations:  {counts.get('penalty_audit', 0)}
 
 This bundle is intended for auditors / tax officers / owner review.
 Keep it archived for at least 5 years per Timor-Leste business record practice.
@@ -279,9 +283,33 @@ async def build_monthend_bundle_bytes(year: int, month: int) -> tuple[bytes, dic
     # 4) Treasury XLSX
     treasury_xlsx = await _build_treasury_xlsx(year, month)
 
+    # 5) Nov-2026 Penalty Migration Audit (system-wide, not period-scoped —
+    # the delta remains until each affected contract is redeemed/reduced to 0)
+    from routes.migration_audit import _build_penalty_audit_rows
+    audit_rows_pm = await _build_penalty_audit_rows()
+    penalty_audit_pdf = build_report_pdf("Nov-2026 Penalty Migration Audit", {
+        "kpis": {
+            "contracts_affected": len(audit_rows_pm),
+            "old_total_penalty": round(sum(r["old_penalty"] for r in audit_rows_pm), 2),
+            "new_total_penalty": round(sum(r["new_penalty"] for r in audit_rows_pm), 2),
+            "penalty_delta_total": round(sum(r["penalty_delta"] for r in audit_rows_pm), 2),
+        },
+        "columns": [
+            "contract_number", "contract_date", "status",
+            "original_loan_amount", "current_principal", "principal_paid",
+            "old_penalty", "new_penalty", "penalty_delta",
+        ],
+        "rows": audit_rows_pm,
+    })
+
     # capital sources count
     sources_count = await db.funding_sources.count_documents({})
-    counts = {"expenses": len(expenses), "audit": len(audit_rows), "sources": sources_count}
+    counts = {
+        "expenses": len(expenses),
+        "audit": len(audit_rows),
+        "sources": sources_count,
+        "penalty_audit": len(audit_rows_pm),
+    }
 
     stamp = f"{year:04d}-{month:02d}"
     buf = BytesIO()
@@ -290,6 +318,7 @@ async def build_monthend_bundle_bytes(year: int, month: int) -> tuple[bytes, dic
         zf.writestr(f"expenses_{stamp}.pdf", expenses_pdf)
         zf.writestr(f"audit_log_{stamp}.pdf", audit_pdf)
         zf.writestr(f"treasury_{stamp}.xlsx", treasury_xlsx)
+        zf.writestr(f"penalty_migration_audit_{stamp}.pdf", penalty_audit_pdf)
         zf.writestr("README.txt", _readme_bytes(year, month, counts))
     return buf.getvalue(), counts
 

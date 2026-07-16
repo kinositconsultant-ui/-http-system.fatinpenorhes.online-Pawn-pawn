@@ -47,12 +47,14 @@ def test_generate_bundle_returns_zip(api_sess):
     assert "expenses_2025-11.pdf" in names
     assert "audit_log_2025-11.pdf" in names
     assert "treasury_2025-11.xlsx" in names
+    assert "penalty_migration_audit_2025-11.pdf" in names
     assert "README.txt" in names
 
     # PDFs are valid (start with %PDF)
     assert zf.read("finance_summary_2025-11.pdf")[:4] == b"%PDF"
     assert zf.read("expenses_2025-11.pdf")[:4] == b"%PDF"
     assert zf.read("audit_log_2025-11.pdf")[:4] == b"%PDF"
+    assert zf.read("penalty_migration_audit_2025-11.pdf")[:4] == b"%PDF"
     # xlsx = zip too
     xlsx_bytes = zf.read("treasury_2025-11.xlsx")
     assert xlsx_bytes[:2] == b"PK"
