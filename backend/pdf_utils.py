@@ -132,10 +132,17 @@ def _header_box(s, contract: dict, client: dict, total_due: float):
     money = _money
     item_kind = contract.get("item_type", "").lower()
     type_label_map = {"car": "VEHICLE - CAR", "motorcycle": "VEHICLE - MOTORCYCLE", "electronic": "ELECTRONIC"}
+    original = float(contract.get("original_loan_amount") or contract.get("loan_amount") or 0)
+    current = float(contract.get("current_principal", contract.get("principal_remaining", original)))
+    # Show original + current side-by-side only when a partial payment reduced it.
+    if abs(original - current) > 0.01:
+        loan_display = f"{money(original)}  →  {money(current)}"
+    else:
+        loan_display = money(original)
     rows = [
         ["Nú Kontratu", contract.get("contract_number", ""),
          "Tipo Kontratu", type_label_map.get(item_kind, item_kind.upper())],
-        ["Montante Empréstimu", money(contract.get("loan_amount", 0)),
+        ["Empréstimu (Orij → Atuál)", loan_display,
          "Taxa Interese", f"{float(contract.get('interest_rate', 0)):.2f}%"],
         ["Total Selu", money(total_due),
          "Status", str(contract.get("status", "active")).upper()],
@@ -219,6 +226,13 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     )
 
     loan = float(contract.get("loan_amount", 0) or 0)
+    original_loan = float(contract.get("original_loan_amount", loan) or loan)
+    current_principal = float(contract.get("current_principal", contract.get("principal_remaining", loan)) or loan)
+    principal_paid_disp = float(contract.get("principal_paid", 0) or 0)
+    penalty_rate = float(contract.get("penalty_rate", 10.0) or 10.0)
+    penalty_charged = float(contract.get("penalty_charged", round(current_principal * penalty_rate / 100.0, 2)))
+    penalty_paid_disp = float(contract.get("penalty_paid", 0) or 0)
+    penalty_outstanding = float(contract.get("penalty_outstanding", max(0.0, penalty_charged - penalty_paid_disp)))
     rate = float(contract.get("interest_rate", 0) or 0)
     interest_amount = round(loan * rate / 100.0, 2)
     total_due = float(contract.get("total_due", loan + interest_amount))
@@ -230,18 +244,36 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(_branded_header(s))
     story.append(Paragraph("Pawn Management System · Pawn Agreement Contract", s["Sub"]))
     story.append(Paragraph("KONTRATU PENHOR", s["DocTitle"]))
-    story.append(_header_box(s, contract, client, total_due))
+    # For overdue/auction contracts, header shows the FULL obligation (with
+    # 3-month interest + penalty). For active contracts, keeps the simple
+    # loan + interest total.
+    header_total = float(contract.get("total_due", total_due))
+    story.append(_header_box(s, contract, client, header_total))
     story.append(Spacer(1, 0.3 * cm))
 
     story.append(_article(s, "Artigu 1º — Objetu Kontratu", [
         "Kredor fó empréstimu osan ba kliente. Atu garante pagamentu dívida, kliente entrega sasán hanesan garantia penhor."
     ]))
-    story.append(_article(s, "Artigu 2º — Montante Empréstimu ho Interese", [
-        f"Montante empréstimu mak: USD ${loan:,.2f}.",
-        f"Taxa interese: {rate:.2f}% kada fulan.",
-        f"Prazu kontratu: {start} to'o {end}.",
-        f"Total selu inklui interese mak: USD ${total_due:,.2f}.",
-    ]))
+    # Nov-2026 spec — Total Selu shows total obligation including interest,
+    # outstanding penalty and (for overdue) 3-month forward interest.
+    interest_outstanding = float(contract.get("interest_outstanding", contract.get("interest_remaining", 0)) or 0)
+    is_overdue_or_auction = contract.get("status") in ("overdue", "auction_ready", "auction")
+    three_month_interest = round(current_principal * rate * 3 / 100.0, 2) if is_overdue_or_auction else 0.0
+    total_selu_all_in = round(
+        current_principal + interest_outstanding + three_month_interest + penalty_outstanding, 2
+    )
+    art2_lines = [
+        f"Montante empréstimu orijinál: USD ${original_loan:,.2f}.",
+        f"Prinsipál atuál (depois de pagamentu parsiál): USD ${current_principal:,.2f}.",
+        f"Taxa interese: {rate:.2f}% kada fulan. Prazu kontratu: {start} to'o {end}.",
+    ]
+    if is_overdue_or_auction:
+        art2_lines.append(
+            f"Total Selu (inklui interese fulan tolu + multa): USD ${total_selu_all_in:,.2f}."
+        )
+    else:
+        art2_lines.append(f"Total selu inklui interese mak: USD ${total_due:,.2f}.")
+    story.append(_article(s, "Artigu 2º — Montante Empréstimu ho Interese", art2_lines))
     story.append(_article(s, "Artigu 3º — Interese", [
         f"Kliente konkorda selu interese ho taxa: {rate:.2f}% kada fulan. Interese sei kalkula durante tempu empréstimu.",
         "Maski kliente selu loan iha loron seluk depois data hahu, taxa interese minimu ida sei aplika.",
@@ -257,7 +289,7 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(Paragraph(
         f"Artigu 5º — Deskrisaun Detalhado Sasán Penhor ({item_label_map.get(item_kind, item_kind)})",
         s["Article"]))
-    story.append(_item_table(s, item_kind, item, loan))
+    story.append(_item_table(s, item_kind, item, current_principal))
 
     story.append(_article(s, "Artigu 6º — Responsabilidade Legal Kliente", [
         "Kliente garante katak sasán ne'e ninia propriedade legal, la iha disputa legal, no la iha penhor iha fatin seluk. Se deklarasaun ida ne'e falsu, kredor bele hato'o keixa penal.",
@@ -265,10 +297,22 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(_article(s, "Artigu 7º — Proibisaun Alienasaun", [
         "Durante kontratu, kliente la bele vende, transfere propriedade, penhor iha fatin seluk, sconde ka muda sasán.",
     ]))
-    story.append(_article(s, "Artigu 8º — Multa Atrasu", [
-        "Se kliente la selu tuir prazu kontratu, sei aplika multa 10% husi montante empréstimu orijinál (la inklui taxa interese).",
-        f"Multa estimada: USD ${(loan * 0.10):,.2f}.",
-    ]))
+    # Nov-2026 spec — Article 8 penalty base is CURRENT principal, not original.
+    art8_lines = [
+        f"Se kliente la selu tuir prazu kontratu, sei aplika multa {penalty_rate:.0f}% husi prinsipál atuál (Artigu 5) — la inklui taxa interese.",
+        f"Multa estimada bazeia ba prinsipál atuál (USD ${current_principal:,.2f}): USD ${penalty_charged:,.2f}.",
+    ]
+    if principal_paid_disp > 0:
+        art8_lines.append(
+            f"Nota história: montante empréstimu orijinál USD ${original_loan:,.2f}; "
+            f"kliente selu ona USD ${principal_paid_disp:,.2f} husi prinsipál, "
+            f"tan multa hamenus tuir Nov-2026 sistema foun."
+        )
+    if penalty_paid_disp > 0:
+        art8_lines.append(f"Multa ne'ebé selu ona: USD ${penalty_paid_disp:,.2f}.")
+    if penalty_outstanding > 0.01:
+        art8_lines.append(f"Multa ne'ebé seidauk selu (Outstanding): USD ${penalty_outstanding:,.2f}.")
+    story.append(_article(s, "Artigu 8º — Multa Atrasu", art8_lines))
     story.append(_article(s, "Artigu 9º — Sasán, Ekipamentus Pezadu, Veikulu no Patrimonio", [
         "Dokumentus orizinal husi sasán, ekipamentus pezadu, veikulu no patrimonio sei sai garantia no kompania mak sei rai.",
         "Kompania sei la uza sasán penhor ba interese privadu.",
