@@ -524,6 +524,29 @@ export default function Contracts() {
                       <div className="font-medium text-[#1B2D5C]">
                         ${Number(r.principal_remaining ?? r.loan_amount).toLocaleString()}
                       </div>
+                      {(() => {
+                        const orig = Number(r.original_loan_amount);
+                        const rem = Number(r.principal_remaining ?? r.loan_amount);
+                        const paid = orig - rem;
+                        const pct = Math.min(100, Math.round((paid / orig) * 100));
+                        return (
+                          <div
+                            className="mt-1 flex flex-col items-end gap-0.5"
+                            data-testid={`contract-progress-${r.id}`}
+                            title={`Principal paid: $${paid.toLocaleString()} / $${orig.toLocaleString()}`}
+                          >
+                            <div className="w-24 h-1 rounded-full bg-stone-200 overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-600"
+                                style={{ width: `${pct}%` }}
+                              ></div>
+                            </div>
+                            <div className="text-[9px] text-emerald-700 font-medium">
+                              {pct}% paid off
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   ) : (
                     <div>${Number(r.loan_amount).toLocaleString()}</div>
