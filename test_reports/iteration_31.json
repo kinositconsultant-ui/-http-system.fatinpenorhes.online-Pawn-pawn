@@ -1,0 +1,23 @@
+{
+  "summary": "Verified PDF header overlap fix for contracts CTR-2026-0003 and CTR-2026-0005 via 5 pytest cases hitting the live /api/contracts/{id}/pdf endpoint. All 5 tests passed. The old long label 'Empréstimu (Orij → Atuál)' has been fully replaced by the short label 'Montante Empréstimu' in the header table. Values are readable and correctly formatted, including the arrow-style '$3,000.00 → $1,000.00' for partial-payment contracts. Article 2 shows both amounts, and Article 8 penalty on CTR-2026-0005 is $100.00 (10% of current $1,000 principal) as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter39_pdf_header_overlap.py",
+    "/app/test_reports/pytest/iter39_pdf_header.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pdf_utils.py is 1860 lines — could be split into header/articles/finance-summary modules for maintainability, but not blocking.",
+    "Header col widths 4.0/4.8/4.0/4.2cm = 17.0cm total, safely inside standard A4 usable width (~17.6cm at 1.8cm margins). Fix is well-sized."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter39_pdf_header_overlap.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (cookie session via POST /api/auth/login)",
+  "seed_data_creation": "None — used existing CTR-2026-0003 and CTR-2026-0005 seed contracts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter39 regression at /app/backend/tests/test_iter39_pdf_header_overlap.py covers: (1) new short label present in CTR-2026-0003 header, (2) old long label absent, (3) partial-payment arrow value in CTR-2026-0005, (4) Article 8 penalty math on current principal, (5) Article 2 dual-amount display. PDF text extracted with pypdf 6.14. Header now shows 'Montante Empréstimu' with 4.0cm label column / 4.8cm value column."
+}

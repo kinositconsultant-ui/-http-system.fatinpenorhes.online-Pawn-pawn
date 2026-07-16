@@ -139,10 +139,14 @@ def _header_box(s, contract: dict, client: dict, total_due: float):
         loan_display = f"{money(original)}  →  {money(current)}"
     else:
         loan_display = money(original)
+    # Always use the short label. When principal was reduced, we simply show
+    # "Original → Current" as the value; when unchanged we show a single
+    # amount. The dedicated label column stays narrow.
+    loan_label = "Montante Empréstimu"
     rows = [
         ["Nú Kontratu", contract.get("contract_number", ""),
          "Tipo Kontratu", type_label_map.get(item_kind, item_kind.upper())],
-        ["Empréstimu (Orij → Atuál)", loan_display,
+        [loan_label, loan_display,
          "Taxa Interese", f"{float(contract.get('interest_rate', 0)):.2f}%"],
         ["Total Selu", money(total_due),
          "Status", str(contract.get("status", "active")).upper()],
@@ -151,7 +155,8 @@ def _header_box(s, contract: dict, client: dict, total_due: float):
         ["Naran Kliente", client.get("full_name", ""),
          "Telefone", client.get("phone", "")],
     ]
-    t = Table(rows, colWidths=[3.6 * cm, 5.2 * cm, 3.6 * cm, 4.6 * cm])
+    # Widen the label columns slightly so long labels never bleed into values.
+    t = Table(rows, colWidths=[4.0 * cm, 4.8 * cm, 4.0 * cm, 4.2 * cm])
     t.setStyle(TableStyle([
         ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
         ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
