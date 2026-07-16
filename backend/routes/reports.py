@@ -351,6 +351,21 @@ async def reports_v2(
     })
 
 
+@router.get("/reports/v2-counts")
+async def reports_v2_counts(_: dict = Depends(require_module("reports"))):
+    """Lightweight row-count per report type for tab badges. Ignores filters
+    (headline count = the full unfiltered dataset each tab sees on load)."""
+    empty_filters = {"month": None, "year": None, "category": None, "sub_category": None}
+    counts: dict[str, int] = {}
+    for key, builder in REPORT_BUILDERS.items():
+        try:
+            data = await builder(empty_filters)
+            counts[key] = len(data.get("rows") or [])
+        except Exception:
+            counts[key] = 0
+    return counts
+
+
 @router.get("/reports/v2/{report_type}/export")
 async def reports_export(
     report_type: str,

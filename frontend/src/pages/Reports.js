@@ -113,6 +113,17 @@ export default function Reports() {
   const [loading, setLoading] = useState(false);
   // Client-side sort: null = server order, otherwise { key, dir: "asc" | "desc" }
   const [sort, setSort] = useState(null);
+  // Row-count per tab (fetched once on mount for tab badges)
+  const [tabCounts, setTabCounts] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/reports/v2-counts");
+        setTabCounts(data || {});
+      } catch { /* non-fatal */ }
+    })();
+  }, []);
 
   const yearOpts = useMemo(() => {
     const now = new Date().getFullYear();
@@ -249,21 +260,35 @@ export default function Reports() {
 
       {/* Tab navigation — color-coded per category */}
       <div className="flex flex-wrap gap-2 print:hidden" data-testid="report-tabs">
-        {TABS.map((tb) => (
-          <button
-            key={tb.key}
-            onClick={() => setTab(tb.key)}
-            data-testid={`report-tab-${tb.key}`}
-            style={tab === tb.key ? { backgroundColor: tb.color, color: "white" } : undefined}
-            className={`px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition shadow-sm ${
-              tab === tb.key
-                ? "shadow-md"
-                : `${tb.soft} hover:opacity-90`
-            }`}
-          >
-            {t(tb.labelKey)}
-          </button>
-        ))}
+        {TABS.map((tb) => {
+          const count = tabCounts[tb.key];
+          const isActive = tab === tb.key;
+          return (
+            <button
+              key={tb.key}
+              onClick={() => setTab(tb.key)}
+              data-testid={`report-tab-${tb.key}`}
+              style={isActive ? { backgroundColor: tb.color, color: "white" } : undefined}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition shadow-sm ${
+                isActive ? "shadow-md" : `${tb.soft} hover:opacity-90`
+              }`}
+            >
+              <span>{t(tb.labelKey)}</span>
+              {count != null && (
+                <span
+                  className={`text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full ${
+                    isActive
+                      ? "bg-white/25 text-white"
+                      : "bg-white/70 text-stone-700"
+                  }`}
+                  data-testid={`report-tab-count-${tb.key}`}
+                >
+                  {count.toLocaleString()}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Saved Views strip */}
