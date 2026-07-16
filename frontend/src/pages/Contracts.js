@@ -516,7 +516,18 @@ export default function Contracts() {
                   </span>
                 </Td>
                 <Td right className="whitespace-nowrap">
-                  <div>${Number(r.loan_amount).toLocaleString()}</div>
+                  {r.original_loan_amount && Math.abs(Number(r.original_loan_amount) - Number(r.principal_remaining ?? r.loan_amount)) > 0.01 ? (
+                    <>
+                      <div className="text-xs text-stone-400 line-through">
+                        ${Number(r.original_loan_amount).toLocaleString()}
+                      </div>
+                      <div className="font-medium text-[#1B2D5C]">
+                        ${Number(r.principal_remaining ?? r.loan_amount).toLocaleString()}
+                      </div>
+                    </>
+                  ) : (
+                    <div>${Number(r.loan_amount).toLocaleString()}</div>
+                  )}
                   <div className="text-xs text-stone-500">@ {r.interest_rate}%</div>
                 </Td>
                 <Td className="whitespace-nowrap text-xs">
@@ -542,7 +553,7 @@ export default function Contracts() {
                       rel="noreferrer"
                       data-testid={`contract-pdf-${r.id}`}
                       className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                      title={t("download_pdf")}
+                      title={`${t("download_pdf")} — Nov-2026 math`}
                     >
                       <FileDown className="w-3 h-3" />
                     </a>
