@@ -265,7 +265,7 @@ async def _report_financial(filters: dict) -> dict:
         {
             "contract_number": c.get("contract_number"),
             "original_loan_amount": float(c.get("original_loan_amount", c.get("loan_amount", 0)) or 0),
-            "loan_amount": float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0),
+            "current_principal": float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0),
             "paid_amount": float(c.get("paid_amount", 0) or 0),
             "interest_received": float(c.get("interest_paid", 0) or 0),
             "penalty_paid": float(c.get("penalty_paid", 0) or 0),
@@ -285,7 +285,7 @@ async def _report_financial(filters: dict) -> dict:
             "penalty_paid": round(penalty_paid, 2),
             "penalty_outstanding": round(penalty_outstanding, 2),
         },
-        "columns": ["contract_number", "contract_date", "original_loan_amount", "loan_amount", "paid_amount",
+        "columns": ["contract_number", "contract_date", "original_loan_amount", "current_principal", "paid_amount",
                     "interest_received", "penalty_paid", "penalty_outstanding", "profit", "status"],
         "rows": rows,
     }
