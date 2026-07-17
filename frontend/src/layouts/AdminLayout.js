@@ -4,6 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
 import AppFooter from "../components/AppFooter";
+import { api } from "../lib/api";
+
+// Threshold at which the sidebar Reports nav shows a red-pulse alert badge.
+// Kept in sync with TAB_ALERT_THRESHOLDS.overdue in /pages/Reports.js.
+const REPORTS_ALERT_THRESHOLD = 15;
 import {
   LayoutDashboard,
   Users,
@@ -34,7 +39,7 @@ const links = [
   { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", module: "audit_log", adminOnly: true },
 ];
 
-function SidebarBody({ onNavigate, user, t, handleLogout }) {
+function SidebarBody({ onNavigate, user, t, handleLogout, alertCounts }) {
   return (
     <>
       <div className="mb-5 flex flex-col items-center gap-2">
@@ -59,6 +64,7 @@ function SidebarBody({ onNavigate, user, t, handleLogout }) {
           const allowed = user?.role === "admin" || (user?.allowed_modules || []).includes(l.module);
           if (!allowed) return null;
           const Icon = l.icon;
+          const alertCount = alertCounts?.[l.key];
           return (
             <NavLink
               key={l.to}
@@ -74,7 +80,16 @@ function SidebarBody({ onNavigate, user, t, handleLogout }) {
               }
             >
               <Icon className="w-4 h-4 shrink-0" />
-              <span className="truncate">{t(l.key)}</span>
+              <span className="truncate flex-1">{t(l.key)}</span>
+              {alertCount != null && alertCount > 0 && (
+                <span
+                  className="text-[10px] font-bold bg-red-600 text-white px-1.5 py-0.5 rounded-full animate-pulse tabular-nums"
+                  data-testid={`nav-alert-${l.key}`}
+                  title={`${alertCount} ${l.key} needing attention`}
+                >
+                  {alertCount}
+                </span>
+              )}
             </NavLink>
           );
         })}
@@ -110,6 +125,27 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [alertCounts, setAlertCounts] = useState({});
+
+  // Poll report counts every 60s so the sidebar reflects fresh overdue counts
+  // without users having to open the Reports page.
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const { data } = await api.get("/reports/v2-counts");
+        if (!alive) return;
+        const next = {};
+        if ((data?.overdue || 0) > REPORTS_ALERT_THRESHOLD) {
+          next.reports = data.overdue;
+        }
+        setAlertCounts(next);
+      } catch { /* non-fatal */ }
+    };
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   // Close the drawer whenever route changes (extra safety in case the NavLink onClick misses)
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -137,7 +173,7 @@ export default function AdminLayout() {
     <div className="min-h-screen flex bg-[#FAFAF9] text-stone-900">
       {/* -------- Desktop sidebar (md+) -------- */}
       <aside className="hidden md:flex w-64 shrink-0 bg-[#4A5568] px-4 py-6 flex-col text-white shadow-xl">
-        <SidebarBody user={user} t={t} handleLogout={handleLogout} />
+        <SidebarBody user={user} t={t} handleLogout={handleLogout} alertCounts={alertCounts} />
       </aside>
 
       {/* -------- Mobile: top bar + slide-out drawer -------- */}
@@ -185,7 +221,7 @@ export default function AdminLayout() {
         >
           <X className="w-5 h-5" />
         </button>
-        <SidebarBody user={user} t={t} handleLogout={handleLogout} onNavigate={() => setMobileOpen(false)} />
+        <SidebarBody user={user} t={t} handleLogout={handleLogout} onNavigate={() => setMobileOpen(false)} alertCounts={alertCounts} />
       </aside>
 
       {/* -------- Main content -------- */}
