@@ -106,6 +106,36 @@ const WIDE_KEYS = new Set([
   "item_brand", "item_model", "brand", "model",
 ]);
 
+// Short display labels for verbose columns so headers don't blow out the
+// table width. Wrapping is also allowed on headers (see <th> below).
+const COL_SHORT_LABEL = {
+  original_loan_amount: "Original Loan",
+  current_principal: "Current Principal",
+  paid_amount: "Paid",
+  interest_received: "Interest Rcvd",
+  interest_charged: "Interest Charged",
+  interest_paid: "Interest Paid",
+  interest_outstanding: "Interest Due",
+  penalty_paid: "Penalty Paid",
+  penalty_outstanding: "Penalty Due",
+  penalty_charged: "Penalty Charged",
+  principal_remaining: "Principal Left",
+  principal_paid: "Principal Paid",
+  total_amount_due: "Total Due",
+  total_payments_received: "Total Received",
+  auction_capital_recovered: "Capital Rec.",
+  auction_realized_profit: "Realized Profit",
+  auction_realized_loss: "Realized Loss",
+  contract_number: "Contract #",
+  receipt_number: "Receipt #",
+  contract_date: "Contract Date",
+  starting_price: "Start Price",
+  sold_price: "Sold Price",
+  manufacture_year: "Mfg Year",
+  payment_method: "Method",
+  interest_rate: "Rate",
+};
+
 const cellClass = (col) => {
   const base = "px-2.5 py-2 align-top";
   if (WIDE_KEYS.has(col)) return `${base} whitespace-normal break-words max-w-[220px]`;
@@ -451,13 +481,15 @@ export default function Reports() {
                       key={c}
                       onClick={() => toggleSort(c)}
                       data-testid={`report-th-${c}`}
-                      className={`px-2.5 py-2.5 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap cursor-pointer select-none ${
+                      className={`px-2 py-2 text-[10px] uppercase tracking-wider font-semibold cursor-pointer select-none align-bottom leading-tight ${
                         active ? "text-[#1B2D5C] bg-stone-100" : "text-stone-500 hover:text-stone-800"
                       }`}
                     >
-                      <span className="inline-flex items-center gap-1">
-                        {prettify(c)}
-                        <Icon className={`w-3 h-3 ${active ? "opacity-100" : "opacity-40"}`} />
+                      <span className="inline-flex items-start gap-1">
+                        <span className="whitespace-normal break-words">
+                          {COL_SHORT_LABEL[c] || prettify(c)}
+                        </span>
+                        <Icon className={`w-3 h-3 shrink-0 mt-0.5 ${active ? "opacity-100" : "opacity-40"}`} />
                       </span>
                     </th>
                   );

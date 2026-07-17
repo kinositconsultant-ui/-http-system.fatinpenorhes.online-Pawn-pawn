@@ -512,3 +512,14 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - Admin: `admin@fatinpenhores.tl` / `admin123` (see `/app/memory/test_credentials.md`).
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
+
+## Iteration 39 — Financial Report Table Fit + Overdue Audio Chime (2026-02-17) ✅
+- **Fix**: Financial report table no longer overflows past its card container. Root cause: `<th>` cells were `whitespace-nowrap` and column labels like "Original Loan Amount" / "Interest Received" / "Penalty Outstanding" pushed the total table width beyond `1280px`.
+- **Changes** in `/app/frontend/src/pages/Reports.js`:
+  - Added `COL_SHORT_LABEL` map for verbose columns (Original Loan, Interest Rcvd, Penalty Due, etc.).
+  - `<th>` now allows header text to wrap (`whitespace-normal break-words`) with `align-bottom` + `leading-tight` for a compact 1–2 line header row.
+  - Header padding tightened to `px-2` (from `px-2.5 py-2.5`).
+- **Result** at 1280×800 viewport: tableWidth 958 == wrapWidth 958, no horizontal overflow. Body still uses `overflow-x-auto` so narrower screens scroll gracefully.
+- **New**: Subtle WebAudio 2-tone chime (A5→E5, ~0.4s, gain 0.08) plays once per browser session in `/app/frontend/src/layouts/AdminLayout.js` when polled overdue count first crosses `REPORTS_ALERT_THRESHOLD` (15). Flag stored in `sessionStorage` (`overdue-chime-played`); auto-resets if count falls below threshold so a subsequent crossing re-alerts.
+- No backend changes; no schema changes; no dependency changes.
+

@@ -9,6 +9,32 @@ import { api } from "../lib/api";
 // Threshold at which the sidebar Reports nav shows a red-pulse alert badge.
 // Kept in sync with TAB_ALERT_THRESHOLDS.overdue in /pages/Reports.js.
 const REPORTS_ALERT_THRESHOLD = 15;
+
+// Play a subtle 2-tone chime via WebAudio (no asset file needed). Silently
+// no-ops if the browser blocks it (e.g., before any user gesture).
+const playOverdueChime = () => {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    const play = (freq, start, dur = 0.18) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + start);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + dur + 0.02);
+    };
+    play(880, 0);      // A5
+    play(660, 0.22);   // E5
+    setTimeout(() => ctx.close?.(), 800);
+  } catch { /* audio blocked — silent */ }
+};
 import {
   LayoutDashboard,
   Users,
@@ -136,8 +162,18 @@ export default function AdminLayout() {
         const { data } = await api.get("/reports/v2-counts");
         if (!alive) return;
         const next = {};
-        if ((data?.overdue || 0) > REPORTS_ALERT_THRESHOLD) {
-          next.reports = data.overdue;
+        const overdue = data?.overdue || 0;
+        if (overdue > REPORTS_ALERT_THRESHOLD) {
+          next.reports = overdue;
+          // Fire a subtle chime the FIRST time in this session the overdue
+          // count crosses the threshold. sessionStorage key resets on new tab.
+          if (!sessionStorage.getItem("overdue-chime-played")) {
+            sessionStorage.setItem("overdue-chime-played", "1");
+            playOverdueChime();
+          }
+        } else {
+          // Below threshold → allow chime to fire again if we cross back over
+          sessionStorage.removeItem("overdue-chime-played");
         }
         setAlertCounts(next);
       } catch { /* non-fatal */ }
