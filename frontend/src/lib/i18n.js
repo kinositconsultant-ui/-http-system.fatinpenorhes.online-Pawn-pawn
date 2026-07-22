@@ -45,6 +45,11 @@ const dict = {
     overview: "Overview",
     client_name: "Client",
     preview: "Preview",
+    engine_cc: "Engine Capacity (CC)",
+    transmission: "Transmission",
+    manual: "Manual",
+    automatic: "Automatic",
+    all_months: "All months",
     // Login / Auth extra
     login_subtitle: "Enter your credentials to access the admin console.",
     login_workspace_body: "A secure workspace for the Fatin Penhores team. Manage clients, contracts, payments and auctions with full audit control.",
@@ -382,6 +387,11 @@ const dict = {
     overview: "Vizão",
     client_name: "Kliente",
     preview: "Haree",
+    engine_cc: "Kapasidade Motor (CC)",
+    transmission: "Transmisaun",
+    manual: "Manual",
+    automatic: "Automátiku",
+    all_months: "Fulan hotu",
     // Login / Auth extra
     login_subtitle: "Insere ó nia kredensiál atu asesu painel administrasaun.",
     login_workspace_body: "Fatin traballu seguru ba ekipa Fatin Penhores. Jere klientes, kontratu, pagamentu no leilaun ho auditoria kompletu.",

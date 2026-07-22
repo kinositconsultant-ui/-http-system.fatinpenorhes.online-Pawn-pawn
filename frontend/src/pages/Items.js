@@ -45,6 +45,17 @@ function vehicleFields(t) {
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
     { k: "manufacture_year", label: t("manufacture_year"), type: "number", tableHide: true },
+    { k: "engine_cc", label: t("engine_cc") || "Engine Capacity (CC)", type: "number", tableHide: true, placeholder: "1500" },
+    {
+      k: "transmission",
+      label: t("transmission") || "Transmission",
+      select: true,
+      tableHide: true,
+      options: [
+        { value: "manual", label: t("manual") || "Manual" },
+        { value: "automatic", label: t("automatic") || "Automatic" },
+      ],
+    },
     { k: "market_value", label: t("market_value"), type: "number", placeholder: "USD" },
     { k: "color", label: t("color"), tableHide: true },
     { k: "plate", label: t("plate") },
@@ -165,6 +176,8 @@ function emptyFor(kind) {
     fuel_percent: 0,
     color: "",
     manufacture_year: "",
+    engine_cc: "",
+    transmission: "",
     market_value: 0,
     location: "",
     photo_url: "",
@@ -277,6 +290,8 @@ function ItemTable({ kind }) {
       payload.fuel_percent = Number(payload.fuel_percent);
     if ("manufacture_year" in payload)
       payload.manufacture_year = payload.manufacture_year ? Number(payload.manufacture_year) : null;
+    if ("engine_cc" in payload)
+      payload.engine_cc = payload.engine_cc ? Number(payload.engine_cc) : null;
     if ("market_value" in payload && payload.market_value !== "")
       payload.market_value = Number(payload.market_value);
     try {

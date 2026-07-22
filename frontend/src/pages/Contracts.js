@@ -38,6 +38,17 @@ const blank = {
 
 const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15, pezadu: 10 };
 
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+function formatYearMonth(ym) {
+  const [y, m] = (ym || "").split("-");
+  const mi = Number(m) - 1;
+  if (!y || mi < 0 || mi > 11) return ym;
+  return `${MONTH_NAMES[mi]} ${y}`;
+}
+
 export default function Contracts() {
   const { t } = useLang();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -245,15 +256,35 @@ export default function Contracts() {
 
   // URL-driven status filter for the main contracts table. Cards on the
   // Dashboard link here with `?status=active|overdue|redeemed|auction_ready`.
+  const monthFilter = searchParams.get("month") || "";
   const filteredRows = useMemo(() => {
-    if (!statusFilter) return rows;
-    return rows.filter((r) => r.status === statusFilter);
-  }, [rows, statusFilter]);
+    let out = rows;
+    if (statusFilter) out = out.filter((r) => r.status === statusFilter);
+    if (monthFilter) out = out.filter((r) => (r.contract_date || "").startsWith(monthFilter));
+    return out;
+  }, [rows, statusFilter, monthFilter]);
   const clearStatusFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("status");
     setSearchParams(next, { replace: true });
   };
+  const setMonthFilter = (val) => {
+    const next = new URLSearchParams(searchParams);
+    if (val) next.set("month", val);
+    else next.delete("month");
+    setSearchParams(next, { replace: true });
+  };
+
+  // Build the list of months present in the contracts dataset so the dropdown
+  // only shows months that actually have contracts (avoids empty selections).
+  const monthOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) {
+      const ym = (r.contract_date || "").slice(0, 7);
+      if (ym) set.add(ym);
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [rows]);
 
   return (
     <div className="space-y-6" data-testid="contracts-root">
@@ -262,7 +293,26 @@ export default function Contracts() {
           <div className="text-eyebrow">{t("contracts")}</div>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("contracts")}</h1>
         </div>
-        <Dialog
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-stone-500">
+              {t("month")}
+            </Label>
+            <Select value={monthFilter || "all"} onValueChange={(v) => setMonthFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-10 w-[180px]" data-testid="contracts-month-filter">
+                <SelectValue placeholder={t("all_months") || "All months"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" data-testid="contracts-month-option-all">{t("all_months") || "All months"}</SelectItem>
+                {monthOptions.map((ym) => (
+                  <SelectItem key={ym} value={ym} data-testid={`contracts-month-option-${ym}`}>
+                    {formatYearMonth(ym)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Dialog
           open={open}
           onOpenChange={(o) => {
             setOpen(o);
@@ -389,6 +439,7 @@ export default function Contracts() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </header>
 
       {/* Pre-Auction / Auction Ready summary card */}
@@ -504,21 +555,31 @@ export default function Contracts() {
       )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
-        {statusFilter && (
+        {(statusFilter || monthFilter) && (
           <div
             className="px-4 py-2 border-b border-stone-200 bg-stone-50 flex items-center justify-between flex-wrap gap-2 text-sm"
             data-testid="contracts-filter-pill"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-stone-500">Filtered by status:</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium uppercase tracking-wider">
-                {statusFilter.replace(/_/g, " ")}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-stone-500">Filtered:</span>
+              {statusFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium uppercase tracking-wider">
+                  status · {statusFilter.replace(/_/g, " ")}
+                </span>
+              )}
+              {monthFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium">
+                  {formatYearMonth(monthFilter)}
+                </span>
+              )}
               <span className="text-xs text-stone-500">· {filteredRows.length} of {rows.length}</span>
             </div>
             <button
               type="button"
-              onClick={clearStatusFilter}
+              onClick={() => {
+                const next = new URLSearchParams();
+                setSearchParams(next, { replace: true });
+              }}
               className="text-xs text-[#1B2D5C] hover:underline font-medium"
               data-testid="contracts-filter-clear"
             >

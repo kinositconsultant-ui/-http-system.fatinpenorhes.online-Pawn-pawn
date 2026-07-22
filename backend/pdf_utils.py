@@ -259,13 +259,15 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     story.append(_article(s, "Artigu 1º — Objetu Kontratu", [
         "Kredor fó empréstimu osan ba kliente. Atu garante pagamentu dívida, kliente entrega sasán hanesan garantia penhor."
     ]))
-    # Nov-2026 spec — Total Selu shows total obligation including interest,
-    # outstanding penalty and (for overdue) 3-month forward interest.
+    # Feb-2026 Article 4 cap — Interest is billed for a MAXIMUM of 2 months
+    # (Artigu 4º "Prazu Kontratu"). After the 2-month window nothing more
+    # accrues even if the contract stays dormant; the sasán moves to
+    # auction. Total Selu shows Principal + capped interest + Article-8
+    # penalty — no additional forward interest is added.
     interest_outstanding = float(contract.get("interest_outstanding", contract.get("interest_remaining", 0)) or 0)
     is_overdue_or_auction = contract.get("status") in ("overdue", "auction_ready", "auction")
-    three_month_interest = round(current_principal * rate * 3 / 100.0, 2) if is_overdue_or_auction else 0.0
     total_selu_all_in = round(
-        current_principal + interest_outstanding + three_month_interest + penalty_outstanding, 2
+        current_principal + interest_outstanding + penalty_outstanding, 2
     )
     art2_lines = [
         f"Montante empréstimu orijinál: USD ${original_loan:,.2f}.",
@@ -274,7 +276,7 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     ]
     if is_overdue_or_auction:
         art2_lines.append(
-            f"Total Selu (inklui interese fulan tolu + multa): USD ${total_selu_all_in:,.2f}."
+            f"Total Selu (inklui interese fulan 2 maximu + multa): USD ${total_selu_all_in:,.2f}."
         )
     else:
         art2_lines.append(f"Total selu inklui interese mak: USD ${total_due:,.2f}.")

@@ -162,7 +162,15 @@ async def _recompute_contract_status(contract: dict) -> dict:
         due = date.today()
     today_dt = date.today()
     effective_end = max(due, today_dt)
-    months_elapsed = _months_billed(contract_start, effective_end)
+    months_elapsed_uncapped = _months_billed(contract_start, effective_end)
+    # ── Feb-2026 Article 4 cap ─────────────────────────────────────────────
+    # Pawn contracts run for a maximum of 2 calendar months (Artigu 4º).
+    # Interest may only be billed for those 2 months even if the client
+    # leaves the contract dormant for longer — after that the sasán goes
+    # to leilaun (auction), no further interest accrues. This makes the
+    # obligation predictable and matches the printed rules card.
+    MAX_BILLING_MONTHS = 2
+    months_elapsed = min(months_elapsed_uncapped, MAX_BILLING_MONTHS)
 
     is_overdue = contract.get("due_date", today_iso) < today_iso
     # Provisional penalty cap for the payment walk — uses ORIGINAL loan × rate

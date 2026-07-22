@@ -553,6 +553,8 @@ class CarIn(BaseModel):
     fuel_percent: int = 0
     color: str = ""
     manufacture_year: Optional[int] = None
+    engine_cc: Optional[int] = None  # engine capacity in CC
+    transmission: str = ""  # "manual" | "automatic" (free-text; UI limits it)
     market_value: float = 0.0
     location: str = ""  # warehouse / shop / off-site
     photo_url: str = ""
@@ -571,6 +573,8 @@ class MotorcycleIn(BaseModel):
     fuel_percent: int = 0
     color: str = ""
     manufacture_year: Optional[int] = None
+    engine_cc: Optional[int] = None
+    transmission: str = ""
     market_value: float = 0.0
     location: str = ""
     photo_url: str = ""
