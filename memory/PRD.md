@@ -996,3 +996,45 @@ Batch A of user's backlog request. Three independent features:
 - Verified via Playwright: `admin@fatinpenhores.tl` → /business → 6 info buttons rendered with correct tooltip text; page renders KPIs correctly ($549,700 portfolio + $364k new-in-range subline).
 - No backend / schema / dependency changes.
 
+
+
+## Iteration 58 (2026-02) — WhatsApp Delivery Report + Bulk Photo + Items Split
+Three P0 features shipped; tested by testing_agent_v3_fork (report /app/test_reports/iteration_50.json), 23/23 backend tests + all frontend flows pass.
+
+### 1. Items Route Split (backend refactor)
+- **NEW** `/app/backend/routes/items.py` — CarIn / MotorcycleIn / ElectronicIn / PezaduIn models + GET/POST/PUT/DELETE `/items/{kind}` and `/items/{kind}/{iid}` (reads/writes cars, motorcycles, electronics, pezadu collections).
+- Removed inline items endpoints/models from `server.py` (was ~155 lines).
+- Registered as `items_router` in `server.py` under `/api`.
+- Pure refactor — no behaviour change.
+
+### 2. Bulk Photo Uploader (Items page)
+- **BACKEND** `PATCH /api/items/{kind}/{iid}/photo` in `routes/items.py` — takes `{photo_url, thumbnail_url}`, updates just those fields on the item, writes audit log. `require_not_cashier`.
+- **FRONTEND** `BulkPhotoDialog` in `/app/frontend/src/components/BulkPhotoDialog.js` — drag/drop zone + per-row file pickers. Files auto-pair with photoless items in list order. Uploads each via existing `/api/upload` (returns storage_path + thumbnail), then PATCHes the item. Progress + toast summary.
+- **UI** New "Bulk photos" button on every kind tab on `/items` (data-testid=`item-bulk-photo-{kind}`).
+- Testids: `bulk-photo-dialog`, `bulk-photo-dropzone`, `bulk-photo-input`, `bulk-photo-cancel`, `bulk-photo-upload-all`, `bulk-photo-row-{id}`, `bulk-photo-row-input-{id}`, `bulk-photo-row-clear-{id}`, `bulk-photo-row-pick-{id}`.
+
+### 3. WhatsApp Delivery Report (Meta callbacks)
+- **BACKEND** `routes/whatsapp.py` new endpoints:
+  - `GET  /api/whatsapp/webhook` — Meta subscription handshake (verify token from settings/env). Returns 200+challenge, 403 mismatch, 503 unconfigured.
+  - `POST /api/whatsapp/webhook` — receives `messages.status` callbacks. HMAC-SHA256 signature validated when `whatsapp_app_secret` is configured; otherwise accepted (staging). Raw events stored in `whatsapp_webhook_events`. Orphans (unknown wamid) tracked in `whatsapp_webhook_orphans`.
+  - `GET  /api/whatsapp/webhook-config` (admin) — configuration + counters summary.
+  - `GET  /api/whatsapp/status/{contract_id}` — latest delivery record for one contract.
+  - `GET  /api/whatsapp/status?contract_ids=a,b` — bulk map for the Contracts overdue table.
+- **BACKEND** `_apply_status_update` enforces monotonic transitions: sent → delivered → read. `failed` always applies. Per-status timestamps (`sent_at`, `delivered_at`, `read_at`, `failed_at`) captured.
+- **BACKEND** `_send_reminder_for_contract` and `/api/whatsapp/send` now persist `meta_message_id` + `delivery_status` + `sent_at` at the top of each `whatsapp_log` row so callbacks can find them.
+- **SCHEMA** `SettingsIn` + `DEFAULT_SETTINGS` extended with `whatsapp_verify_token` and `whatsapp_app_secret`.
+- **FRONTEND** `/app/frontend/src/components/WhatsAppStatusPill.js` — reusable pill (queued / mocked / sent / delivered / read / failed). Testid `wa-pill-{status}` or `wa-pill-none`.
+- **FRONTEND** `Contracts.js` — new WhatsApp column in the pre-auction table; inline pill under `StatusBadge` in the main table. `refreshWaStatuses(rows)` runs after `load()` and 30 s poll so callbacks surface without reload. Pill refreshes immediately after send.
+- **FRONTEND** `Settings.js` — new Verify Token + App Secret fields + green webhook-URL panel to copy into Meta config.
+
+### Known follow-ups (not blocking)
+- `whatsapp_app_secret` and `whatsapp_verify_token` are returned plaintext from GET /settings; existing `whatsapp_token` is masked — consider parity later.
+- `server.py` still ~2017 lines; contracts / payments / auctions splits are the natural next refactors.
+- Existing legacy pytest baseline: 418 passed / 20 failed (unchanged by this iteration).
+- User needs to paste Meta Verify Token + App Secret in Settings and configure the webhook URL in Meta's App Dashboard for real delivery updates. UI works with mocked events today.
+
+### Files touched
+- Backend NEW: `/app/backend/routes/items.py`, `/app/backend/tests/test_iter58_items_whatsapp.py`
+- Backend UPDATED: `/app/backend/routes/whatsapp.py`, `/app/backend/server.py`, `/app/backend/services.py`
+- Frontend NEW: `/app/frontend/src/components/BulkPhotoDialog.js`, `/app/frontend/src/components/WhatsAppStatusPill.js`
+- Frontend UPDATED: `/app/frontend/src/pages/Items.js`, `/app/frontend/src/pages/Contracts.js`, `/app/frontend/src/pages/Settings.js`
