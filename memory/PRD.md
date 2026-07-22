@@ -513,6 +513,12 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 43 — KPI Trend Badges (2026-02-17) ✅
+- Added a small trend pill under **Total Loan / Total Payments / Profit** KPI cards showing month-over-month delta pulled from the existing `/dashboard/trends` endpoint (last 6 monthly buckets).
+- Green (↗) when the direction is favourable, rose (↘) when unfavourable. `invertTrend: true` supported for cards where an increase is bad (e.g. future Overdue trend). "no baseline" pill when the prior month is 0 to avoid divide-by-zero.
+- New helper `monthlyDelta(months, key)` and new component `TrendBadge` (in Dashboard.js). Values are rounded to 1 decimal.
+- Verified: `kpi-loan-trend = +82.3%`, `kpi-payments-trend = +1729.2%`, `kpi-profit-trend = +86.7%` — all rendering as green pills on the current dataset.
+
 ## Iteration 42 — Clickable KPI Cards + URL-driven Report Tabs (2026-02-17) ✅
 - All 6 top KPI cards on the Dashboard now deep-link into the relevant page:
   - Total Clients → `/clients`

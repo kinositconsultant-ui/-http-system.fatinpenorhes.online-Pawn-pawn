@@ -13,6 +13,9 @@ import {
   TrendingUp,
   Banknote,
   Gavel,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -32,6 +35,20 @@ const moneyFmt = (n) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+
+// Compute a % change between the last completed month and the month before
+// it, using the array returned by GET /dashboard/trends. Returns null when
+// there is not enough data or when the baseline is 0 (avoid divide-by-zero).
+function monthlyDelta(months, key) {
+  if (!Array.isArray(months) || months.length < 2) return null;
+  const cur = Number(months[months.length - 1]?.[key] || 0);
+  const prev = Number(months[months.length - 2]?.[key] || 0);
+  if (prev === 0) {
+    if (cur === 0) return 0;
+    return null; // cannot compute % from a zero baseline
+  }
+  return ((cur - prev) / prev) * 100;
+}
 
 export default function Dashboard() {
   const { t } = useLang();
@@ -70,6 +87,8 @@ export default function Dashboard() {
       tone: "text-[#993333]",
       testid: "kpi-overdue",
       to: "/contracts?status=overdue",
+      // For overdue an increase is BAD, so we invert the tone semantics.
+      invertTrend: true,
     },
     {
       key: "loan",
@@ -79,6 +98,7 @@ export default function Dashboard() {
       tone: "text-[#1B2D5C]",
       testid: "kpi-loan",
       to: "/reports?tab=financial",
+      trend: monthlyDelta(trends?.months, "loans"),
     },
     {
       key: "payments",
@@ -88,6 +108,7 @@ export default function Dashboard() {
       tone: "text-[#1B2D5C]",
       testid: "kpi-payments",
       to: "/reports?tab=payments",
+      trend: monthlyDelta(trends?.months, "payments"),
     },
     {
       key: "profit",
@@ -97,6 +118,7 @@ export default function Dashboard() {
       tone: "text-[#C17767]",
       testid: "kpi-profit",
       to: "/reports?tab=financial",
+      trend: monthlyDelta(trends?.months, "interest"),
     },
   ];
 
@@ -113,11 +135,14 @@ export default function Dashboard() {
         {cards.map((c) => {
           const inner = (
             <div className="flex items-start justify-between">
-              <div>
+              <div className="min-w-0">
                 <div className="text-eyebrow">{c.label}</div>
                 <div className="font-display text-2xl md:text-3xl font-semibold mt-3 break-words">
                   {c.value}
                 </div>
+                {c.trend !== undefined && (
+                  <TrendBadge value={c.trend} invert={c.invertTrend} testid={`${c.testid}-trend`} />
+                )}
               </div>
               <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
@@ -293,3 +318,42 @@ function Stat({ label, value, tone = "text-stone-900", icon, testid, to }) {
     </div>
   );
 }
+
+/**
+ * Small pill shown under a KPI value expressing month-over-month change.
+ * When `invert` is true, an increase is treated as negative (e.g. Overdue).
+ * Passing `value === null` yields a neutral "— vs last month" placeholder.
+ */
+function TrendBadge({ value, invert = false, testid }) {
+  if (value === null || value === undefined) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-stone-400" data-testid={testid}>
+        <Minus className="w-3 h-3" /> no baseline
+      </div>
+    );
+  }
+  const rounded = Math.round(value * 10) / 10;
+  const isZero = Math.abs(rounded) < 0.05;
+  const isUp = rounded > 0;
+  // Semantics: green = "good direction" (invert flips it)
+  const goodDirection = invert ? !isUp : isUp;
+  const color = isZero
+    ? "bg-stone-100 text-stone-500"
+    : goodDirection
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : "bg-rose-50 text-rose-700 border-rose-200";
+  const Icon = isZero ? Minus : isUp ? ArrowUpRight : ArrowDownRight;
+  const sign = isZero ? "" : isUp ? "+" : "";
+  return (
+    <div
+      className={`mt-2 inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-md border ${color}`}
+      data-testid={testid}
+      title="Change vs the previous month (from /dashboard/trends)"
+    >
+      <Icon className="w-3 h-3" />
+      <span>{sign}{rounded.toFixed(1)}%</span>
+      <span className="text-stone-500 font-normal">vs last month</span>
+    </div>
+  );
+}
+
