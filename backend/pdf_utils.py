@@ -234,11 +234,14 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     original_loan = float(contract.get("original_loan_amount", loan) or loan)
     current_principal = float(contract.get("current_principal", contract.get("principal_remaining", loan)) or loan)
     principal_paid_disp = float(contract.get("principal_paid", 0) or 0)
-    penalty_rate = float(contract.get("penalty_rate", 10.0) or 10.0)
+    rate = float(contract.get("interest_rate", 0) or 0)
+    # Penalty defaults to the contract's own interest rate (15% electronics →
+    # 15% penalty; 10% car → 10% penalty). Explicit `penalty_rate` on the
+    # contract overrides this default.
+    penalty_rate = float(contract.get("penalty_rate") or rate or 10.0)
     penalty_charged = float(contract.get("penalty_charged", round(current_principal * penalty_rate / 100.0, 2)))
     penalty_paid_disp = float(contract.get("penalty_paid", 0) or 0)
     penalty_outstanding = float(contract.get("penalty_outstanding", max(0.0, penalty_charged - penalty_paid_disp)))
-    rate = float(contract.get("interest_rate", 0) or 0)
     interest_amount = round(loan * rate / 100.0, 2)
     total_due = float(contract.get("total_due", loan + interest_amount))
     item_kind = contract.get("item_type", "").lower()
@@ -1604,18 +1607,18 @@ DEFAULT_TNC_EN = """1. The Client pledges the item described above as security f
 2. Maximum contract term is 2 months from the contract date.
 3. The Client may repay the loan in full, in part, or pay interest-only at any time within the term.
 4. Even if the loan is repaid the day after contract date, the minimum agreed interest still applies.
-5. Standard interest rates: Car 10%, Motorcycle 15%, Electronic 15%.
+5. Standard interest rates: Car 10%, Motorcycle 10%, Electronic 15%.
 6. Partial payments reduce the principal first; interest is then calculated only on the remaining principal.
-7. Late payment penalty: 10% of the original loan amount (does not include the interest fee).
+7. Late payment penalty matches the contract's interest rate (Car 10%, Motorcycle 10%, Electronic 15%) and is calculated on the current principal (does not include the interest fee).
 8. If unpaid after the due date, the item may be moved to public auction or the contract may be reactivated by the Officer."""
 
 DEFAULT_TNC_TET = """1. Kliente entrega sasán ne'ebé deskreve iha leten nudar garantia ba osan empréstimu.
 2. Prazu maximu kontratu mak fulan rua (2) hahu husi data kontratu.
 3. Kliente bele selu kompletu, parsiál, ka selu juru deit iha tempu ne'ebé deit durante prazu.
 4. Maski selu loan iha loron tuir mai ba data kontratu, taxa interese minimu sei aplika.
-5. Taxa juru padraun: Karreta 10%, Motorizada 15%, Eletróniku 15%.
+5. Taxa juru padraun: Karreta 10%, Motorizada 10%, Eletróniku 15%.
 6. Pagamentu parsiál hamenus uluk principal; interese kalkula tan iha balansu principal ne'ebé restu.
-7. Multa atrasu: 10% husi montante empréstimu orijinál (la inklui taxa interese).
+7. Multa atrasu tuir taxa juru kontratu (Karreta 10%, Motorizada 10%, Eletróniku 15%) no kalkula ba prinsipál atuál (la inklui taxa interese).
 8. Se la selu kompleta to'o data limite, sasán bele hatama ba leilaun ka kontratu bele halo aktivu fali husi Ofisiál."""
 
 

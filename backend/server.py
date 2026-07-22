@@ -2087,6 +2087,23 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"Grace-period status migration skipped: {e}")
 
+    # One-time migration: clear cached `penalty_charged` on any contract that
+    # doesn't store its own `penalty_rate`. This forces recompute_financials
+    # to recalculate the penalty against the CONTRACT's interest rate (e.g.
+    # 15% for electronics, 10% for cars) instead of the historical flat 10%.
+    try:
+        marker = await db.migrations.find_one({"_id": "penalty_rate_2026_02"})
+        if not marker:
+            wipe = await db.contracts.update_many(
+                {"penalty_rate": {"$exists": False}, "status": {"$ne": "redeemed"}},
+                {"$unset": {"penalty_charged": "", "penalty_outstanding": ""}},
+            )
+            await db.migrations.insert_one({"_id": "penalty_rate_2026_02"})
+            if wipe.modified_count:
+                logger.info(f"Cleared cached penalty on {wipe.modified_count} contracts (will recompute vs interest_rate)")
+    except Exception as e:
+        logger.warning(f"Penalty-rate migration skipped: {e}")
+
     # Initialize object storage (best-effort)
     try:
         objstore.init_storage()

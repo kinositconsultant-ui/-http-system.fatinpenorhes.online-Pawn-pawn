@@ -668,6 +668,21 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 54 — Article 8 Penalty Rate Matches Interest Rate (2026-02-22) ✅
+User feedback: on the contract PDF, Article 8 (Multa Atrasu) was hard-coded to 10% of current principal even when Article 3 charged 15% interest (electronics) — the penalty rate should mirror the interest rate.
+
+### Fix
+- **`services.py:_recompute_contract_status`**: `penalty_rate` now defaults to the contract's own `interest_rate` (`float(contract.get("penalty_rate") or rate)`). Contracts that explicitly store a `penalty_rate` field still respect it.
+- **`pdf_utils.build_contract_pdf`**: same default (`penalty_rate = float(contract.get("penalty_rate") or rate or 10.0)`), so Article 8's wording and math automatically reflect Car 10%, Motorcycle 10%, Electronic 15%.
+- **`DEFAULT_TNC_EN` / `DEFAULT_TNC_TET`**: rule 7 rewritten from "10% of the original loan amount" to "matches the contract's interest rate (Car 10%, Motorcycle 10%, Electronic 15%) and is calculated on the current principal". Rule 5 also updated (Motorcycle 15% → 10%).
+- **One-time migration** at startup: clears cached `penalty_charged` / `penalty_outstanding` on non-redeemed contracts that don't have an explicit `penalty_rate`, so recompute_financials recalculates them against the interest rate. Uses `db.migrations` collection with `_id: "penalty_rate_2026_02"` for idempotency.
+
+### Verification (live)
+- Car @ 10%: Article 8 shows "multa **10%** … USD $500.00" (10% × $5,000 principal) ✅
+- Motorcycle @ 15%: Article 8 shows "multa **15%** … USD $150.00" (15% × $1,000 principal) ✅
+- Electronic @ 10%: penalty $10 = 10% × $100 ✅
+- Motorcycle @ 10%: penalty $100 = 10% × $1,000 ✅
+
 ## Iteration 53 — Batch B: Grace Nudge + Public Catalogue + Snapshot QR (2026-02-22) ✅
 Three follow-ups from Batch A backlog. Server Split (item #4 requested) is **deferred** to a dedicated session — full split of `server.py` (2,144 lines / 60 route decorators) is a multi-hour pure refactor with high regression risk; the user-facing value here is zero and it deserves its own testing pass.
 

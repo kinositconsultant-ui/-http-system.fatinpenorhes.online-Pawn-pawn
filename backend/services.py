@@ -148,9 +148,11 @@ async def _recompute_contract_status(contract: dict) -> dict:
     # audit reports, PDF terms cards and receipts. Never mutated.
     original_loan_amount = float(contract.get("original_loan_amount") or loan)
     rate = float(contract["interest_rate"])
-    penalty_rate = float(contract.get("penalty_rate", 10.0))  # 10% default
-    # Legacy contracts default to M2 (their historical rule); new contracts
-    # explicitly set "M1" at creation time.
+    # Penalty rate matches the contract's interest rate by default so that a
+    # 15%-electronics contract charges a 15% late penalty and a 10%-car
+    # contract charges a 10% one. Legacy behaviour used a flat 10%; contracts
+    # that were saved with an explicit `penalty_rate` field keep that value.
+    penalty_rate = float(contract.get("penalty_rate") or rate)
     interest_rule = contract.get("interest_rule", "M2")
 
     today_iso = _today_iso()
