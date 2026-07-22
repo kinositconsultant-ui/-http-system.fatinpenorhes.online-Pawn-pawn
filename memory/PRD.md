@@ -667,3 +667,25 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - **New**: Subtle WebAudio 2-tone chime (A5→E5, ~0.4s, gain 0.08) plays once per browser session in `/app/frontend/src/layouts/AdminLayout.js` when polled overdue count first crosses `REPORTS_ALERT_THRESHOLD` (15). Flag stored in `sessionStorage` (`overdue-chime-played`); auto-resets if count falls below threshold so a subsequent crossing re-alerts.
 - No backend changes; no schema changes; no dependency changes.
 
+
+## Iteration 50 — Business Dashboard Clarity: Labels + Info Tooltips (2026-02-22) ✅
+- User asked "what is different loan amount in dashboard business" — realized the KPI wording was ambiguous vs. Contracts/Reports terminology.
+- **Renamed KPIs** in `/app/frontend/src/pages/BusinessDashboard.js` for clarity:
+  - "Total Loaned Out" → **"Current Portfolio"** (sub: "Principal remaining on all active loans" / "New disbursed <range>: $X")
+  - "Interest Earned · <range>" → **"Interest Received · <range>"** (sub: "Realized interest collected via payments")
+  - "Projected Interest · <range>" — sub clarified to "Expected at current book · capped by Article 4"
+  - "Potential Loss" — unchanged label, tooltip added
+- **Info (ⓘ) tooltips** added on all 6 KPI + status cards (Current Portfolio, Interest Received, Projected Interest, Potential Loss, Grace Period, Ready for Auction). Uses native `title` attribute; small `<Info>` icon from lucide-react; `preventDefault + stopPropagation` on click so the parent Link doesn't navigate.
+- **i18n keys added** (EN + TET) in `/app/frontend/src/lib/i18n.js`:
+  - `business_current_portfolio` / `business_current_portfolio_sub` / `business_new_disbursed`
+  - `business_interest_received` / `business_interest_received_sub`
+  - `business_projected_sub`
+  - `info_current_portfolio`, `info_interest_received`, `info_projected_interest`, `info_potential_loss`, `info_grace_period`, `info_auction_ready`
+- **Terminology reference (documented in tooltips)**:
+  - **Current Portfolio** = Σ `principal_remaining` across active contracts (snapshot; unaffected by range toggle).
+  - **New disbursed** = amount newly disbursed inside the selected Daily/Weekly/30d/YTD window (based on `contract_date`).
+  - **Loan Amount** (Contracts/Reports) = original disbursed principal, immutable.
+  - **Principal Remaining** = outstanding after partial principal payments — this is what sums into "Current Portfolio".
+- Verified via Playwright: `admin@fatinpenhores.tl` → /business → 6 info buttons rendered with correct tooltip text; page renders KPIs correctly ($549,700 portfolio + $364k new-in-range subline).
+- No backend / schema / dependency changes.
+

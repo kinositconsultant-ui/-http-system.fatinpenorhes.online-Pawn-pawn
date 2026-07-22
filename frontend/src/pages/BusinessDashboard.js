@@ -12,6 +12,7 @@ import {
   DollarSign,
   Calendar,
   PieChart as PieIcon,
+  Info,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -68,30 +69,35 @@ export default function BusinessDashboard() {
   const kpis = [
     {
       key: "loaned",
-      label: t("business_total_loaned") || "Total Loaned Out",
-      sub: rangeData ? `New ${rangeLabel}: ${money(rangeData.loaned_new)}` : "Cash currently in the field",
+      label: t("business_current_portfolio") || "Current Portfolio",
+      sub: rangeData
+        ? `${t("business_new_disbursed") || "New disbursed"} ${rangeLabel}: ${money(rangeData.loaned_new)}`
+        : t("business_current_portfolio_sub") || "Principal remaining on all active loans",
       value: metrics ? money(metrics.total_loaned_out) : "—",
       Icon: Wallet,
       tone: "text-[#1B2D5C]",
       to: "/contracts?status=active",
+      info: t("info_current_portfolio"),
     },
     {
       key: "earned",
-      label: `Interest Earned · ${rangeLabel}`,
-      sub: "Realized interest received via payments",
+      label: `${t("business_interest_received") || "Interest Received"} · ${rangeLabel}`,
+      sub: t("business_interest_received_sub") || "Realized interest collected via payments",
       value: rangeData ? money(rangeData.interest_earned) : "—",
       Icon: DollarSign,
       tone: "text-[#4C7F62]",
       to: "/reports?tab=payments",
+      info: t("info_interest_received"),
     },
     {
       key: "proj",
       label: `Projected Interest · ${projRangeLabel}`,
-      sub: "At current book, capped by Article 4",
+      sub: t("business_projected_sub") || "Expected at current book · capped by Article 4",
       value: rangeData ? money(rangeData.projected_interest) : "—",
       Icon: TrendingUp,
       tone: "text-[#C17767]",
       to: "/reports?tab=financial",
+      info: t("info_projected_interest"),
     },
     {
       key: "risk",
@@ -101,6 +107,7 @@ export default function BusinessDashboard() {
       Icon: AlertTriangle,
       tone: "text-[#993333]",
       to: "/contracts?status=auction_ready",
+      info: t("info_potential_loss"),
     },
   ];
 
@@ -114,6 +121,7 @@ export default function BusinessDashboard() {
       tone: "text-amber-700",
       bg: "bg-amber-50 border-amber-200",
       to: "/contracts?status=overdue",
+      info: t("info_grace_period"),
     },
     {
       key: "auction_ready",
@@ -124,6 +132,7 @@ export default function BusinessDashboard() {
       tone: "text-rose-800",
       bg: "bg-rose-50 border-rose-200",
       to: "/contracts?status=auction_ready",
+      info: t("info_auction_ready"),
     },
   ];
 
@@ -174,7 +183,21 @@ export default function BusinessDashboard() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="text-eyebrow">{c.label}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-eyebrow">{c.label}</div>
+                  {c.info && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      title={c.info}
+                      aria-label={c.info}
+                      data-testid={`biz-kpi-${c.key}-info`}
+                      className="text-stone-400 hover:text-[#1B2D5C] transition"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
                 <div className="font-display text-2xl md:text-[1.75rem] font-semibold mt-3 break-words">
                   {c.value}
                 </div>
@@ -197,8 +220,22 @@ export default function BusinessDashboard() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase tracking-wider font-semibold text-stone-700">
-                  {c.label}
+                <div className="flex items-center gap-1.5">
+                  <div className="text-xs uppercase tracking-wider font-semibold text-stone-700">
+                    {c.label}
+                  </div>
+                  {c.info && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      title={c.info}
+                      aria-label={c.info}
+                      data-testid={`biz-status-${c.key}-info`}
+                      className="text-stone-400 hover:text-stone-700 transition"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
                 <div className={`font-display text-3xl mt-2 ${c.tone}`}>{c.value}</div>
                 <div className="text-[11px] text-stone-500 mt-1">{c.hint}</div>
