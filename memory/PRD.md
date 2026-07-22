@@ -668,6 +668,26 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 60 — Payment History Summary PDF (2026-02-22) ✅
+
+User request: *"add full pay into one pdf summary — interest, partial, penalty, full-pay in summary not inside pdf. Split the payment pdf remain same?"* — confirmed: keep the individual per-payment receipts (still handed to customers at each transaction), add a NEW combined "Full History" PDF per contract.
+
+### Backend
+- **New `build_payment_history_pdf(contract, client, item, payments)`** in `pdf_utils.py`. Two blocks:
+  - **Snapshot table** at top: Original Loan / Principal Left / Interest Paid / Charged / Penalty Paid / Charged / Status.
+  - **Detail table**: every payment in chronological order with `Date · Receipt · Type · Principal · Interest · Penalty · Amount · Balance` (running balance). Disbursements shown at the top as negative amount setting the opening balance; TOTALS footer sums principal / interest / penalty / total received (excludes disbursements).
+  - Footer note explicitly reminds staff that the individual receipt PDFs are still the official proof handed to the client per transaction.
+- **New endpoint** `GET /api/contracts/{cid}/payments-summary-pdf` — protected by `get_current_user`. Pulls contract → client → item → all payments, streams the PDF as `<contract_number>-payment-history.pdf`.
+- Placed BEFORE `/payments/{pid}/pdf` — no route-order conflict since the two paths are distinct.
+
+### Frontend
+- **New "Payment History" button** (`ScrollText` icon, `data-testid="payment-history-btn-{cid}"`, green) next to the contract number on each Payments group row. Only shows on the Payments and Overdue tabs (not on Disbursements).
+- Clicking opens the shared `PdfPreviewDialog` with title `Payment History · <contract_number>` and a Download option. Reuses `openPaymentPdf(r)` — the button passes `_url` + `_title` so no separate handler needed.
+- **Verified**: 135 Payment History buttons render on the Payments page; clicking one opens the dialog; PDF text extraction on a 3-payment contract shows: Disbursement → Partial ($50) → Full ($60), running balance $100 → $50 → $0, TOTALS $110 ✅.
+
+### Zero regressions
+- Existing `/api/payments/{pid}/pdf` single-payment receipt PDFs untouched — cashiers still print those at each transaction.
+
 ## Iteration 59 — Scan Page + Gold Auction Labels + Payment Search Redesign (2026-02-22) ✅
 
 ### 1. `/scan` Admin Route — QR camera lookup

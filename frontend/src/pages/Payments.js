@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
@@ -59,6 +59,18 @@ export default function Payments() {
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
 
   const openPaymentPdf = (r) => {
+    // Handle both single-payment receipts and the new contract-level
+    // payment-history summary. The history button passes `_url` and `_title`
+    // so we don't need a separate handler.
+    if (r._url) {
+      setPdfPreview({
+        open: true,
+        url: r._url,
+        title: r._title || "Payment History",
+        filename: `${r.receipt_number || "payment-history"}.pdf`,
+      });
+      return;
+    }
     setPdfPreview({
       open: true,
       url: `${API_BASE}/payments/${r.id}/pdf`,
@@ -687,7 +699,32 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
                       {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </button>
                   </Td>
-                  <Td className="font-medium whitespace-nowrap">{contractLabel(g.contract_id)}</Td>
+                  <Td className="font-medium whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>{contractLabel(g.contract_id)}</span>
+                      {!disbursement && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const cn = contract?.contract_number || g.contract_id;
+                            const url = `${API_BASE}/contracts/${g.contract_id}/payments-summary-pdf`;
+                            onPreview && onPreview({
+                              id: g.contract_id,
+                              receipt_number: `${cn}-history`,
+                              _url: url,
+                              _title: `Payment History · ${cn}`,
+                            });
+                          }}
+                          data-testid={`payment-history-btn-${g.contract_id}`}
+                          title="Payment History PDF (all payments on this contract)"
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
+                        >
+                          <ScrollText className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </Td>
                   <Td right className="tabular-nums">{g.items.length}</Td>
                   <Td right className="font-medium tabular-nums">${g.total.toLocaleString()}</Td>
                   <Td className="whitespace-nowrap text-stone-500">{g.latest_date || "—"}</Td>

@@ -371,6 +371,140 @@ def build_contract_pdf(contract: dict, client: dict, item: dict, settings: dict 
     return buf.getvalue()
 
 
+
+def build_payment_history_pdf(
+    contract: dict,
+    client: dict | None,
+    item: dict | None,
+    payments: list[dict],
+) -> bytes:
+    """Combined payment-history summary for one contract.
+
+    Lists every payment on the contract (disbursement, interest_only,
+    partial, penalty, full-pay) in a single table with date, receipt no,
+    type, principal/interest/penalty split, and running balance. Individual
+    receipt PDFs (`/api/payments/{pid}/pdf`) are unaffected — the shop still
+    hands those to customers for each payment.
+    """
+    s = _styles()
+    buf, doc = _new_doc()
+
+    story = [
+        _branded_header(s),
+        Paragraph("Payment History Summary · Rezumu Istória Pagamentu", s["DocTitle"]),
+        Paragraph(
+            f"Contract <b>{contract.get('contract_number','—')}</b>"
+            f" · Client <b>{(client or {}).get('full_name','—')}</b>",
+            s["Body"],
+        ),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    # Snapshot at the top
+    loan = float(contract.get("loan_amount", 0) or 0)
+    principal_left = float(contract.get("principal_remaining", 0) or 0)
+    interest_charged = float(contract.get("interest_charged", 0) or 0)
+    interest_paid = float(contract.get("interest_paid", 0) or 0)
+    penalty_charged = float(contract.get("penalty_charged", 0) or 0)
+    penalty_paid = float(contract.get("penalty_paid", 0) or 0)
+    story.append(_data_table(
+        ["Original Loan", "Principal Left", "Interest Paid / Charged", "Penalty Paid / Charged", "Contract Status"],
+        [[
+            _money(loan),
+            _money(principal_left),
+            f"{_money(interest_paid)} / {_money(interest_charged)}",
+            f"{_money(penalty_paid)} / {_money(penalty_charged)}",
+            str(contract.get("status", "—")).replace("_", " ").upper(),
+        ]],
+        col_widths=[3.2 * cm, 3.4 * cm, 4.6 * cm, 4.6 * cm, 3.0 * cm],
+    ))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # Payments table
+    if not payments:
+        story.append(Paragraph(
+            "<i>No payments recorded yet · Seidauk iha pagamentu.</i>",
+            s["Body"],
+        ))
+    else:
+        # Sort chronologically so the running balance is meaningful
+        payments_sorted = sorted(
+            payments,
+            key=lambda p: (p.get("date") or "", p.get("created_at") or ""),
+        )
+        running = loan
+        rows: list[list[str]] = []
+        total_amount = 0.0
+        total_principal = 0.0
+        total_interest = 0.0
+        total_penalty = 0.0
+        for p in payments_sorted:
+            amount = float(p.get("amount", 0) or 0)
+            prin = float(p.get("principal_paid", p.get("principal", 0)) or 0)
+            interest = float(p.get("interest_paid", p.get("interest", 0)) or 0)
+            penalty = float(p.get("penalty_paid", p.get("penalty", 0)) or 0)
+            ptype = str(p.get("type") or p.get("payment_type") or "—").replace("_", " ")
+            if p.get("type") == "disbursement" or p.get("payment_type") == "disbursement":
+                # Disbursement — the initial pay-out increases what the client owes;
+                # skip it in totals but keep it visible as the opening line.
+                running = loan
+                rows.append([
+                    p.get("date", "—"),
+                    p.get("receipt_number", "—"),
+                    "Disbursement",
+                    "—",
+                    "—",
+                    "—",
+                    _money(-amount),
+                    _money(running),
+                ])
+                continue
+            # Reduces balance
+            running = max(0.0, running - amount)
+            total_amount += amount
+            total_principal += prin
+            total_interest += interest
+            total_penalty += penalty
+            rows.append([
+                p.get("date", "—"),
+                p.get("receipt_number", "—"),
+                ptype.title(),
+                _money(prin),
+                _money(interest),
+                _money(penalty),
+                _money(amount),
+                _money(running),
+            ])
+
+        footer = [
+            "",
+            "TOTALS",
+            "",
+            _money(total_principal),
+            _money(total_interest),
+            _money(total_penalty),
+            _money(total_amount),
+            "",
+        ]
+        story.append(_data_table(
+            ["Date", "Receipt", "Type", "Principal", "Interest", "Penalty", "Amount", "Balance"],
+            rows,
+            col_widths=[2.0 * cm, 2.4 * cm, 2.4 * cm, 2.0 * cm, 2.0 * cm, 2.0 * cm, 2.0 * cm, 2.2 * cm],
+            footer_row=footer,
+        ))
+
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(
+        "<font size=7 color='#64748B'>Summary generated from all payments recorded against this contract. "
+        "Individual receipt PDFs (one per payment) are still available on the Payments page and remain the "
+        "official proof handed to the client at each transaction.</font>",
+        s["Body"],
+    ))
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None) -> bytes:
     s = _styles()
     buf = BytesIO()

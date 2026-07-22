@@ -816,6 +816,32 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     return {"payment": doc, "contract": updated}
 
 
+@api.get("/contracts/{cid}/payments-summary-pdf")
+async def contract_payments_summary_pdf(cid: str, _: dict = Depends(get_current_user)):
+    """Combined payment-history summary PDF for a single contract.
+
+    Lists every payment recorded against the contract in chronological order
+    with a running balance. Individual per-payment receipts remain at
+    `/api/payments/{pid}/pdf` — this endpoint does NOT replace them.
+    """
+    from pdf_utils import build_payment_history_pdf  # noqa: PLC0415
+
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
+    client_doc = await db.clients.find_one({"id": c.get("client_id")}, {"_id": 0}) or {}
+    item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
+    payments = await db.payments.find({"contract_id": cid}, {"_id": 0}).to_list(500)
+    pdf_bytes = build_payment_history_pdf(c, client_doc, item, payments)
+    safe_no = str(c.get("contract_number", "history")).replace("/", "-")
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe_no}-payment-history.pdf"'},
+    )
+
+
 @api.get("/payments/{pid}/pdf")
 async def payment_pdf(pid: str, _: dict = Depends(get_current_user)):
     p = await db.payments.find_one({"id": pid}, {"_id": 0})
