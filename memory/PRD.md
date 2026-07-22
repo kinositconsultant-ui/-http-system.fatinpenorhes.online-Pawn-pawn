@@ -513,6 +513,15 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 45 — Owner Snapshot PDF (2026-02-17) ✅
+- New endpoint `GET /api/dashboard/snapshot/pdf` (module-gated by `dashboard`) generates a one-page "Owner Snapshot" PDF containing:
+  - 3×2 KPI grid (Clients / Active / Overdue / Total Loan / Total Payments / Profit) with month-over-month arrows (▲ ▼) on the money row
+  - 6-month multi-line trend chart (Loans / Payments / Interest) using ReportLab `HorizontalLineChart` — Navy / Green / Coral series
+  - Overdue-by-item-type bar chart in Rose
+- New `build_dashboard_snapshot_pdf(summary, trends, generated_at)` in `pdf_utils.py`. Refactored server.py to expose `_dashboard_summary_data()` and `_dashboard_trends_data()` helpers so the PDF endpoint reuses the exact same aggregation as the JSON endpoints (no duplicate math).
+- Frontend: new **"Owner Snapshot PDF"** button in the Dashboard header (data-testid=`dashboard-snapshot-btn`) that opens the existing `PdfPreviewDialog` with `url=/api/dashboard/snapshot/pdf` → users see the PDF preview first, then choose Download.
+- Verified via curl: endpoint returns HTTP 200, 46KB payload with `%PDF-1.4` magic header. Frontend dialog opens with correct title + Download button.
+
 ## Iteration 44 — KPI Sparklines (2026-02-17) ✅
 - Added ultra-compact 6-month sparklines (recharts `LineChart`, no axes/grid/tooltip, 96×32px, animation off) next to the trend pill on **Total Loan / Total Payments / Profit** KPI cards.
 - Colors match each KPI tone: Loan Navy `#1B2D5C`, Payments Green `#4C7F62`, Profit Coral `#C17767`.

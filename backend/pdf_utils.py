@@ -1857,3 +1857,166 @@ def build_member_card_pdf(client: dict, verify_url: str, photo_bytes: bytes | No
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+
+# =====================================================================
+# Owner Snapshot — one-page dashboard summary PDF
+# =====================================================================
+def build_dashboard_snapshot_pdf(
+    summary: dict,
+    trends: dict,
+    generated_at: str = "",
+) -> bytes:
+    """One-page "Owner Snapshot" PDF: KPI grid + 6-month trend chart +
+    overdue-by-type breakdown. Designed for board updates / investor emails.
+
+    Args:
+        summary: payload from /api/dashboard/summary
+        trends:  payload from /api/dashboard/trends
+        generated_at: ISO date string for the "Generated" line
+    """
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics.charts.linecharts import HorizontalLineChart
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+
+    s = _styles()
+    buf, doc = _new_doc()
+
+    story = [
+        _branded_header(s),
+        Paragraph("Owner Snapshot · Vizão Nain-Kompañia", s["DocTitle"]),
+        Paragraph(f"Generated: <b>{generated_at or 'now'}</b>", s["Small"]),
+        Spacer(1, 0.35 * cm),
+    ]
+
+    # ---------- KPI grid (3 columns × 2 rows) ----------
+    def _delta(cur, prev):
+        if prev in (0, None):
+            return "—"
+        pct = (cur - prev) / prev * 100.0
+        arrow = "▲" if pct >= 0 else "▼"
+        return f"{arrow} {pct:+.1f}%"
+
+    months = trends.get("months") or []
+    last = months[-1] if months else {}
+    prev = months[-2] if len(months) >= 2 else {}
+
+    def _kpi_cell(title, value, delta_str=""):
+        return [
+            Paragraph(f"<font size=8 color='#64748B'>{title.upper()}</font>", s["Small"]),
+            Paragraph(f"<font size=13 color='#1B2D5C'><b>{value}</b></font>", s["Body"]),
+            Paragraph(
+                f"<font size=8 color='#64748B'>{delta_str}</font>"
+                if delta_str else "&nbsp;",
+                s["Small"],
+            ),
+        ]
+
+    total_loan = summary.get("total_loan_amount", 0)
+    total_payments = summary.get("total_payments", 0)
+    profit = summary.get("total_interest_expected", 0)
+    grid = [
+        [
+            _kpi_cell("Clients", f"{summary.get('total_clients', 0)}"),
+            _kpi_cell("Active Contracts", f"{summary.get('active_contracts', 0)}"),
+            _kpi_cell("Overdue Contracts", f"{summary.get('overdue_contracts', 0)}"),
+        ],
+        [
+            _kpi_cell(
+                "Total Loan",
+                _money(total_loan),
+                _delta(last.get("loans", 0), prev.get("loans", 0)),
+            ),
+            _kpi_cell(
+                "Total Payments",
+                _money(total_payments),
+                _delta(last.get("payments", 0), prev.get("payments", 0)),
+            ),
+            _kpi_cell(
+                "Profit / Interest",
+                _money(profit),
+                _delta(last.get("interest", 0), prev.get("interest", 0)),
+            ),
+        ],
+    ]
+    grid_tbl = Table(grid, colWidths=[5.9 * cm, 5.9 * cm, 5.9 * cm])
+    grid_tbl.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.5, RULE),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, RULE),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(grid_tbl)
+    story.append(Spacer(1, 0.4 * cm))
+
+    # ---------- Monthly Trend Chart (6-month line chart) ----------
+    story.append(_section_title(s, "Monthly Trend — Loans · Payments · Interest"))
+    if months:
+        loans_series = [float(m.get("loans", 0) or 0) for m in months]
+        pays_series = [float(m.get("payments", 0) or 0) for m in months]
+        int_series = [float(m.get("interest", 0) or 0) for m in months]
+        cats = [m.get("month", "")[-2:] for m in months]  # "MM" suffix for readability
+
+        d = Drawing(500, 150)
+        chart = HorizontalLineChart()
+        chart.x = 40
+        chart.y = 20
+        chart.width = 440
+        chart.height = 115
+        chart.data = [loans_series, pays_series, int_series]
+        chart.categoryAxis.categoryNames = [f"{m.get('month','')}" for m in months]
+        chart.categoryAxis.labels.fontSize = 7
+        chart.categoryAxis.labels.dy = -3
+        chart.valueAxis.labels.fontSize = 7
+        chart.valueAxis.forceZero = 1
+        chart.lines[0].strokeColor = NAVY
+        chart.lines[0].strokeWidth = 1.6
+        chart.lines[1].strokeColor = colors.HexColor("#4C7F62")
+        chart.lines[1].strokeWidth = 1.6
+        chart.lines[2].strokeColor = colors.HexColor("#C17767")
+        chart.lines[2].strokeWidth = 1.6
+        chart.lineLabels.fontSize = 6
+        d.add(chart)
+        story.append(d)
+        # Legend row
+        legend = Table(
+            [[
+                Paragraph("<font color='#1B2D5C'>■</font> <font size=8>Loans</font>", s["Small"]),
+                Paragraph("<font color='#4C7F62'>■</font> <font size=8>Payments</font>", s["Small"]),
+                Paragraph("<font color='#C17767'>■</font> <font size=8>Interest</font>", s["Small"]),
+            ]],
+            colWidths=[5.9 * cm, 5.9 * cm, 5.9 * cm],
+        )
+        legend.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+        story.append(legend)
+    else:
+        story.append(Paragraph("<i>No trend data available.</i>", s["Small"]))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # ---------- Overdue by Item Type (bar chart) ----------
+    obt = trends.get("overdue_by_type") or []
+    if obt:
+        story.append(_section_title(s, "Overdue by Item Type"))
+        bar_d = Drawing(500, 130)
+        bar = VerticalBarChart()
+        bar.x = 40
+        bar.y = 20
+        bar.width = 440
+        bar.height = 95
+        bar.data = [[int(row.get("count", 0)) for row in obt]]
+        bar.categoryAxis.categoryNames = [str(row.get("type", "")) for row in obt]
+        bar.categoryAxis.labels.fontSize = 8
+        bar.valueAxis.labels.fontSize = 7
+        bar.valueAxis.forceZero = 1
+        bar.bars[0].fillColor = colors.HexColor("#993333")
+        bar.barSpacing = 4
+        bar_d.add(bar)
+        story.append(bar_d)
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()

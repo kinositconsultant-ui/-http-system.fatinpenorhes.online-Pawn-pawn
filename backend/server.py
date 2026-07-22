@@ -38,6 +38,7 @@ from pdf_utils import (
     build_expenses_pdf,
     build_finance_summary_pdf,
     build_member_card_pdf,
+    build_dashboard_snapshot_pdf,
     DEFAULT_TNC_EN,
     DEFAULT_TNC_TET,
 )
@@ -1387,8 +1388,10 @@ async def delete_auction(aid: str, user: dict = Depends(require_admin)):
 # =====================================================================
 # Dashboard
 # =====================================================================
-@api.get("/dashboard/summary")
-async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
+async def _dashboard_summary_data() -> dict:
+    """Pure data-fetch helper for the Dashboard summary endpoint. Extracted
+    so other endpoints (e.g. the Owner Snapshot PDF) can reuse the exact
+    same aggregation without duplicating the arithmetic."""
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
     clients_count = await db.clients.count_documents({})
@@ -1418,7 +1421,6 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
     profit = total_payments - sum(
         float(c.get("loan_amount", 0)) for c in contracts if c.get("status") == "redeemed"
     )
-
     return {
         "total_clients": clients_count,
         "active_contracts": active,
@@ -1433,6 +1435,11 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
     }
 
 
+@api.get("/dashboard/summary")
+async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
+    return await _dashboard_summary_data()
+
+
 # =====================================================================
 
 
@@ -1440,8 +1447,7 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
 # =====================================================================
 # Dashboard trends (for charts)
 # =====================================================================
-@api.get("/dashboard/trends")
-async def dashboard_trends(_: dict = Depends(get_current_user)):
+async def _dashboard_trends_data() -> dict:
     """Return last-6-month monthly aggregates and overdue snapshot."""
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
@@ -1483,6 +1489,28 @@ async def dashboard_trends(_: dict = Depends(get_current_user)):
             by_type[c.get("item_type", "car")] = by_type.get(c.get("item_type", "car"), 0) + 1
     overdue_by_type = [{"type": k, "count": v} for k, v in by_type.items()]
     return {"months": months, "overdue_by_type": overdue_by_type}
+
+
+@api.get("/dashboard/trends")
+async def dashboard_trends(_: dict = Depends(get_current_user)):
+    return await _dashboard_trends_data()
+
+
+@api.get("/dashboard/snapshot/pdf")
+async def dashboard_snapshot_pdf(_: dict = Depends(require_module("dashboard"))):
+    """One-page Owner Snapshot PDF (KPIs + monthly trend chart + overdue-by-type)."""
+    summary = await _dashboard_summary_data()
+    trends = await _dashboard_trends_data()
+    pdf_bytes = build_dashboard_snapshot_pdf(
+        summary,
+        trends,
+        generated_at=_today_iso(),
+    )
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="owner-snapshot.pdf"'},
+    )
 
 
 # =====================================================================

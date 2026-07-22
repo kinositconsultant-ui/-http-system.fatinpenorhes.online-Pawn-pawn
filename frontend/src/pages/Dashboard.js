@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
 import PinnedViewsPanel from "../components/PinnedViewsPanel";
 import SystemManagementPanel from "../components/SystemManagementPanel";
+import PdfPreviewDialog from "../components/PdfPreviewDialog";
 import {
   Users,
   FileText,
@@ -16,6 +18,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  FileDown,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -56,6 +59,7 @@ export default function Dashboard() {
   const { t } = useLang();
   const [data, setData] = useState(null);
   const [trends, setTrends] = useState(null);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
 
   useEffect(() => {
     api.get("/dashboard/summary").then((r) => setData(r.data));
@@ -132,11 +136,22 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8" data-testid="dashboard-root">
-      <header>
-        <div className="text-eyebrow">{t("overview")}</div>
-        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-stone-900 mt-1">
-          {t("dashboard")}
-        </h1>
+      <header className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <div className="text-eyebrow">{t("overview")}</div>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-stone-900 mt-1">
+            {t("dashboard")}
+          </h1>
+        </div>
+        <Button
+          onClick={() => setSnapshotOpen(true)}
+          variant="outline"
+          className="gap-2 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white"
+          data-testid="dashboard-snapshot-btn"
+          title="One-page PDF snapshot — great for board updates and investor emails"
+        >
+          <FileDown className="w-4 h-4" /> Owner Snapshot PDF
+        </Button>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -307,6 +322,14 @@ export default function Dashboard() {
       <PinnedViewsPanel />
 
       <SystemManagementPanel />
+
+      <PdfPreviewDialog
+        open={snapshotOpen}
+        onOpenChange={setSnapshotOpen}
+        url={pdfUrl("/dashboard/snapshot/pdf")}
+        title="Owner Snapshot"
+        downloadName="owner-snapshot.pdf"
+      />
     </div>
   );
 }
