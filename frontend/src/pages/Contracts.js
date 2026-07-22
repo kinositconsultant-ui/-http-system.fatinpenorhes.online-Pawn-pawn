@@ -962,7 +962,9 @@ function RulePreviewCard({ loan, rate }) {
   }
   const monthly = loan * rate / 100;
   const twoMonthInterest = 2 * monthly;
-  const penalty = loan * 0.10;
+  // Penalty (Article 8) matches the contract's interest rate — cashiers can
+  // quote it live to the client so there are no surprises when it kicks in.
+  const penalty = loan * rate / 100;
   const maxDue = loan + twoMonthInterest + penalty;
   const money = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
@@ -976,7 +978,12 @@ function RulePreviewCard({ loan, rate }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <RuleRow label="Monthly interest" value={money(monthly)} sub={`${rate}% × principal`} />
         <RuleRow label="Interest × 2 max" value={money(twoMonthInterest)} sub="Article 4 cap" />
-        <RuleRow label="Penalty (Art. 8)" value={money(penalty)} sub="10% one-time" />
+        <RuleRow
+          label="Penalty if late"
+          value={money(penalty)}
+          sub={`${rate}% × principal (Art. 8)`}
+          data-testid="rule-preview-penalty"
+        />
         <RuleRow
           label="Total Selu max"
           value={money(maxDue)}

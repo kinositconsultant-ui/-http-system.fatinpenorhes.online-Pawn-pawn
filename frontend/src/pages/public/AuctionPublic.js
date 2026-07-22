@@ -28,9 +28,11 @@ export default function AuctionPublic() {
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [nextAuction, setNextAuction] = useState({ item_count: 0, next_auction_date: "" });
 
   useEffect(() => {
     api.get("/public/auction-status").then((r) => setLocked(r.data.locked)).catch(() => {});
+    api.get("/public/auction-catalogue/info").then((r) => setNextAuction(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,17 +117,27 @@ export default function AuctionPublic() {
             {T("Contact us on WhatsApp", "Kontaktu liu husi WhatsApp")}:{" "}
             <a className="text-[#1A2A52] font-semibold" href="https://wa.me/67078372678" target="_blank" rel="noreferrer">+670 78372678</a>
           </p>
-          <div className="pt-4 border-t border-stone-200 text-center">
-            <a
-              href={`${process.env.REACT_APP_BACKEND_URL}/api/public/auction-catalogue/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="public-catalogue-locked-btn"
-              className="inline-flex items-center gap-2 text-sm text-[#1A2A52] hover:text-[#B45309] font-medium"
-            >
-              <FileDown className="w-4 h-4" />
-              {T("Or download the printable catalogue (no password)", "Ka baixa katálogu impressu (la presiza liafuan-xave)")}
-            </a>
+          <div className="pt-4 border-t border-stone-200 text-center space-y-2">
+            {nextAuction.next_auction_date && (
+              <div
+                data-testid="next-auction-banner-locked"
+                className="inline-block px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
+              >
+                🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b>
+              </div>
+            )}
+            <div>
+              <a
+                href={`${process.env.REACT_APP_BACKEND_URL}/api/public/auction-catalogue/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="public-catalogue-locked-btn"
+                className="inline-flex items-center gap-2 text-sm text-[#1A2A52] hover:text-[#B45309] font-medium"
+              >
+                <FileDown className="w-4 h-4" />
+                {T("Or download the printable catalogue (no password)", "Ka baixa katálogu impressu (la presiza liafuan-xave)")}
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -157,6 +169,14 @@ export default function AuctionPublic() {
               "Sasán ne'ebé daudaun ami buka komprador. Kontaktu mai ami atu bid ka vizita lokál Dili.",
             )}
           </p>
+          {nextAuction.next_auction_date && (
+            <div
+              data-testid="next-auction-banner"
+              className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
+            >
+              🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b>
+            </div>
+          )}
         </div>
         {locked && (
           <button

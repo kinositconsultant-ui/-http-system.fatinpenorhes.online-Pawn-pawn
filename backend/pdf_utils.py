@@ -2069,13 +2069,19 @@ def build_dashboard_snapshot_pdf(
 
 
 
-def build_auction_catalogue_pdf(items: list[dict], generated_at: str | None = None) -> bytes:
+def build_auction_catalogue_pdf(
+    items: list[dict],
+    generated_at: str | None = None,
+    next_auction_date: str | None = None,
+) -> bytes:
     """Public-facing catalogue of items eligible for the next auction.
 
-    Each row shows the item type, description/brand-model, market value, and
-    a reference code so a bidder can walk into the shop and ask to inspect it.
-    Personal / financial detail about the borrower is intentionally excluded —
-    this document is safe to hand out on the street or pin on a noticeboard.
+    Args:
+        items: list of item dicts (ref, item_type, brand, model, year, color,
+            plate, description, market_value, min_bid). No PII.
+        generated_at: ISO date string for the "Generated" line.
+        next_auction_date: ISO date shown as a highlighted banner near the top.
+            When empty, shows "TBA · Sei informa" — safe fallback.
     """
     s = _styles()
     buf, doc = _new_doc(landscape_mode=False)
@@ -2083,13 +2089,20 @@ def build_auction_catalogue_pdf(items: list[dict], generated_at: str | None = No
     story = [
         _branded_header(s),
         Paragraph("Auction Catalogue · Katálogu Leilaun", s["DocTitle"]),
-        Paragraph(
-            f"Items eligible for the next auction — Sasán prontu ba leilaun tuir mai."
-            f"<br/>Generated: <b>{generated_at or ''}</b> · Total items: <b>{len(items)}</b>",
-            s["Body"],
-        ),
-        Spacer(1, 0.3 * cm),
     ]
+
+    # Next auction date banner
+    banner_date = next_auction_date if next_auction_date else "TBA · Sei informa"
+    story.append(Paragraph(
+        f"<font color='#B45309'><b>Next Auction · Leilaun tuir mai:</b> {banner_date}</font>",
+        s["Body"],
+    ))
+    story.append(Paragraph(
+        f"Items eligible for the next auction — Sasán prontu ba leilaun tuir mai."
+        f"<br/>Generated: <b>{generated_at or ''}</b> · Total items: <b>{len(items)}</b>",
+        s["Body"],
+    ))
+    story.append(Spacer(1, 0.3 * cm))
 
     rows = []
     for it in items:

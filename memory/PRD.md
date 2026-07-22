@@ -668,6 +668,35 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 55 — Catalogue Auto-Refresh + Next Auction Date + Penalty Preview (2026-02-22) ✅
+
+### 1. Catalogue Auto-Refresh (cached PDF)
+- **New in-process cache** `_CATALOGUE_CACHE` in `server.py` keyed on `(today, next_auction_date)`. Hits within the same day return the exact same bytes.
+- **New scheduler job** `catalogue_refresh` (APScheduler cron `01:00 UTC` = `10:00 Timor`) rebuilds the cache nightly. Registered in `scheduler.JOB_IDS` + `start_scheduler`.
+- **New endpoint** `POST /api/auctions/catalogue/refresh` (admin) force-rebuilds the cache and returns `{size_bytes, generated_at, next_auction_date, item_count}`.
+- Both admin (`/api/auctions/catalogue/pdf`) and public (`/api/public/auction-catalogue/pdf`) endpoints now serve from the cache; refactored to share `get_or_build_catalogue_pdf()`.
+- **New public info endpoint** `GET /api/public/auction-catalogue/info` — cheap `{item_count, next_auction_date}` for the public site to poll before showing the PDF button.
+
+### 2. Next Auction Date
+- Added `next_auction_date: str = ""` to `SettingsIn`. Empty = "TBA · Sei informa" on the PDF.
+- **PDF**: `build_auction_catalogue_pdf` now takes `next_auction_date` and renders a bold amber-brown banner immediately after the title: *"Next Auction · Leilaun tuir mai: 2026-08-15"*.
+- **Settings UI**: new "Auction Settings · Konfigurasaun Leilaun" card with a `date` input (`data-testid="settings-next-auction-date"`) + "Refresh Catalogue Now" button that calls the force-rebuild endpoint.
+- **Public AuctionPublic page**: fetches `/info` on mount, shows a highlighted amber banner "🗓️ Next Auction: 2026-08-15" on both the locked screen (`data-testid="next-auction-banner-locked"`) and the unlocked header (`data-testid="next-auction-banner"`).
+
+### 3. Penalty Preview in New Contract dialog
+- `RulePreviewCard` in `Contracts.js` now computes `penalty = loan × interest_rate` (was hardcoded 10%).
+- Renamed row label: "Penalty (Art. 8)" → "**Penalty if late**" with sub-copy `${rate}% × principal (Art. 8)` so cashiers can quote the exact figure live to the client as they change the rate.
+- `Total Selu max` follows suit automatically since it feeds off the new penalty value.
+
+### Verification (live)
+- Settings PUT → `next_auction_date=2026-08-15` accepted; GET returns it back.
+- Force refresh: `{ok:true, size_bytes:60248, item_count:192, next_auction_date:"2026-08-15"}`.
+- Public `/info` (no auth): `{"item_count":192,"next_auction_date":"2026-08-15"}` ✅.
+- Public catalogue PDF banner extract via pdfminer: *"Next Auction · Leilaun tuir mai: 2026-08-15"* ✅.
+- Screenshot: locked-screen banner renders correctly.
+- New Contract dialog with loan $1,000 @ 10%: "Penalty if late $100 · 10% × principal (Art. 8)"; switching to 15% would auto-update to $150 ✅.
+- Scheduler: `catalogue_refresh` job registered on boot.
+
 ## Iteration 54 — Article 8 Penalty Rate Matches Interest Rate (2026-02-22) ✅
 User feedback: on the contract PDF, Article 8 (Multa Atrasu) was hard-coded to 10% of current principal even when Article 3 charged 15% interest (electronics) — the penalty rate should mirror the interest rate.
 

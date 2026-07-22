@@ -41,40 +41,34 @@ async def rules_print_card():
 async def public_auction_catalogue_pdf():
     """Public, no-auth catalogue PDF of items eligible for the next auction.
 
-    Same content as the admin `/api/auctions/catalogue/pdf`, but this route is
-    open so passers-by can browse from the marketing site. Contains no PII.
+    Uses the shared in-process cache built by `/api/auctions/catalogue/pdf`
+    and refreshed by the nightly scheduler job. First public hit after a
+    server restart triggers a cold build.
     """
-    from datetime import date  # noqa: PLC0415
     from io import BytesIO  # noqa: PLC0415
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
+    # Import lazily to avoid circular imports at module load
+    from server import get_or_build_catalogue_pdf  # noqa: PLC0415
 
-    contracts = await db.contracts.find(
-        {"status": {"$in": ["auction_ready", "auction"]}}, {"_id": 0}
-    ).to_list(5000)
-    contracts.sort(key=lambda c: c.get("contract_number", ""))
-    rows: list[dict] = []
-    for c in contracts:
-        item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
-        market = float(item.get("market_value") or c.get("loan_amount") or 0)
-        rows.append({
-            "reference": c.get("contract_number"),
-            "contract_number": c.get("contract_number"),
-            "item_type": c.get("item_type"),
-            "brand": item.get("brand"),
-            "model": item.get("model"),
-            "year": item.get("year") or item.get("manufacture_year"),
-            "color": item.get("color"),
-            "plate": item.get("plate"),
-            "description": item.get("description") or item.get("name"),
-            "market_value": market,
-            "min_bid": round(market * 0.70, 2),
-        })
-    pdf_bytes = build_auction_catalogue_pdf(rows, generated_at=date.today().isoformat())
+    pdf_bytes = await get_or_build_catalogue_pdf()
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="fatin-penhores-auction-catalogue.pdf"'},
     )
+
+
+@router.get("/public/auction-catalogue/info")
+async def public_auction_catalogue_info():
+    """Public metadata about the catalogue (item count, next auction date).
+
+    Cheap to call; safe for the public site to poll before showing the PDF
+    button. No auth required.
+    """
+    settings_doc = await get_settings_doc()
+    next_date = (settings_doc or {}).get("next_auction_date", "") or ""
+    n = await db.contracts.count_documents({"status": {"$in": ["auction_ready", "auction"]}})
+    return {"item_count": n, "next_auction_date": next_date}
 
 
 @router.get("/public/auction-items")

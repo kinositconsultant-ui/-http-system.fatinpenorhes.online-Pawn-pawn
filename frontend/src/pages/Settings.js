@@ -256,6 +256,46 @@ export default function Settings() {
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="font-display text-xl">Auction Settings · Konfigurasaun Leilaun</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
+            Public catalogue
+          </span>
+        </div>
+        <p className="text-sm text-stone-600">
+          The <b>Next Auction Date</b> is shown on the public catalogue PDF and on the /auction page.
+          Leave empty to display "TBA · Sei informa".
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Next Auction Date · Data Leilaun Tuir mai">
+            <Input
+              type="date"
+              value={s.next_auction_date || ""}
+              onChange={(e) => onChange("next_auction_date", e.target.value)}
+              data-testid="settings-next-auction-date"
+            />
+          </Field>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const r = await api.post("/auctions/catalogue/refresh");
+                  toast.success(`Catalogue refreshed — ${r.data.item_count} items`);
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Refresh failed");
+                }
+              }}
+              data-testid="settings-catalogue-refresh"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white transition text-sm font-medium"
+            >
+              Refresh Catalogue Now
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <h2 className="font-display text-xl">{t("whatsapp_config")}</h2>
             {s.whatsapp_connected ? (

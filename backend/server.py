@@ -753,6 +753,7 @@ class SettingsIn(BaseModel):
     whatsapp_phone_id: str = ""
     reminder_days_before: int = 3
     reminders_enabled: bool = True  # Master switch for daily overdue reminders (iter17)
+    next_auction_date: str = ""  # ISO date shown on public catalogue and PDF; empty = "TBA"
 
 
 @api.get("/settings")
@@ -1585,24 +1586,23 @@ async def dashboard_snapshot_pdf(request: Request, _: dict = Depends(require_mod
     )
 
 
-@api.get("/auctions/catalogue/pdf")
-async def auction_catalogue_pdf(_: dict = Depends(require_module("auctions"))):
-    """Public-safe catalogue PDF of all items eligible for the next auction.
+# In-process cache for the auction catalogue PDF. The catalogue changes only
+# when contracts hit `auction_ready`/`auction` or when the settings' next-auction
+# date changes — nightly scheduler regen keeps it warm; invalidated below when
+# either input changes.
+_CATALOGUE_CACHE: dict = {"bytes": None, "generated_at": None, "next_date": None, "item_count": 0}
 
-    Includes: reference (contract number), item type, brand/model/year/plate,
-    market value, and a suggested minimum bid (70% of market value). Excludes
-    all client PII so the file can be printed for public noticeboards.
-    """
+
+async def _build_catalogue_bytes_now() -> tuple[bytes, dict]:
+    """Fetch fresh data, build the PDF, and update the in-process cache."""
     from pdf_utils import build_auction_catalogue_pdf  # noqa: PLC0415
 
     contracts = await db.contracts.find(
         {"status": {"$in": ["auction_ready", "auction"]}}, {"_id": 0}
     ).to_list(5000)
     contracts.sort(key=lambda c: c.get("contract_number", ""))
-
     rows: list[dict] = []
     for c in contracts:
-        # Look up the item by kind so we get brand/model/plate/etc.
         kind = c.get("item_type")
         coll = COLLECTION_MAP.get(kind)
         item: dict = {}
@@ -1615,20 +1615,64 @@ async def auction_catalogue_pdf(_: dict = Depends(require_module("auctions"))):
             "item_type": kind,
             "brand": item.get("brand"),
             "model": item.get("model"),
-            "year": item.get("year"),
+            "year": item.get("year") or item.get("manufacture_year"),
             "color": item.get("color"),
             "plate": item.get("plate"),
             "description": item.get("description") or item.get("name"),
             "market_value": market,
             "min_bid": round(market * 0.70, 2),
         })
+    settings_doc = await get_settings_doc()
+    next_date = (settings_doc or {}).get("next_auction_date", "") or ""
+    generated_at = _today_iso()
+    pdf_bytes = build_auction_catalogue_pdf(rows, generated_at=generated_at, next_auction_date=next_date)
+    _CATALOGUE_CACHE.update({
+        "bytes": pdf_bytes,
+        "generated_at": generated_at,
+        "next_date": next_date,
+        "item_count": len(rows),
+    })
+    return pdf_bytes, _CATALOGUE_CACHE
 
-    pdf_bytes = build_auction_catalogue_pdf(rows, generated_at=_today_iso())
+
+async def get_or_build_catalogue_pdf(force: bool = False) -> bytes:
+    """Return cached catalogue bytes if fresh (same day + same next_date),
+    otherwise rebuild. `force=True` always rebuilds."""
+    settings_doc = await get_settings_doc()
+    current_next_date = (settings_doc or {}).get("next_auction_date", "") or ""
+    if (
+        not force
+        and _CATALOGUE_CACHE.get("bytes")
+        and _CATALOGUE_CACHE.get("generated_at") == _today_iso()
+        and _CATALOGUE_CACHE.get("next_date") == current_next_date
+    ):
+        return _CATALOGUE_CACHE["bytes"]
+    pdf_bytes, _ = await _build_catalogue_bytes_now()
+    return pdf_bytes
+
+
+@api.get("/auctions/catalogue/pdf")
+async def auction_catalogue_pdf(_: dict = Depends(require_module("auctions"))):
+    """Public-safe catalogue PDF of all items eligible for the next auction."""
+    pdf_bytes = await get_or_build_catalogue_pdf()
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="auction-catalogue.pdf"'},
     )
+
+
+@api.post("/auctions/catalogue/refresh")
+async def auction_catalogue_refresh(_: dict = Depends(require_admin)):
+    """Force-rebuild the cached auction catalogue PDF."""
+    pdf_bytes = await get_or_build_catalogue_pdf(force=True)
+    return {
+        "ok": True,
+        "size_bytes": len(pdf_bytes),
+        "generated_at": _CATALOGUE_CACHE.get("generated_at"),
+        "next_auction_date": _CATALOGUE_CACHE.get("next_date") or "",
+        "item_count": _CATALOGUE_CACHE.get("item_count", 0),
+    }
 
 
 # =====================================================================

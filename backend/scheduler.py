@@ -26,7 +26,7 @@ RETENTION = 7  # keep last 7 daily snapshots
 
 _scheduler: AsyncIOScheduler | None = None
 
-JOB_IDS = ("daily_backup", "daily_reminders", "monthend_bundle", "alert_digest")
+JOB_IDS = ("daily_backup", "daily_reminders", "monthend_bundle", "alert_digest", "catalogue_refresh")
 
 
 # ---------------------------------------------------------------------
@@ -141,6 +141,39 @@ def run_backup_and_prune() -> None:
     _record_job_run_sync("daily_backup", status, int((time.time() - t0) * 1000), details)
 
 
+def run_catalogue_refresh_sync() -> None:
+    """Nightly rebuild of the public auction catalogue PDF cache.
+
+    Runs at 01:00 UTC (10:00 Timor) so overnight status changes propagate to
+    the public site before the day begins. Best-effort: on failure it logs
+    and records the failure but never crashes the scheduler.
+    """
+    t0 = time.time()
+    status = "ok"
+    details: dict = {}
+    try:
+        # Import lazily so the scheduler module doesn't tug in server.py at load
+        from server import get_or_build_catalogue_pdf, _CATALOGUE_CACHE  # noqa: PLC0415
+
+        loop = asyncio.new_event_loop()
+        try:
+            pdf_bytes = loop.run_until_complete(get_or_build_catalogue_pdf(force=True))
+        finally:
+            loop.close()
+        details["size_bytes"] = len(pdf_bytes)
+        details["item_count"] = _CATALOGUE_CACHE.get("item_count", 0)
+        details["next_auction_date"] = _CATALOGUE_CACHE.get("next_date", "")
+        logger.info(
+            "[catalogue] nightly refresh done — %d bytes, %d items, next auction %s",
+            details["size_bytes"], details["item_count"], details["next_auction_date"] or "TBA",
+        )
+    except Exception as exc:
+        logger.exception("[catalogue] nightly refresh failed")
+        status = "failed"
+        details["error"] = str(exc)
+    _record_job_run_sync("catalogue_refresh", status, int((time.time() - t0) * 1000), details)
+
+
 def start_scheduler() -> AsyncIOScheduler:
     """Start the APScheduler with the daily jobs. Idempotent."""
     global _scheduler
@@ -178,6 +211,14 @@ def start_scheduler() -> AsyncIOScheduler:
         run_alert_digest_sync,
         CronTrigger(hour=23, minute=0),
         id="alert_digest",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    # Nightly auction-catalogue cache refresh — 01:00 UTC (10:00 Timor)
+    _scheduler.add_job(
+        run_catalogue_refresh_sync,
+        CronTrigger(hour=1, minute=0),
+        id="catalogue_refresh",
         replace_existing=True,
         misfire_grace_time=3600,
     )
