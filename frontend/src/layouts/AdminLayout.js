@@ -48,6 +48,7 @@ import {
   LogOut,
   Settings as SettingsIcon,
   ScrollText,
+  ScanLine,
   Menu,
   X,
 } from "lucide-react";
@@ -58,6 +59,7 @@ const links = [
   { to: "/clients", key: "clients", icon: Users, testid: "nav-clients", module: "clients" },
   { to: "/items", key: "items", icon: Package, testid: "nav-items", module: "items" },
   { to: "/contracts", key: "contracts", icon: FileText, testid: "nav-contracts", module: "contracts" },
+  { to: "/scan", key: "scan", icon: ScanLine, testid: "nav-scan", module: "contracts" },
   { to: "/payments", key: "payments", icon: Wallet, testid: "nav-payments", module: "payments" },
   { to: "/auctions", key: "auctions", icon: Gavel, testid: "nav-auctions", module: "auctions" },
   { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports", module: "reports" },

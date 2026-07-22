@@ -28,6 +28,7 @@ import BusinessDashboard from "@/pages/BusinessDashboard";
 import Clients from "@/pages/Clients";
 import Items from "@/pages/Items";
 import Contracts from "@/pages/Contracts";
+import Scan from "@/pages/Scan";
 import Payments from "@/pages/Payments";
 import Auctions from "@/pages/Auctions";
 import Reports from "@/pages/Reports";
@@ -76,6 +77,7 @@ function App() {
                 <Route path="/clients" element={<ModuleGuard module="clients" label="Clients"><Clients /></ModuleGuard>} />
                 <Route path="/items" element={<ModuleGuard module="items" label="Pawn Items"><Items /></ModuleGuard>} />
                 <Route path="/contracts" element={<ModuleGuard module="contracts" label="Contracts"><Contracts /></ModuleGuard>} />
+                <Route path="/scan" element={<ModuleGuard module="contracts" label="Scan"><Scan /></ModuleGuard>} />
                 <Route path="/payments" element={<ModuleGuard module="payments" label="Payments"><Payments /></ModuleGuard>} />
                 <Route path="/auctions" element={<ModuleGuard module="auctions" label="Auctions"><Auctions /></ModuleGuard>} />
                 <Route path="/reports" element={<ModuleGuard module="reports" label="Reports"><Reports /></ModuleGuard>} />

@@ -2149,9 +2149,8 @@ def build_auction_catalogue_pdf(
 def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, client: dict | None = None) -> None:
     """Draw a single item-label onto the current page of an existing canvas.
 
-    Extracted so both the single-label and bulk-label endpoints share the
-    exact same layout. Caller is responsible for `showPage()` between labels
-    and `save()` at the end.
+    Auction-ready (or in-auction) contracts are highlighted with gold accents
+    so warehouse staff can spot them on the shelf without reading text.
     """
     from reportlab.lib.utils import ImageReader
     import qrcode as _qrcode
@@ -2159,6 +2158,21 @@ def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, cl
 
     contract_number = contract.get("contract_number", "—")
     contract_id = contract.get("id", "")
+    status = str(contract.get("status", "")).lower()
+
+    # Gold accent for auction-ready / in-auction items; navy for everything
+    # else. Colours match the frontend brand palette so the printed label
+    # visually matches on-screen status badges.
+    if status in ("auction_ready", "auction"):
+        primary = "#B45309"     # deep gold-brown
+        qr_colour = "#B45309"
+        accent = "#F0B435"      # bright gold divider + border
+        border_on = True
+    else:
+        primary = "#1B2D5C"     # navy
+        qr_colour = "#1B2D5C"
+        accent = "#F0B435"      # keep the gold divider for consistency
+        border_on = False
 
     parts: list[str] = []
     for k in ("brand", "model", "year", "manufacture_year", "color", "plate"):
@@ -2183,10 +2197,17 @@ def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, cl
     )
     qr.add_data(payload)
     qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="#1B2D5C", back_color="white")
+    qr_img = qr.make_image(fill_color=qr_colour, back_color="white")
     qr_buf = BytesIO()
     qr_img.save(qr_buf, format="PNG")
     qr_buf.seek(0)
+
+    # Auction-ready border around the whole sticker so staff spot them fast
+    if border_on:
+        c.setStrokeColor(accent)
+        c.setLineWidth(3)
+        margin = 0.15 * cm
+        c.rect(margin, margin, page_w - 2 * margin, page_h - 2 * margin, stroke=1, fill=0)
 
     # Left column: QR
     qr_size = 7.5 * cm
@@ -2198,30 +2219,45 @@ def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, cl
     text_x = qr_x + qr_size + 0.5 * cm
     text_w = page_w - text_x - 0.4 * cm
 
-    c.setFillColor("#1B2D5C")
+    c.setFillColor(primary)
     c.setFont("Helvetica-Bold", 9)
     c.drawString(text_x, page_h - 0.9 * cm, "FATIN PENHORES")
     c.setFillColor("#64748B")
     c.setFont("Helvetica", 7)
     c.drawString(text_x, page_h - 1.4 * cm, "Unipessoal, Lda · Caicoli, Dili")
 
-    c.setStrokeColor("#F0B435")
+    c.setStrokeColor(accent)
     c.setLineWidth(1.2)
     c.line(text_x, page_h - 1.75 * cm, text_x + text_w, page_h - 1.75 * cm)
 
-    c.setFillColor("#1B2D5C")
+    c.setFillColor(primary)
     c.setFont("Helvetica-Bold", 18)
     c.drawString(text_x, page_h - 3.0 * cm, contract_number)
 
-    c.setFillColor("#64748B")
-    c.setFont("Helvetica", 7)
-    c.drawString(text_x, page_h - 3.6 * cm, "ITEM · SASÁN")
+    # Status badge — small text under the number, only for auction-ready
+    if border_on:
+        c.setFillColor("#B45309")
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(text_x, page_h - 3.5 * cm, "AUCTION READY · PRONTU BA LEILAUN")
+        item_label_y = page_h - 4.1 * cm
+        desc_y_start = page_h - 4.75 * cm
+    else:
+        c.setFillColor("#64748B")
+        c.setFont("Helvetica", 7)
+        c.drawString(text_x, page_h - 3.6 * cm, "ITEM · SASÁN")
+        item_label_y = None
+        desc_y_start = page_h - 4.3 * cm
+
+    if item_label_y:
+        c.setFillColor("#64748B")
+        c.setFont("Helvetica", 7)
+        c.drawString(text_x, item_label_y, "ITEM · SASÁN")
 
     c.setFillColor("#0F1B3A")
     c.setFont("Helvetica-Bold", 10)
     words = item_name.split(" ")
     line = ""
-    y = page_h - 4.3 * cm
+    y = desc_y_start
     for w in words:
         candidate = f"{line} {w}".strip()
         if c.stringWidth(candidate, "Helvetica-Bold", 10) < text_w:

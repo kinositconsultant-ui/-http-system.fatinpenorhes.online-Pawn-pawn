@@ -650,8 +650,15 @@ export default function Contracts() {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r) => (
-              <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
+            {filteredRows.map((r) => {
+              const highlighted = searchParams.get("highlight") === r.contract_number;
+              return (
+              <tr
+                key={r.id}
+                ref={highlighted ? (el) => el?.scrollIntoView({ block: "center" }) : undefined}
+                className={`border-t border-stone-100 hover:bg-stone-50/50 ${highlighted ? "bg-amber-50 ring-2 ring-amber-300" : ""}`}
+                data-testid={highlighted ? `contract-highlight-${r.id}` : undefined}
+              >
                 <Td className="font-medium whitespace-nowrap" title={r.contract_number}>{shortContract(r.contract_number)}</Td>
                 <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
                 <Td className="max-w-[160px] truncate">
@@ -781,7 +788,8 @@ export default function Contracts() {
                   </div>
                 </Td>
               </tr>
-            ))}
+              );
+            })}
             {filteredRows.length === 0 && (
               <tr>
                 <td colSpan="8" className="p-8 text-center text-stone-500">
