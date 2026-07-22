@@ -22,7 +22,9 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Copy,
 } from "lucide-react";
+import { toast } from "sonner";
 import MonthEndBundle from "../components/MonthEndBundle";
 import SavedViews from "../components/SavedViews";
 
@@ -97,11 +99,51 @@ const fmtCell = (col, v, row) => {
       </div>
     );
   }
+  if (col === "phone" && v) {
+    // Tap-to-dial on mobile; small copy button on desktop.
+    return <PhoneCell value={String(v)} />;
+  }
   if (v == null || v === "") return "—";
   if (MONEY_KEYS.has(col)) return fmtMoney(v);
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 };
+
+function PhoneCell({ value }) {
+  const clean = value.replace(/\s+/g, "");
+  const onCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`Copied ${value}`);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="phone-cell">
+      <a
+        href={`tel:${clean}`}
+        className="text-[#1B2D5C] hover:underline font-medium"
+        onClick={(e) => e.stopPropagation()}
+        title="Tap to call"
+      >
+        {value}
+      </a>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-stone-200 text-stone-500 hover:text-[#1B2D5C]"
+        title="Copy number"
+        aria-label={`Copy ${value}`}
+        data-testid="phone-copy-btn"
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+    </span>
+  );
+}
 
 const MONTHS_EN = [
   ["1", "January"], ["2", "February"], ["3", "March"], ["4", "April"],

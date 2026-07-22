@@ -513,6 +513,11 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 48 — Tap-to-Dial Phone Cells (2026-02-17) ✅
+- Every `phone` column in the Reports table now renders as a **navy `tel:` link** (opens the dialer on mobile / FaceTime/Skype/etc. on desktop) followed by a small copy-to-clipboard button that shows a "Copied +670..." toast.
+- New helper component `PhoneCell` in `Reports.js`. `fmtCell(col, v, row)` dispatches to it whenever `col === "phone"`.
+- Verified on the Overdue tab: **163 phone cells, 163 copy buttons**, first href correctly `tel:+670700111`. Zero console warnings.
+
 ## Iteration 47 — Overdue Report Enrichment + Auction-Eligible Pill (2026-02-17) ✅
 - **Overdue tab now includes `auction_ready` contracts too** — they were previously hidden from this view even though they need auctioneer follow-up. The Overdue tab is the single place staff go to see everyone who owes money past due date.
 - **New columns on the Overdue report**: `client_name`, `phone`, `contract_date`, `days_overdue`, `total_amount_due`, plus the existing item brand/model/type. Backend `_enrich_contracts_with_client()` helper attaches full_name + phone via a batched client lookup (no N+1 queries).
