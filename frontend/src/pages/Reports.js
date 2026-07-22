@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, API_BASE } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
@@ -145,7 +146,15 @@ const cellClass = (col) => {
 
 export default function Reports() {
   const { t } = useLang();
-  const [tab, setTab] = useState("active-contracts");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // URL-driven initial tab so Dashboard KPI cards can deep-link straight into
+  // e.g. /reports?tab=financial. Falls back to active-contracts.
+  const initialTab = (() => {
+    const q = searchParams.get("tab");
+    const valid = TABS.some((r) => r.key === q);
+    return valid ? q : "active-contracts";
+  })();
+  const [tab, setTab] = useState(initialTab);
   const [filters, setFilters] = useState({ month: "", year: "", category: "", sub_category: "" });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -153,6 +162,19 @@ export default function Reports() {
   const [sort, setSort] = useState(null);
   // Row-count per tab (fetched once on mount for tab badges)
   const [tabCounts, setTabCounts] = useState({});
+
+  // Keep the URL param in sync whenever the user switches tabs so links and
+  // browser back/forward preserve the current tab.
+  const changeTab = useCallback(
+    (nextKey) => {
+      setTab(nextKey);
+      const next = new URLSearchParams(searchParams);
+      if (nextKey === "active-contracts") next.delete("tab");
+      else next.set("tab", nextKey);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   useEffect(() => {
     (async () => {
@@ -306,7 +328,7 @@ export default function Reports() {
           return (
             <button
               key={tb.key}
-              onClick={() => setTab(tb.key)}
+              onClick={() => changeTab(tb.key)}
               data-testid={`report-tab-${tb.key}`}
               style={isActive ? { backgroundColor: tb.color, color: "white" } : undefined}
               className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium tracking-wide rounded-md transition shadow-sm ${

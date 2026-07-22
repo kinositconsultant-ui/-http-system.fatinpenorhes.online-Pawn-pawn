@@ -51,6 +51,7 @@ export default function Dashboard() {
       Icon: Users,
       tone: "text-[#1B2D5C]",
       testid: "kpi-clients",
+      to: "/clients",
     },
     {
       key: "active",
@@ -59,6 +60,7 @@ export default function Dashboard() {
       Icon: FileText,
       tone: "text-[#4C7F62]",
       testid: "kpi-active",
+      to: "/contracts?status=active",
     },
     {
       key: "overdue",
@@ -67,6 +69,7 @@ export default function Dashboard() {
       Icon: AlertCircle,
       tone: "text-[#993333]",
       testid: "kpi-overdue",
+      to: "/contracts?status=overdue",
     },
     {
       key: "loan",
@@ -75,6 +78,7 @@ export default function Dashboard() {
       Icon: Banknote,
       tone: "text-[#1B2D5C]",
       testid: "kpi-loan",
+      to: "/reports?tab=financial",
     },
     {
       key: "payments",
@@ -83,6 +87,7 @@ export default function Dashboard() {
       Icon: Wallet,
       tone: "text-[#1B2D5C]",
       testid: "kpi-payments",
+      to: "/reports?tab=payments",
     },
     {
       key: "profit",
@@ -91,6 +96,7 @@ export default function Dashboard() {
       Icon: TrendingUp,
       tone: "text-[#C17767]",
       testid: "kpi-profit",
+      to: "/reports?tab=financial",
     },
   ];
 
@@ -104,12 +110,8 @@ export default function Dashboard() {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {cards.map((c) => (
-          <Card
-            key={c.key}
-            className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white"
-            data-testid={c.testid}
-          >
+        {cards.map((c) => {
+          const inner = (
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-eyebrow">{c.label}</div>
@@ -119,8 +121,22 @@ export default function Dashboard() {
               </div>
               <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
-          </Card>
-        ))}
+          );
+          const cardCls =
+            "p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white block transition hover:border-[#1B2D5C] hover:shadow-sm";
+          if (c.to) {
+            return (
+              <Link key={c.key} to={c.to} data-testid={c.testid} className={`${cardCls} cursor-pointer`}>
+                {inner}
+              </Link>
+            );
+          }
+          return (
+            <Card key={c.key} className={cardCls} data-testid={c.testid}>
+              {inner}
+            </Card>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">

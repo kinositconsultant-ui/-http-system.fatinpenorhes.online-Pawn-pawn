@@ -513,6 +513,17 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 42 — Clickable KPI Cards + URL-driven Report Tabs (2026-02-17) ✅
+- All 6 top KPI cards on the Dashboard now deep-link into the relevant page:
+  - Total Clients → `/clients`
+  - Active Contracts → `/contracts?status=active`
+  - Overdue Contracts → `/contracts?status=overdue`
+  - Total Loan Amount → `/reports?tab=financial`
+  - Total Payments → `/reports?tab=payments`
+  - Profit / Interest → `/reports?tab=financial`
+- Reports page now reads `?tab=<key>` on mount (validated against `TABS`) and writes it back whenever the user switches tabs via a new `changeTab` helper. Browser back/forward and shared URLs preserve the tab.
+- Verified: kpi-loan → `?tab=financial` (Financial tab teal-active), kpi-payments → `?tab=payments` (Payments tab green-active). No console errors.
+
 ## Iteration 41 — Clickable Dashboard Cards (2026-02-17) ✅
 - Each of the 5 status cards on the Dashboard is now a `<Link>` that jumps to a pre-filtered view:
   - Active / Overdue / Redeemed / Auction Ready → `/contracts?status=<value>`
