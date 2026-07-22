@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye, ScrollText } from "lucide-react";
+import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye, ScrollText, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
@@ -134,6 +134,22 @@ export default function Payments() {
   const clientNameById = (id) => clientById(id)?.full_name || "";
   const selectedContract = contracts.find((c) => c.id === form.contract_id);
   const selectedClient = selectedContract ? clientById(selectedContract.client_id) : null;
+
+  // Auto-detect: when the amount matches the remaining balance to the cent,
+  // flip the type to "Full" so the cashier doesn't need to change it. The
+  // Save button also turns green in the render logic when this is true.
+  const isFullMatch = useMemo(() => {
+    if (!selectedContract || !form.amount) return false;
+    const a = Number(form.amount);
+    const bal = Number(selectedContract.remaining_balance || 0);
+    return bal > 0 && Math.abs(a - bal) < 0.01;
+  }, [form.amount, selectedContract]);
+
+  useEffect(() => {
+    if (isFullMatch && form.type !== "full") {
+      setForm((f) => ({ ...f, type: "full" }));
+    }
+  }, [isFullMatch, form.type]);
   // Filter open contracts by the search query so cashiers can quickly find
   // the row by contract number, client name, or item type.
   const payableContracts = useMemo(
@@ -426,11 +442,15 @@ export default function Payments() {
                 </Button>
                 <Button
                   onClick={submit}
-                  className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
+                  className={
+                    isFullMatch
+                      ? "bg-[#4C7F62] hover:bg-[#3F6B52] text-white transition-colors"
+                      : "bg-[#1B2D5C] hover:bg-[#0F1B3A]"
+                  }
                   data-testid="payment-save"
                   disabled={!form.contract_id || !form.amount}
                 >
-                  {t("save")}
+                  {isFullMatch ? "✓ " : ""}{t("save")}{isFullMatch ? ` (${t("full")})` : ""}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -703,25 +723,51 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
                     <div className="flex items-center gap-2">
                       <span>{contractLabel(g.contract_id)}</span>
                       {!disbursement && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const cn = contract?.contract_number || g.contract_id;
-                            const url = `${API_BASE}/contracts/${g.contract_id}/payments-summary-pdf`;
-                            onPreview && onPreview({
-                              id: g.contract_id,
-                              receipt_number: `${cn}-history`,
-                              _url: url,
-                              _title: `Payment History · ${cn}`,
-                            });
-                          }}
-                          data-testid={`payment-history-btn-${g.contract_id}`}
-                          title="Payment History PDF (all payments on this contract)"
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
-                        >
-                          <ScrollText className="w-3 h-3" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const cn = contract?.contract_number || g.contract_id;
+                              const url = `${API_BASE}/contracts/${g.contract_id}/payments-summary-pdf`;
+                              onPreview && onPreview({
+                                id: g.contract_id,
+                                receipt_number: `${cn}-history`,
+                                _url: url,
+                                _title: `Payment History · ${cn}`,
+                              });
+                            }}
+                            data-testid={`payment-history-btn-${g.contract_id}`}
+                            title="Payment History PDF (all payments on this contract)"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#4C7F62] text-white hover:bg-[#3F6B52] transition-colors"
+                          >
+                            <ScrollText className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const r = await api.post(`/contracts/${g.contract_id}/email-history`);
+                                const st = r.data.email_status;
+                                if (st === "sent") {
+                                  toast.success(`History emailed to ${r.data.to}`);
+                                } else if (st === "mocked") {
+                                  toast.info(`Email service not configured — ${r.data.note || "logged only"}`);
+                                } else {
+                                  toast.error(`Email ${st || "failed"}`);
+                                }
+                              } catch (err) {
+                                toast.error(err?.response?.data?.detail || "Email failed");
+                              }
+                            }}
+                            data-testid={`email-history-btn-${g.contract_id}`}
+                            title="Email payment history PDF to the client"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#C17767] text-white hover:bg-[#A96253] transition-colors"
+                          >
+                            <Mail className="w-3 h-3" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </Td>

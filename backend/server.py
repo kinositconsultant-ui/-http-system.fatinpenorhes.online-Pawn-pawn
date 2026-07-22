@@ -608,6 +608,7 @@ async def contracts_bulk_labels_pdf(
     ids: str = "",
     month: str = "",
     status: str = "",
+    layout: str = "single",
     _: dict = Depends(get_current_user),
 ):
     """Batch printable-label PDF — one A6 page per contract.
@@ -637,7 +638,7 @@ async def contracts_bulk_labels_pdf(
 
     contracts = await db.contracts.find(q, {"_id": 0}).sort("contract_number", 1).to_list(500)
     if not contracts:
-        pdf_bytes = build_bulk_labels_pdf([])
+        pdf_bytes = build_bulk_labels_pdf([], layout=layout)
     else:
         # Pre-fetch clients in bulk to avoid N round-trips
         client_ids = list({c["client_id"] for c in contracts if c.get("client_id")})
@@ -650,7 +651,7 @@ async def contracts_bulk_labels_pdf(
             item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
             client_doc = client_docs.get(c.get("client_id"))
             rows.append((c, item, client_doc))
-        pdf_bytes = build_bulk_labels_pdf(rows)
+        pdf_bytes = build_bulk_labels_pdf(rows, layout=layout)
 
     return StreamingResponse(
         BytesIO(pdf_bytes),
@@ -814,6 +815,49 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     })
     doc.pop("_id", None)
     return {"payment": doc, "contract": updated}
+
+
+@api.post("/contracts/{cid}/email-history")
+async def contract_email_history(cid: str, user: dict = Depends(get_current_user)):
+    """Email the payment-history summary PDF to the contract's client.
+
+    Sends via Resend when configured; falls back to a mocked result (returned
+    to the caller as `{status: "mocked"}`) if no `RESEND_API_KEY` is set so
+    the flow still succeeds during development.
+    """
+    from pdf_utils import build_payment_history_pdf  # noqa: PLC0415
+    import email_svc  # noqa: PLC0415
+
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    c = await _recompute_contract_status(c)
+    client_doc = await db.clients.find_one({"id": c.get("client_id")}, {"_id": 0}) or {}
+    to_email = (client_doc.get("email") or "").strip()
+    if not to_email:
+        raise HTTPException(status_code=400, detail="Client has no email on file")
+    item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
+    payments = await db.payments.find({"contract_id": cid}, {"_id": 0}).to_list(500)
+    pdf_bytes = build_payment_history_pdf(c, client_doc, item, payments)
+    subject = f"{email_svc.BRAND} — Payment History {c.get('contract_number','')}"
+    html = f"""
+<!doctype html><html><body style='font-family: Arial, sans-serif; color:#0F1B3A;'>
+  <p>Hi {(client_doc.get('full_name') or 'Client').split(' ')[0]},</p>
+  <p>Attached is the full payment history for your contract
+     <b>{c.get('contract_number','')}</b>.
+     Individual receipt PDFs remain available on request.</p>
+  <p>Questions? Reply to this email or WhatsApp us at +670 78372678.</p>
+  {email_svc.FOOTER_HTML}
+</body></html>"""
+    safe_no = str(c.get("contract_number", "history")).replace("/", "-")
+    result = await email_svc.send_email(
+        to_email,
+        subject,
+        html,
+        attachments=[{"filename": f"{safe_no}-payment-history.pdf", "content": pdf_bytes}],
+    )
+    await write_audit(user, "email_payment_history", "contract", cid, {"to": to_email, "status": result.get("status")})
+    return {"ok": True, "email_status": result.get("status"), "to": to_email, "note": result.get("note")}
 
 
 @api.get("/contracts/{cid}/payments-summary-pdf")

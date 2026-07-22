@@ -47,8 +47,14 @@ async def send_email(
     subject: str,
     html: str,
     reply_to: Optional[str] = None,
+    attachments: Optional[list[dict]] = None,
 ) -> dict:
-    """Send an HTML email via Resend. Returns dict with status + id (or mocked)."""
+    """Send an HTML email via Resend. Returns dict with status + id (or mocked).
+
+    Args:
+        attachments: optional list of `{"filename": str, "content": bytes}`.
+            The bytes are base64-encoded and passed to Resend as attachments.
+    """
     if not to or "@" not in to:
         return _mock_result(to, subject, "invalid recipient")
     if not is_configured():
@@ -63,6 +69,16 @@ async def send_email(
     }
     if reply_to:
         params["reply_to"] = reply_to
+    if attachments:
+        import base64  # noqa: PLC0415
+        params["attachments"] = [
+            {
+                "filename": a["filename"],
+                "content": base64.b64encode(a["content"]).decode("ascii"),
+            }
+            for a in attachments
+            if a.get("content")
+        ]
     try:
         # Resend SDK is sync — offload to thread so FastAPI event loop stays free
         res = await asyncio.to_thread(resend.Emails.send, params)

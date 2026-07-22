@@ -46,6 +46,7 @@ class ClientIn(BaseModel):
     id_type: Literal["BI", "Electoral", "Passport", "Drivers License"]
     id_number: str
     phone: str
+    email: str = ""
     address: str = ""
     municipality: str = ""
     posto: str = ""

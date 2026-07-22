@@ -668,6 +668,32 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 61 — Payment Auto-Detect + 4-up Labels + Email History (2026-02-22) ✅
+
+### 1. Payment Type Auto-Detect
+- Payments.js: new `isFullMatch` `useMemo` compares `form.amount` to `selectedContract.remaining_balance` (tolerance 0.01). When they match:
+  - `useEffect` flips `form.type` to `"full"`.
+  - Save button re-renders with green (`#4C7F62`) background and label `"✓ Save (Full)"` instead of the default navy `"Save"`.
+- Verified live: typing `1000` into Amount for a contract with $1,000 balance → button flips to green "✓ Save (Full)" ✅.
+
+### 2. Label Sheet 4-up A4 Layout
+- `build_bulk_labels_pdf(rows, layout="single"|"4up")` in `pdf_utils.py` — new `4up` layout renders A4 portrait with a 2×2 grid; each cell (14.85 × 10.5 cm = A6 landscape) reuses `_draw_item_label_on_canvas` verbatim so the design is identical. Dashed cut-line frame around each cell.
+- Endpoint `/api/contracts/labels-pdf` now accepts `?layout=4up`.
+- Contracts page header split the old button into a segmented control: **"Print Labels"** (sticker paper) + **"4-up A4"** (printer paper). Both respect the current month/status/id filters.
+- Verified: 160 auction-ready labels @ 4up → 40 A4 pages (exactly 4 per page), 892 KB ✅.
+
+### 3. History Email
+- `email_svc.send_email` now accepts an optional `attachments=[{filename, content}]` list and base64-encodes the bytes for Resend.
+- New endpoint `POST /api/contracts/{cid}/email-history` (auth: `get_current_user`) — regenerates the payment-history PDF and emails it to the client's email on file. Returns `{ok, email_status, to, note}`; `email_status` is `sent` when Resend delivers, `mocked` when `RESEND_API_KEY` is absent (dev-friendly).
+- `ClientIn` model in `routes/clients.py` now includes optional `email: str = ""` so owners can attach an email through the existing client edit form.
+- Frontend Payments.js: new brown Mail icon button (`data-testid="email-history-btn-{cid}"`) next to the green History icon. Success toast shows the delivery target; missing-key falls back to a friendly info toast.
+- Verified: unattached client → 400 "Client has no email on file"; attached client → `{"email_status":"mocked","to":"demo@example.com","note":"RESEND_API_KEY not configured"}` — flow works end-to-end ✅.
+
+### Live verification summary
+- 135 Email History buttons rendered on Payments page.
+- 4-up A4 endpoint: HTTP 200, 40 pages ÷ 4 per page = 160 labels.
+- Auto-detect: green "✓ Save (Full)" button confirmed via Playwright.
+
 ## Iteration 60 — Payment History Summary PDF (2026-02-22) ✅
 
 User request: *"add full pay into one pdf summary — interest, partial, penalty, full-pay in summary not inside pdf. Split the payment pdf remain same?"* — confirmed: keep the individual per-payment receipts (still handed to customers at each transaction), add a NEW combined "Full History" PDF per contract.

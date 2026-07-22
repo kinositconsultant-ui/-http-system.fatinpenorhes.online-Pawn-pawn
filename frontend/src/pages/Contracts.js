@@ -330,30 +330,55 @@ export default function Contracts() {
               </SelectContent>
             </Select>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              const params = new URLSearchParams();
-              if (monthFilter) params.set("month", monthFilter);
-              if (statusFilter) params.set("status", statusFilter);
-              if (!monthFilter && !statusFilter && filteredRows.length) {
-                params.set("ids", filteredRows.map((r) => r.id).slice(0, 500).join(","));
-              }
-              const suffix = params.toString() ? `?${params.toString()}` : "";
-              setPdfPreview({
-                open: true,
-                url: pdfUrl(`/contracts/labels-pdf${suffix}`),
-                title: `${t("print_labels") || "Print Labels"} · ${filteredRows.length} item${filteredRows.length === 1 ? "" : "s"}`,
-                filename: `fatin-penhores-labels-${monthFilter || statusFilter || "batch"}.pdf`,
-              });
-            }}
-            data-testid="contracts-print-labels-btn"
-            title={t("print_labels_hint") || "Batch QR sticker PDF for the currently filtered contracts"}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white transition text-sm font-medium"
-          >
-            <QrCode className="w-4 h-4" />
-            {t("print_labels") || "Print Labels"}
-          </button>
+          <div className="inline-flex items-center gap-1 rounded-md border border-stone-300 p-0.5 bg-white text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (monthFilter) params.set("month", monthFilter);
+                if (statusFilter) params.set("status", statusFilter);
+                if (!monthFilter && !statusFilter && filteredRows.length) {
+                  params.set("ids", filteredRows.map((r) => r.id).slice(0, 500).join(","));
+                }
+                const suffix = params.toString() ? `?${params.toString()}` : "";
+                setPdfPreview({
+                  open: true,
+                  url: pdfUrl(`/contracts/labels-pdf${suffix}`),
+                  title: `${t("print_labels") || "Print Labels"} · ${filteredRows.length} · single`,
+                  filename: `fatin-penhores-labels-${monthFilter || statusFilter || "batch"}-single.pdf`,
+                });
+              }}
+              data-testid="contracts-print-labels-btn"
+              title={t("print_labels_hint") || "One sticker per page (A6 landscape)"}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[#1B2D5C] hover:bg-stone-100 font-medium"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              {t("print_labels") || "Print Labels"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set("layout", "4up");
+                if (monthFilter) params.set("month", monthFilter);
+                if (statusFilter) params.set("status", statusFilter);
+                if (!monthFilter && !statusFilter && filteredRows.length) {
+                  params.set("ids", filteredRows.map((r) => r.id).slice(0, 500).join(","));
+                }
+                setPdfPreview({
+                  open: true,
+                  url: pdfUrl(`/contracts/labels-pdf?${params.toString()}`),
+                  title: `${t("print_labels") || "Print Labels"} · ${filteredRows.length} · 4-up`,
+                  filename: `fatin-penhores-labels-${monthFilter || statusFilter || "batch"}-4up.pdf`,
+                });
+              }}
+              data-testid="contracts-print-labels-4up-btn"
+              title={t("print_labels_4up_hint") || "4 labels per A4 sheet — standard printer paper"}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-stone-600 hover:bg-stone-100 border-l border-stone-200 font-medium"
+            >
+              4-up A4
+            </button>
+          </div>
           <Dialog
           open={open}
           onOpenChange={(o) => {

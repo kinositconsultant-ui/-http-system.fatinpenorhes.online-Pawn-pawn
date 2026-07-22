@@ -2430,19 +2430,69 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     return buf.getvalue()
 
 
-def build_bulk_labels_pdf(rows: list[tuple[dict, dict, dict | None]]) -> bytes:
-    """Multi-page label PDF — one A6 landscape label per contract in `rows`.
+def build_bulk_labels_pdf(
+    rows: list[tuple[dict, dict, dict | None]],
+    layout: str = "single",
+) -> bytes:
+    """Multi-page label PDF.
 
-    Each row is a `(contract, item, client)` tuple. Empty input returns a
-    single "no items" page so the download still succeeds gracefully.
+    Layouts:
+      • `single` (default) — one A6-landscape label per page (sticker paper).
+      • `4up` — 2 × 2 grid on A4 portrait so staff can print on standard
+        printer paper and cut the four labels apart.
     """
-    from reportlab.lib.pagesizes import A6, landscape
+    from reportlab.lib.pagesizes import A4, A6, landscape
     from reportlab.pdfgen import canvas as _canvas
 
     buf = BytesIO()
+
+    if layout == "4up":
+        page = A4  # portrait: 21.0 × 29.7 cm
+        page_w, page_h = page
+        c = _canvas.Canvas(buf, pagesize=page)
+
+        if not rows:
+            c.setFillColor("#64748B")
+            c.setFont("Helvetica-Oblique", 12)
+            c.drawCentredString(page_w / 2, page_h / 2, "No items to label · La iha sasán atu etiketa")
+            c.showPage()
+            c.save()
+            return buf.getvalue()
+
+        # A4 portrait split into 2 columns × 2 rows. Each cell renders as if it
+        # were an A6-landscape page (14.85 × 10.5 cm) so we get an exact match
+        # to the single-label layout — same helper, translated into place.
+        cell_w = page_w / 2
+        cell_h = page_h / 2
+        positions = [
+            (0, cell_h),      # top-left
+            (cell_w, cell_h), # top-right
+            (0, 0),           # bottom-left
+            (cell_w, 0),      # bottom-right
+        ]
+        for i, (contract, item, client) in enumerate(rows):
+            slot = i % 4
+            if i > 0 and slot == 0:
+                c.showPage()
+            x0, y0 = positions[slot]
+            c.saveState()
+            c.translate(x0, y0)
+            # Cut-line so staff know where to slice
+            c.setStrokeColor("#94A3B8")
+            c.setDash(2, 2)
+            c.setLineWidth(0.3)
+            c.rect(0, 0, cell_w, cell_h, stroke=1, fill=0)
+            c.setDash()  # reset
+            _draw_item_label_on_canvas(c, cell_w, cell_h, contract, item, client)
+            c.restoreState()
+        c.showPage()
+        c.save()
+        return buf.getvalue()
+
+    # Default single-label-per-page layout
     page = landscape(A6)
-    c = _canvas.Canvas(buf, pagesize=page)
     page_w, page_h = page
+    c = _canvas.Canvas(buf, pagesize=page)
 
     if not rows:
         c.setFillColor("#64748B")
