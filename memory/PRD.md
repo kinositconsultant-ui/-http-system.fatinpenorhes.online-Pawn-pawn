@@ -513,6 +513,12 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 44 — KPI Sparklines (2026-02-17) ✅
+- Added ultra-compact 6-month sparklines (recharts `LineChart`, no axes/grid/tooltip, 96×32px, animation off) next to the trend pill on **Total Loan / Total Payments / Profit** KPI cards.
+- Colors match each KPI tone: Loan Navy `#1B2D5C`, Payments Green `#4C7F62`, Profit Coral `#C17767`.
+- Component `MiniSpark` in Dashboard.js accepts `data`, `dataKey`, `color`, `testid`. Rendered only when `trends.months` is populated, so first paint is clean.
+- Verified: 3 sparklines render (`kpi-loan-spark`, `kpi-payments-spark`, `kpi-profit-spark`), each showing the last 6 monthly buckets of the trends payload.
+
 ## Iteration 43 — KPI Trend Badges (2026-02-17) ✅
 - Added a small trend pill under **Total Loan / Total Payments / Profit** KPI cards showing month-over-month delta pulled from the existing `/dashboard/trends` endpoint (last 6 monthly buckets).
 - Green (↗) when the direction is favourable, rose (↘) when unfavourable. `invertTrend: true` supported for cards where an increase is bad (e.g. future Overdue trend). "no baseline" pill when the prior month is 0 to avoid divide-by-zero.

@@ -28,6 +28,8 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
+  LineChart,
+  Line,
 } from "recharts";
 
 const moneyFmt = (n) =>
@@ -99,6 +101,8 @@ export default function Dashboard() {
       testid: "kpi-loan",
       to: "/reports?tab=financial",
       trend: monthlyDelta(trends?.months, "loans"),
+      sparkKey: "loans",
+      sparkColor: "#1B2D5C",
     },
     {
       key: "payments",
@@ -109,6 +113,8 @@ export default function Dashboard() {
       testid: "kpi-payments",
       to: "/reports?tab=payments",
       trend: monthlyDelta(trends?.months, "payments"),
+      sparkKey: "payments",
+      sparkColor: "#4C7F62",
     },
     {
       key: "profit",
@@ -119,6 +125,8 @@ export default function Dashboard() {
       testid: "kpi-profit",
       to: "/reports?tab=financial",
       trend: monthlyDelta(trends?.months, "interest"),
+      sparkKey: "interest",
+      sparkColor: "#C17767",
     },
   ];
 
@@ -134,15 +142,25 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {cards.map((c) => {
           const inner = (
-            <div className="flex items-start justify-between">
-              <div className="min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
                 <div className="text-eyebrow">{c.label}</div>
                 <div className="font-display text-2xl md:text-3xl font-semibold mt-3 break-words">
                   {c.value}
                 </div>
-                {c.trend !== undefined && (
-                  <TrendBadge value={c.trend} invert={c.invertTrend} testid={`${c.testid}-trend`} />
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {c.trend !== undefined && (
+                    <TrendBadge value={c.trend} invert={c.invertTrend} testid={`${c.testid}-trend`} />
+                  )}
+                  {c.sparkKey && trends?.months && (
+                    <MiniSpark
+                      data={trends.months}
+                      dataKey={c.sparkKey}
+                      color={c.sparkColor}
+                      testid={`${c.testid}-spark`}
+                    />
+                  )}
+                </div>
               </div>
               <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
@@ -353,6 +371,32 @@ function TrendBadge({ value, invert = false, testid }) {
       <Icon className="w-3 h-3" />
       <span>{sign}{rounded.toFixed(1)}%</span>
       <span className="text-stone-500 font-normal">vs last month</span>
+    </div>
+  );
+}
+
+
+/**
+ * Ultra-compact 6-month sparkline. No axes, no grid, no tooltip — just the
+ * shape of the trend so users can eyeball direction and magnitude next to
+ * the KPI value.
+ */
+function MiniSpark({ data, dataKey, color = "#1B2D5C", testid }) {
+  if (!Array.isArray(data) || data.length === 0) return null;
+  return (
+    <div className="h-8 w-24 shrink-0" data-testid={testid} aria-hidden="true">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 2 }}>
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={1.75}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
