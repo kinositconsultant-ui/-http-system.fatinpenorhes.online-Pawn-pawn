@@ -137,18 +137,53 @@ async def _report_payments(filters: dict) -> dict:
     }
 
 
+async def _enrich_contracts_with_client(rows: list[dict]) -> list[dict]:
+    """Add client_name and phone onto each contract row so overdue / auction
+    reports can show who to contact without a separate lookup on the client."""
+    client_ids = list({r.get("client_id") for r in rows if r.get("client_id")})
+    if not client_ids:
+        return rows
+    clients = await db.clients.find(
+        {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "full_name": 1, "phone": 1}
+    ).to_list(len(client_ids))
+    by_id = {c["id"]: c for c in clients}
+    for r in rows:
+        c = by_id.get(r.get("client_id"))
+        if c:
+            r["client_name"] = c.get("full_name", "")
+            r["phone"] = c.get("phone", "")
+    return rows
+
+
 async def _report_overdue(filters: dict) -> dict:
     today = date.today()
     rows = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     for r in rows:
         await _recompute_contract_status(r)
-    rows = [r for r in rows if r.get("status") == "overdue"]
+    # Include BOTH overdue AND auction_ready — both need auctioneer follow-up
+    # and were previously split across two tabs. Grouping them under a single
+    # "Overdue + Auction-Ready" view (with an is_auction_eligible flag on
+    # each row) matches how staff mentally handle these cases.
+    rows = [r for r in rows if r.get("status") in ("overdue", "auction_ready")]
     rows = await _enrich_contracts_with_item_meta(rows)
+    rows = await _enrich_contracts_with_client(rows)
     rows = _apply_date_filter(rows, "due_date", filters.get("month"), filters.get("year"))
     rows = _apply_item_filter(rows, filters.get("category"), filters.get("sub_category"))
+    # Flag rows that are auction-eligible (past the 10-day tolerance AND already
+    # at the 2-month interest cap — no more accrual pressure). The frontend
+    # renders a red "AUCTION ELIGIBLE" pill next to the status.
+    for r in rows:
+        days = int(r.get("days_overdue", 0) or 0)
+        months_elapsed = int(r.get("months_elapsed", 0) or 0)
+        r["is_auction_eligible"] = bool(
+            r.get("status") == "auction_ready"
+            or (days > 10 and months_elapsed >= 2)
+        )
     total_overdue = len(rows)
     total_outstanding = sum(float(r.get("principal_remaining", 0) or 0) for r in rows)
     total_interest = sum(float(r.get("interest_remaining", 0) or 0) for r in rows)
+    total_due = sum(float(r.get("total_amount_due", 0) or 0) for r in rows)
+    auction_eligible = sum(1 for r in rows if r.get("is_auction_eligible"))
     near = today + timedelta(days=7)
     near_expired = sum(
         1 for r in rows
@@ -159,10 +194,19 @@ async def _report_overdue(filters: dict) -> dict:
             "total_overdue": total_overdue,
             "total_outstanding": round(total_outstanding, 2),
             "total_interest": round(total_interest, 2),
+            "total_due": round(total_due, 2),
+            "auction_eligible": auction_eligible,
             "near_expired": near_expired,
         },
-        "columns": ["contract_number", "item_type", "item_brand", "item_model", "loan_amount",
-                    "principal_remaining", "interest_remaining", "penalty", "due_date", "status"],
+        # Extended columns per Feb-2026 UX pass: added client_name/phone/
+        # days_overdue/total_amount_due/penalty_charged/contract_date so
+        # cashiers can see everything they need without opening the contract.
+        "columns": [
+            "contract_number", "client_name", "phone", "item_type",
+            "item_brand", "item_model", "contract_date", "due_date",
+            "days_overdue", "principal_remaining", "interest_remaining",
+            "penalty", "total_amount_due", "status",
+        ],
         "rows": rows,
     }
 

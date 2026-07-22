@@ -81,7 +81,22 @@ const fmtMoney = (v) => {
   })}`;
 };
 
-const fmtCell = (col, v) => {
+const fmtCell = (col, v, row) => {
+  if (col === "status" && row?.is_auction_eligible) {
+    // Render a compact status + red AUCTION ELIGIBLE pill so the auctioneer
+    // can spot rows that are past the 10-day tolerance and have hit the
+    // Article 4 two-month interest cap (no further accrual pressure).
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap" data-testid="auction-eligible-row">
+        <span className="text-xs px-1.5 py-0.5 rounded-md border border-stone-300 bg-white uppercase tracking-wider font-medium">
+          {String(v || "—").replace(/_/g, " ")}
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap">
+          Auction Eligible
+        </span>
+      </div>
+    );
+  }
   if (v == null || v === "") return "—";
   if (MONEY_KEYS.has(col)) return fmtMoney(v);
   if (typeof v === "object") return JSON.stringify(v);
@@ -130,6 +145,10 @@ const COL_SHORT_LABEL = {
   contract_number: "Contract #",
   receipt_number: "Receipt #",
   contract_date: "Contract Date",
+  due_date: "Due Date",
+  days_overdue: "Days Overdue",
+  client_name: "Client",
+  phone: "Phone",
   starting_price: "Start Price",
   sold_price: "Sold Price",
   manufacture_year: "Mfg Year",
@@ -525,7 +544,7 @@ export default function Reports() {
               {!loading && sortedRows.map((r, i) => (
                 <tr key={r.id || r.contract_number || i} className="border-t border-stone-100 hover:bg-stone-50/50">
                   {(data?.columns || []).map((c) => (
-                    <td key={c} className={cellClass(c)}>{fmtCell(c, r[c])}</td>
+                    <td key={c} className={cellClass(c)}>{fmtCell(c, r[c], r)}</td>
                   ))}
                 </tr>
               ))}

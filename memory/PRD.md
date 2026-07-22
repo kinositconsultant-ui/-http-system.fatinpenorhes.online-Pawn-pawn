@@ -513,6 +513,14 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 47 — Overdue Report Enrichment + Auction-Eligible Pill (2026-02-17) ✅
+- **Overdue tab now includes `auction_ready` contracts too** — they were previously hidden from this view even though they need auctioneer follow-up. The Overdue tab is the single place staff go to see everyone who owes money past due date.
+- **New columns on the Overdue report**: `client_name`, `phone`, `contract_date`, `days_overdue`, `total_amount_due`, plus the existing item brand/model/type. Backend `_enrich_contracts_with_client()` helper attaches full_name + phone via a batched client lookup (no N+1 queries).
+- **`is_auction_eligible` flag** computed server-side: true when status = `auction_ready` OR (days_overdue > 10 AND months_elapsed >= 2). The frontend renders a red **AUCTION ELIGIBLE** pill next to the status badge on those rows — clear visual cue that further waiting won't add accrual pressure per the new Article 4 cap.
+- New KPIs on this report: `total_due` (sum of all `total_amount_due`) and `auction_eligible` count.
+- Column short-labels added for `due_date`, `days_overdue`, `client_name`, `phone` so header widths stay tight.
+- Verified: 168 rows visible on the Overdue tab, 150 rows have the AUCTION ELIGIBLE pill (all auction_ready + long-overdue rows). Total Due column shows correctly ($2,600 on typical car contracts).
+
 ## Iteration 46 — Car Fields + Month Filter + Article 4 Interest Cap (2026-02-17) ✅
 Three adjustments delivered — testing agent verified 11/11 backend pytest, all frontend flows pass.
 
