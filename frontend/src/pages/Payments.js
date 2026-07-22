@@ -28,9 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
+import PdfPreviewDialog from "../components/PdfPreviewDialog";
 
 const blank = {
   contract_id: "",
@@ -50,6 +51,16 @@ export default function Payments() {
   const [contracts, setContracts] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
+  const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
+
+  const openPaymentPdf = (r) => {
+    setPdfPreview({
+      open: true,
+      url: `${API_BASE}/payments/${r.id}/pdf`,
+      title: `${t("payment_receipt") || "Receipt"} ${shortReceipt(r.receipt_number) || r.receipt_number}`,
+      filename: `${r.receipt_number || "receipt"}.pdf`,
+    });
+  };
 
   // Overdue dialog state
   const [odOpen, setOdOpen] = useState(false);
@@ -337,13 +348,13 @@ export default function Payments() {
         </TabsList>
 
         <TabsContent value="all">
-          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} />
+          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="overdue">
-          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} />
+          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="disbursements">
-          <PaymentsTable rows={disbursements} contractLabel={contractLabel} contractById={contractById} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} />
+          <PaymentsTable rows={disbursements} contractLabel={contractLabel} contractById={contractById} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
       </Tabs>
 
@@ -459,11 +470,19 @@ export default function Payments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfPreviewDialog
+        open={pdfPreview.open}
+        onOpenChange={(o) => setPdfPreview((p) => ({ ...p, open: o }))}
+        url={pdfPreview.url}
+        title={pdfPreview.title}
+        downloadName={pdfPreview.filename}
+      />
     </div>
   );
 }
 
-function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete }) {
+function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete, onPreview }) {
   const [expanded, setExpanded] = useState({});
   const typeBadge = (type) => {
     const map = {
@@ -594,16 +613,15 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
                                   <SubTd>{r.date}</SubTd>
                                   <SubTd right>
                                     <div className="flex justify-end gap-1.5">
-                                      <a
-                                        href={`${API_BASE}/payments/${r.id}/pdf`}
-                                        target="_blank"
-                                        rel="noreferrer"
+                                      <button
+                                        type="button"
+                                        onClick={(ev) => { ev.stopPropagation(); onPreview?.(r); }}
                                         data-testid={`payment-pdf-${r.id}`}
                                         className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                                        title={t("download_pdf")}
+                                        title={t("preview") || "Preview"}
                                       >
-                                        <FileDown className="w-3.5 h-3.5" />
-                                      </a>
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
                                       {isAdmin && (
                                         <button
                                           type="button"

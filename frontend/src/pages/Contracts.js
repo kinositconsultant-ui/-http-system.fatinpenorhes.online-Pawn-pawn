@@ -553,16 +553,15 @@ export default function Contracts() {
                               <Gavel className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          <a
-                            href={`${API_BASE}/contracts/${r.id}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openContractPdf(r)}
                             data-testid={`pa-pdf-${r.id}`}
                             className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                            title={t("download_pdf")}
+                            title={t("preview") || "Preview"}
                           >
-                            <FileDown className="w-3.5 h-3.5" />
-                          </a>
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </Td>
                     </tr>
@@ -687,16 +686,15 @@ export default function Contracts() {
                 </Td>
                 <Td right>
                   <div className="flex justify-end gap-0.5">
-                    <a
-                      href={`${API_BASE}/contracts/${r.id}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => openContractPdf(r)}
                       data-testid={`contract-pdf-${r.id}`}
                       className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C] transition-colors"
-                      title={`${t("download_pdf")} — Nov-2026 math`}
+                      title={`${t("preview") || "Preview"} — Nov-2026 math`}
                     >
-                      <FileDown className="w-3 h-3" />
-                    </a>
+                      <Eye className="w-3 h-3" />
+                    </button>
                     {r.status === "overdue" && (
                       <button
                         onClick={() => openReactivate(r)}
@@ -871,6 +869,14 @@ export default function Contracts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfPreviewDialog
+        open={pdfPreview.open}
+        onOpenChange={(o) => setPdfPreview((p) => ({ ...p, open: o }))}
+        url={pdfPreview.url}
+        title={pdfPreview.title}
+        downloadName={pdfPreview.filename}
+      />
     </div>
   );
 }

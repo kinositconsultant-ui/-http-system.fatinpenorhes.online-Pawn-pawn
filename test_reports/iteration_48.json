@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 48 backlog batch validated end-to-end. Backend: 5/5 new tests pass — settings defaults now car=10 / motorcycle=10 / electronic=15 / pezadu=10, existing motorcycle contracts preserved their historic 15% rate (27/28 legacy at 15, 1 new at 10), GET /api/auctions enriches orphan rows with 'Deleted Contract · CTR-XXXX' label (34/76 orphan rows correctly labelled, 0 rows with empty client_name). Regression: 29/30 backend_test.py pass; the one failure (TestPublic::test_public_auction_items → 401 'Auction listing is locked') is a pre-existing feature-flag behavior unrelated to this batch. Frontend: all 5 UI features verified in browser — (1) Items page renders 4 filter chips per tab with correct testids and count badges, clicking 'sold' filters 517→0 rows; (2) RulePreviewCard shows rule-preview-empty initially, then computes monthly=$300, interest×2=$600, penalty=$300, Total Selu max=$3,900 for loan=3000@10%; (3) contract-pdf-<id> and pa-pdf-<id> buttons both open pdf-preview-dialog with iframe src ending in /contracts/<id>/pdf; (4) payment-pdf-<id> opens dialog with iframe src ending in /payments/<id>/pdf; (5) /payments?contract=CTR-2026-0429 shows pill 'Filtered by contract: CTR-2026-0429 · 3 of 448 payments' and Clear × removes the query param; (6) /auctions?client=TEST shows pill 'Filtered by client: TEST · 42 auctions' with case-insensitive client-name filtering.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Pre-existing Recharts 'width(-1) height(-1)' console warnings on initial render — cosmetic only, called out as known in the review request."]},
+      {"screen": "PdfPreviewDialog", "issues": ["Radix a11y warning: 'Missing Description or aria-describedby for DialogContent' — accessibility polish only, does not affect functionality."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter48_backlog_batch.py",
+    "/app/test_reports/pytest/iter48_results.xml",
+    "/app/test_reports/pytest/iter48_regression.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: add DialogDescription (sr-only) to PdfPreviewDialog to silence Radix a11y warning.",
+    "OPTIONAL (test hygiene, unrelated to this iter): backend_test.py::TestPublic::test_public_auction_items should either unlock the listing before calling GET /api/public/auction-items or expect a 401 when it is locked."
+  ],
+  "critical_code_review_comments": [
+    "services.py DEFAULT_SETTINGS correctly changed motorcycle 15→10; live DB updated as verified via GET /api/settings.",
+    "list_auctions orphan enrichment: verified via API — 34 auctions whose contract was deleted come back with client_name='Deleted Contract · CTR-XXXX' (suffix always matches the auction's own contract_number). 0 auctions returned with empty client_name (down from ~34 orphans previously grouped as '—').",
+    "Contracts.js RulePreviewCard math is client-side and matches Article 4 backend semantics exactly: monthly = loan * rate/100; interest_2x = 2 * monthly; penalty = loan * 0.10; total_max = loan + interest_2x + penalty. Live-updates correctly on input change.",
+    "PdfPreviewDialog reused across Contracts (contract-pdf, pa-pdf) and Payments (payment-pdf) with correct dynamic src bindings. Iframe src always uses REACT_APP_BACKEND_URL/api/... path.",
+    "Payments.js contractFilter uses useSearchParams and computes filteredForContract as a client-side predicate; tabs and pill counts stay in sync (Payments 2 + Overdue 0 + Disbursements 1 = 3 = 'of 448' pill count).",
+    "Auctions.js clientFilter uses case-insensitive substring match on group.client name; verified /auctions?client=TEST returns 42 groups and pill/clear-filter cycle is clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter48_backlog_batch.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% for new features (5/5); 29/30 pre-existing regression (1 unrelated 401 on locked public listing)",
+    "frontend": "100% (6/6 flows: items chips, rule preview, contracts PDF preview, pre-auction PDF preview, payments PDF preview, payments filter pill, auctions filter pill)"
+  },
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "None (validated against live seeded data — 76 auctions with 34 orphans, 448 payments, 434 contracts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 48 file /app/backend/tests/test_iter48_backlog_batch.py contains 5 tests over 2 classes: TestSettingsDefaults (motorcycle=10, existing 15% contracts preserved) and TestAuctionOrphanEnrichment (no empty client_name, 'Deleted Contract · <ctr#>' label format, label suffix matches contract_number). Frontend testids used: item-filter-chips, item-filter-{all|in_stock|pawned|sold}, rule-preview, rule-preview-empty, contract-pdf-<id>, pa-pdf-<id>, payment-pdf-<id>, pdf-preview-dialog, pdf-preview-iframe, pdf-preview-download, payments-filter-pill, payments-filter-clear, auctions-filter-pill, auctions-filter-clear. Known pre-existing issues (unchanged): Recharts width(-1) warning on Dashboard, Radix DialogContent aria-describedby warning on PdfPreviewDialog + Items dialogs, TestPublic::test_public_auction_items 401 (auction listing locked feature).",
+  "rca of the issue": "N/A — no bugs found in this iteration's changes."
+}
