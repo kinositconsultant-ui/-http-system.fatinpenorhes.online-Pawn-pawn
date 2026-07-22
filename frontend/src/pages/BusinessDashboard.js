@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { toast } from "sonner";
 import {
   Wallet,
   TrendingUp,
@@ -13,6 +15,8 @@ import {
   Calendar,
   PieChart as PieIcon,
   Info,
+  Link2,
+  Check,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -43,14 +47,38 @@ export default function BusinessDashboard() {
   const { t } = useLang();
   const [metrics, setMetrics] = useState(null);
   const [cashflow, setCashflow] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   // Global range affects Loaned / Interest / Projected KPIs. Potential Loss
   // stays as a snapshot since it doesn't scale by time window.
-  const [range, setRange] = useState("30d"); // "daily" | "weekly" | "30d" | "ytd"
+  // Range is URL-driven so the view is shareable (?range=weekly).
+  const rangeFromUrl = searchParams.get("range");
+  const validRanges = ["daily", "weekly", "30d", "ytd"];
+  const range = validRanges.includes(rangeFromUrl) ? rangeFromUrl : "30d";
+  const setRange = (r) => {
+    const next = new URLSearchParams(searchParams);
+    if (r && r !== "30d") next.set("range", r);
+    else next.delete("range");
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     api.get("/business/metrics").then((r) => setMetrics(r.data));
     api.get("/business/cashflow-forecast").then((r) => setCashflow(r.data));
   }, []);
+
+  const copyShareLink = async () => {
+    const url = `${window.location.origin}${window.location.pathname}?range=${range}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success(t("share_link_copied") || "Share link copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      // Fallback: show the URL so the owner can copy manually
+      window.prompt(t("share_link_prompt") || "Copy this link:", url);
+    }
+  };
 
   const rangeData = metrics?.ranges?.[range];
   const rangeLabel = {
@@ -120,7 +148,7 @@ export default function BusinessDashboard() {
       Icon: Clock,
       tone: "text-amber-700",
       bg: "bg-amber-50 border-amber-200",
-      to: "/contracts?status=overdue",
+      to: "/contracts?status=grace_period",
       info: t("info_grace_period"),
     },
     {
@@ -148,27 +176,40 @@ export default function BusinessDashboard() {
             Owner-focused view: cash out, interest earned, projected income, and downside risk.
           </p>
         </div>
-        <div className="inline-flex items-center gap-0.5 p-1 bg-stone-100 rounded-md text-xs" data-testid="range-toggle">
-          {[
-            { k: "daily", l: "Daily" },
-            { k: "weekly", l: "Weekly" },
-            { k: "30d", l: "30d" },
-            { k: "ytd", l: "YTD" },
-          ].map((opt) => (
-            <button
-              key={opt.k}
-              type="button"
-              onClick={() => setRange(opt.k)}
-              data-testid={`range-${opt.k}`}
-              className={`px-3 py-1 rounded transition font-medium ${
-                range === opt.k
-                  ? "bg-[#1B2D5C] text-white"
-                  : "text-stone-600 hover:text-stone-900"
-              }`}
-            >
-              {opt.l}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            onClick={copyShareLink}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white"
+            data-testid="share-snapshot-btn"
+            title={t("share_snapshot_hint") || "Copy a link that opens this dashboard on the same range"}
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+            {copied ? (t("copied") || "Copied") : (t("share_snapshot") || "Share Snapshot")}
+          </Button>
+          <div className="inline-flex items-center gap-0.5 p-1 bg-stone-100 rounded-md text-xs" data-testid="range-toggle">
+            {[
+              { k: "daily", l: "Daily" },
+              { k: "weekly", l: "Weekly" },
+              { k: "30d", l: "30d" },
+              { k: "ytd", l: "YTD" },
+            ].map((opt) => (
+              <button
+                key={opt.k}
+                type="button"
+                onClick={() => setRange(opt.k)}
+                data-testid={`range-${opt.k}`}
+                className={`px-3 py-1 rounded transition font-medium ${
+                  range === opt.k
+                    ? "bg-[#1B2D5C] text-white"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                {opt.l}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

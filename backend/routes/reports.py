@@ -164,7 +164,7 @@ async def _report_overdue(filters: dict) -> dict:
     # and were previously split across two tabs. Grouping them under a single
     # "Overdue + Auction-Ready" view (with an is_auction_eligible flag on
     # each row) matches how staff mentally handle these cases.
-    rows = [r for r in rows if r.get("status") in ("overdue", "auction_ready")]
+    rows = [r for r in rows if r.get("status") in ("overdue", "grace_period", "auction_ready")]
     rows = await _enrich_contracts_with_item_meta(rows)
     rows = await _enrich_contracts_with_client(rows)
     rows = _apply_date_filter(rows, "due_date", filters.get("month"), filters.get("year"))
@@ -256,7 +256,9 @@ async def _report_inventory(filters: dict) -> dict:
     active_items = sum(1 for r in out_rows if r["status"] in ("pawned", "in_stock"))
     overdue_items = 0
     # count overdue by looking up active contracts whose status is overdue
-    overdue_contracts = await db.contracts.find({"status": "overdue"}, {"_id": 0}).to_list(5000)
+    overdue_contracts = await db.contracts.find(
+        {"status": {"$in": ["overdue", "grace_period"]}}, {"_id": 0}
+    ).to_list(5000)
     overdue_item_ids = {c["item_id"] for c in overdue_contracts}
     overdue_items = sum(1 for r in out_rows if r["id"] in overdue_item_ids)
 

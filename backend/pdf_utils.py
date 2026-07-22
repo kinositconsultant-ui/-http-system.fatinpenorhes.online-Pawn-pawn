@@ -2022,3 +2022,67 @@ def build_dashboard_snapshot_pdf(
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
+
+
+
+def build_auction_catalogue_pdf(items: list[dict], generated_at: str | None = None) -> bytes:
+    """Public-facing catalogue of items eligible for the next auction.
+
+    Each row shows the item type, description/brand-model, market value, and
+    a reference code so a bidder can walk into the shop and ask to inspect it.
+    Personal / financial detail about the borrower is intentionally excluded —
+    this document is safe to hand out on the street or pin on a noticeboard.
+    """
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+
+    story = [
+        _branded_header(s),
+        Paragraph("Auction Catalogue · Katálogu Leilaun", s["DocTitle"]),
+        Paragraph(
+            f"Items eligible for the next auction — Sasán prontu ba leilaun tuir mai."
+            f"<br/>Generated: <b>{generated_at or ''}</b> · Total items: <b>{len(items)}</b>",
+            s["Body"],
+        ),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    rows = []
+    for it in items:
+        ref = it.get("reference") or it.get("contract_number") or "—"
+        kind = str(it.get("item_type") or "").upper() or "—"
+        desc_parts = []
+        for k in ("brand", "model", "year", "color", "plate"):
+            v = it.get(k)
+            if v:
+                desc_parts.append(str(v))
+        # Fallback for pezadu / electronics without those fields
+        if not desc_parts:
+            desc_parts.append(str(it.get("description") or it.get("name") or "—"))
+        desc = " · ".join(desc_parts)
+        market = _money(it.get("market_value", 0))
+        min_bid = _money(it.get("min_bid") or float(it.get("market_value") or 0) * 0.7)
+        rows.append([ref, kind, desc, market, min_bid])
+
+    if not rows:
+        story.append(Paragraph(
+            "<i>No items are currently eligible for auction. La iha sasán prontu ba leilaun agora.</i>",
+            s["Body"],
+        ))
+    else:
+        story.append(_data_table(
+            ["Ref.", "Type", "Description", "Market Value", "Min. Bid"],
+            rows,
+            col_widths=[2.6 * cm, 2.4 * cm, 8.5 * cm, 3.0 * cm, 3.0 * cm],
+        ))
+
+    story.append(Spacer(1, 0.6 * cm))
+    story.append(Paragraph(
+        "<b>How to bid — Oinsá atu bid:</b> visit our office in Caicoli, Dili, or WhatsApp "
+        "+670 78372678. All items are sold as-is; inspection is welcome before the auction day. "
+        "Sasán hotu-hotu faan iha kondisaun atuál; ita bo'ot bele mai haree molok loron leilaun.",
+        s["Body"],
+    ))
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()

@@ -332,7 +332,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
     elif is_overdue and days_overdue > 10:
         status = "auction_ready"
     elif is_overdue:
-        status = "overdue"
+        status = "grace_period"
     else:
         status = "active"
 

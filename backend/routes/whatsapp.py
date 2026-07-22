@@ -130,7 +130,7 @@ async def whatsapp_reminders_run(language: str = Query("en"), user: dict = Depen
     target_due = (today + timedelta(days=days_before)).isoformat()
     today_iso = today.isoformat()
     contracts = await db.contracts.find(
-        {"status": {"$in": ["active", "overdue"]}},
+        {"status": {"$in": ["active", "overdue", "grace_period"]}},
         {"_id": 0},
     ).to_list(5000)
     sent: list[dict] = []

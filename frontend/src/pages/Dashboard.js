@@ -95,7 +95,7 @@ export default function Dashboard() {
       Icon: AlertCircle,
       tone: "text-[#993333]",
       testid: "kpi-overdue",
-      to: "/contracts?status=overdue",
+      to: "/contracts?status=grace_period",
       // For overdue an increase is BAD, so we invert the tone semantics.
       invertTrend: true,
       info: t("info_overdue_contracts"),
@@ -313,7 +313,7 @@ export default function Dashboard() {
             label={t("overdue_contracts")}
             value={data?.overdue_contracts}
             tone="text-[#993333]"
-            to="/contracts?status=overdue"
+            to="/contracts?status=grace_period"
             testid="stat-overdue"
             info={t("info_stat_overdue")}
           />

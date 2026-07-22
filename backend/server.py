@@ -270,7 +270,7 @@ async def list_clients(_: dict = Depends(require_module("clients"))):
     # Enrich each client with a lightweight risk profile so the frontend can
     # render a green/amber/red pill without a second round-trip.
     contracts = await db.contracts.find(
-        {"status": {"$in": ["active", "overdue", "auction_ready"]}},
+        {"status": {"$in": ["active", "overdue", "grace_period", "auction_ready"]}},
         {"_id": 0, "client_id": 1, "status": 1, "principal_remaining": 1,
          "loan_amount": 1, "days_overdue": 1},
     ).to_list(5000)
@@ -919,7 +919,7 @@ async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depe
     if not c:
         raise HTTPException(status_code=404, detail="Contract not found")
     c = await _recompute_contract_status(c)
-    if c["status"] not in ("overdue", "active", "auction_ready"):
+    if c["status"] not in ("overdue", "grace_period", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only overdue or active contracts can be reactivated")
     try:
         nd = date.fromisoformat(payload.new_due_date)
@@ -1185,7 +1185,7 @@ async def move_to_auction(payload: AuctionMoveIn, _: dict = Depends(get_current_
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     contract = await _recompute_contract_status(contract)
-    if contract["status"] not in ("overdue", "active", "auction_ready"):
+    if contract["status"] not in ("overdue", "grace_period", "active", "auction_ready"):
         raise HTTPException(status_code=400, detail="Only active/overdue contracts can be auctioned")
     doc = {
         "id": new_id(),
@@ -1433,7 +1433,7 @@ async def delete_auction(aid: str, user: dict = Depends(require_admin)):
             if contract.get("status") in ("auction", "auction_ready"):
                 await db.contracts.update_one(
                     {"id": contract["id"]},
-                    {"$set": {"status": "overdue"}, "$unset": {"auction_id": ""}},
+                    {"$set": {"status": "grace_period"}, "$unset": {"auction_id": ""}},
                 )
     await write_audit(user, "delete", "auction", aid, {
         "contract_id": a.get("contract_id"),
@@ -1454,7 +1454,7 @@ async def _dashboard_summary_data() -> dict:
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
     clients_count = await db.clients.count_documents({})
 
-    active = overdue = redeemed = auction = auction_ready = 0
+    active = overdue = redeemed = auction = auction_ready = grace_period = 0
     total_loan = 0.0
     total_interest = 0.0
     today = _today_iso()
@@ -1470,6 +1470,9 @@ async def _dashboard_summary_data() -> dict:
             auction += 1
         elif status == "auction_ready":
             auction_ready += 1
+        elif status == "grace_period":
+            grace_period += 1
+            overdue += 1  # legacy alias — same records
         elif c.get("due_date", today) < today and status != "redeemed":
             overdue += 1
         else:
@@ -1483,6 +1486,7 @@ async def _dashboard_summary_data() -> dict:
         "total_clients": clients_count,
         "active_contracts": active,
         "overdue_contracts": overdue,
+        "grace_period_contracts": grace_period,
         "auction_ready_contracts": auction_ready,
         "redeemed_contracts": redeemed,
         "auction_contracts": auction,
@@ -1571,6 +1575,52 @@ async def dashboard_snapshot_pdf(_: dict = Depends(require_module("dashboard")))
     )
 
 
+@api.get("/auctions/catalogue/pdf")
+async def auction_catalogue_pdf(_: dict = Depends(require_module("auctions"))):
+    """Public-safe catalogue PDF of all items eligible for the next auction.
+
+    Includes: reference (contract number), item type, brand/model/year/plate,
+    market value, and a suggested minimum bid (70% of market value). Excludes
+    all client PII so the file can be printed for public noticeboards.
+    """
+    from pdf_utils import build_auction_catalogue_pdf  # noqa: PLC0415
+
+    contracts = await db.contracts.find(
+        {"status": {"$in": ["auction_ready", "auction"]}}, {"_id": 0}
+    ).to_list(5000)
+    contracts.sort(key=lambda c: c.get("contract_number", ""))
+
+    rows: list[dict] = []
+    for c in contracts:
+        # Look up the item by kind so we get brand/model/plate/etc.
+        kind = c.get("item_type")
+        coll = COLLECTION_MAP.get(kind)
+        item: dict = {}
+        if coll and c.get("item_id"):
+            item = await db[coll].find_one({"id": c["item_id"]}, {"_id": 0}) or {}
+        market = float(item.get("market_value") or c.get("loan_amount") or 0)
+        rows.append({
+            "reference": c.get("contract_number"),
+            "contract_number": c.get("contract_number"),
+            "item_type": kind,
+            "brand": item.get("brand"),
+            "model": item.get("model"),
+            "year": item.get("year"),
+            "color": item.get("color"),
+            "plate": item.get("plate"),
+            "description": item.get("description") or item.get("name"),
+            "market_value": market,
+            "min_bid": round(market * 0.70, 2),
+        })
+
+    pdf_bytes = build_auction_catalogue_pdf(rows, generated_at=_today_iso())
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="auction-catalogue.pdf"'},
+    )
+
+
 # =====================================================================
 # Business Dashboard — owner-focused metrics + cash-flow forecast
 # =====================================================================
@@ -1643,7 +1693,7 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
 
     for c in contracts:
         status = c.get("status")
-        if status in ("active", "overdue", "auction_ready"):
+        if status in ("active", "overdue", "grace_period", "auction_ready"):
             prin = float(c.get("principal_remaining", 0) or 0)
             total_loaned_out += prin
             rate = float(c.get("interest_rate", 0) or 0)
@@ -1661,7 +1711,7 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
             if status == "auction_ready":
                 potential_loss += prin
                 auction_ready_count += 1
-            elif status == "overdue":
+            elif status in ("grace_period", "overdue"):
                 grace_count += 1
             per_loan.append({
                 "contract_id": c.get("id"),
@@ -1799,7 +1849,7 @@ async def business_cashflow_forecast(_: dict = Depends(require_module("dashboard
 
     # Forecast inflows for the next 30 days.
     for c in contracts:
-        if c.get("status") not in ("active", "overdue"):
+        if c.get("status") not in ("active", "overdue", "grace_period"):
             continue
         due = c.get("due_date")
         if not due:
@@ -2012,6 +2062,20 @@ async def on_startup():
     await db.invoices.create_index("invoice_number", unique=True)
     for coll in COLLECTION_MAP.values():
         await db[coll].create_index("id", unique=True)
+
+    # One-time migration: rename legacy status "overdue" (1-10 days past due)
+    # to the new distinct "grace_period" status. Idempotent — safe to run
+    # every startup; typically hits zero docs after first run. Records with
+    # days_overdue > 10 are already "auction_ready" and are untouched.
+    try:
+        res = await db.contracts.update_many(
+            {"status": "overdue"},
+            {"$set": {"status": "grace_period"}},
+        )
+        if res.modified_count:
+            logger.info(f"Migrated {res.modified_count} contracts from 'overdue' → 'grace_period'")
+    except Exception as e:
+        logger.warning(f"Grace-period status migration skipped: {e}")
 
     # Initialize object storage (best-effort)
     try:

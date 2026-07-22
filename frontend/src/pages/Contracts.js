@@ -259,18 +259,25 @@ export default function Contracts() {
     (i) => i.status === "in_stock" || !i.status
   );
 
-  // Pre-Auction list: contracts 1-10 days overdue (status "overdue", not yet auction_ready)
+  // Pre-Auction list: contracts 1-10 days past due (status "grace_period"; legacy "overdue" alias)
   const preAuction = rows.filter(
-    (r) => r.status === "overdue" && Number(r.days_overdue || 0) >= 1 && Number(r.days_overdue || 0) <= 10
+    (r) =>
+      (r.status === "grace_period" || r.status === "overdue") &&
+      Number(r.days_overdue || 0) >= 1 &&
+      Number(r.days_overdue || 0) <= 10
   );
   const auctionReady = rows.filter((r) => r.status === "auction_ready");
 
   // URL-driven status filter for the main contracts table. Cards on the
-  // Dashboard link here with `?status=active|overdue|redeemed|auction_ready`.
+  // Dashboard link here with `?status=active|overdue|grace_period|redeemed|auction_ready`.
+  // Legacy `?status=overdue` links are treated as `grace_period` (same 1-10 day window).
   const monthFilter = searchParams.get("month") || "";
   const filteredRows = useMemo(() => {
     let out = rows;
-    if (statusFilter) out = out.filter((r) => r.status === statusFilter);
+    if (statusFilter) {
+      const sf = statusFilter === "overdue" ? "grace_period" : statusFilter;
+      out = out.filter((r) => r.status === sf || (sf === "grace_period" && r.status === "overdue"));
+    }
     if (monthFilter) out = out.filter((r) => (r.contract_date || "").startsWith(monthFilter));
     return out;
   }, [rows, statusFilter, monthFilter]);
@@ -695,7 +702,7 @@ export default function Contracts() {
                     >
                       <Eye className="w-3 h-3" />
                     </button>
-                    {r.status === "overdue" && (
+                    {(r.status === "overdue" || r.status === "grace_period") && (
                       <button
                         onClick={() => openReactivate(r)}
                         data-testid={`contract-reactivate-${r.id}`}
@@ -705,7 +712,7 @@ export default function Contracts() {
                         <RefreshCw className="w-3 h-3" />
                       </button>
                     )}
-                    {["active", "overdue"].includes(r.status) && (
+                    {["active", "overdue", "grace_period"].includes(r.status) && (
                       <button
                         onClick={() => moveToAuction(r.id)}
                         data-testid={`contract-auction-${r.id}`}
@@ -715,7 +722,7 @@ export default function Contracts() {
                         <Gavel className="w-3 h-3" />
                       </button>
                     )}
-                    {["active", "overdue"].includes(r.status) && (
+                    {["active", "overdue", "grace_period"].includes(r.status) && (
                       <button
                         onClick={() => sendWhatsApp(r.id, "en")}
                         data-testid={`contract-whatsapp-${r.id}`}
@@ -885,12 +892,17 @@ function StatusBadge({ status }) {
   const map = {
     active: "bg-emerald-50 text-emerald-800 border-emerald-200",
     overdue: "bg-amber-50 text-amber-800 border-amber-200",
+    grace_period: "bg-amber-50 text-amber-800 border-amber-200",
     auction_ready: "bg-red-50 text-red-800 border-red-200",
     redeemed: "bg-stone-100 text-stone-700 border-stone-200",
     auction: "bg-orange-50 text-orange-800 border-orange-200",
     sold: "bg-purple-50 text-purple-800 border-purple-200",
   };
-  const label = status === "auction_ready" ? "auction ready" : status;
+  const labelMap = {
+    grace_period: "grace period",
+    auction_ready: "auction ready",
+  };
+  const label = labelMap[status] || status;
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-full border ${

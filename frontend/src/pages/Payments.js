@@ -110,7 +110,7 @@ export default function Payments() {
   const contractById = (id) => contracts.find((x) => x.id === id) || null;
   const selectedContract = contracts.find((c) => c.id === form.contract_id);
   const overdueContracts = useMemo(
-    () => contracts.filter((c) => c.status === "overdue" || c.status === "auction_ready"),
+    () => contracts.filter((c) => c.status === "overdue" || c.status === "grace_period" || c.status === "auction_ready"),
     [contracts]
   );
   const odContract = contracts.find((c) => c.id === odContractId);
@@ -221,7 +221,7 @@ export default function Payments() {
                     </SelectTrigger>
                     <SelectContent>
                       {contracts
-                        .filter((c) => ["active", "overdue", "auction_ready"].includes(c.status))
+                        .filter((c) => ["active", "overdue", "grace_period", "auction_ready"].includes(c.status))
                         .map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.contract_number} · ${Number(c.remaining_balance || 0).toLocaleString()} left

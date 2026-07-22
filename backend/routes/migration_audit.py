@@ -33,7 +33,7 @@ async def _build_penalty_audit_rows() -> list[dict]:
     rows: list[dict] = []
     for c in contracts:
         await _recompute_contract_status(c)
-        if c.get("status") not in ("overdue", "auction_ready"):
+        if c.get("status") not in ("overdue", "grace_period", "auction_ready"):
             continue
         original = float(c.get("original_loan_amount") or c.get("loan_amount") or 0)
         current = float(c.get("current_principal", c.get("principal_remaining", 0)) or 0)

@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../components/ui/dialog";
-import { FileText, Trash2, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { FileText, Trash2, ChevronDown, ChevronRight, Eye, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { shortInvoice } from "../lib/docNumbers";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
@@ -120,12 +120,29 @@ export default function Auctions() {
 
   return (
     <div className="space-y-6" data-testid="auctions-root">
-      <header>
-        <div className="text-eyebrow">{t("auctions")}</div>
-        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("auctions")}</h1>
-        <p className="text-stone-600 text-sm mt-1">
-          Overdue items are moved here from contracts. Mark them as sold to close the loop.
-        </p>
+      <header className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <div className="text-eyebrow">{t("auctions")}</div>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">{t("auctions")}</h1>
+          <p className="text-stone-600 text-sm mt-1">
+            Overdue items are moved here from contracts. Mark them as sold to close the loop.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPdfPreview({
+            open: true,
+            url: pdfUrl("/auctions/catalogue/pdf"),
+            title: t("auction_catalogue") || "Auction Catalogue",
+            filename: "auction-catalogue.pdf",
+          })}
+          data-testid="auction-catalogue-btn"
+          title={t("auction_catalogue_hint") || "Printable public catalogue of items eligible for the next auction"}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white transition text-sm font-medium"
+        >
+          <FileDown className="w-4 h-4" />
+          {t("auction_catalogue") || "Auction Catalogue"}
+        </button>
       </header>
 
       {clientFilter && (

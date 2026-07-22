@@ -668,6 +668,38 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 52 — Real Grace Period Status + Share Snapshot + Auction Catalogue (2026-02-22) ✅
+Batch A of user's backlog request. Three independent features:
+
+### 1. Real Grace Period Status
+- Introduced a **persisted `grace_period`** contract status (previously the 1–10 day window was reusing the `overdue` label).
+- **`services.py`**: `recompute_financials` now writes `status = "grace_period"` (instead of `"overdue"`) for contracts 1–10 days past due. Contracts >10 days remain `auction_ready`.
+- **Startup migration** in `server.py:on_startup`: idempotent `update_many({"status": "overdue"}, {"$set": {"status": "grace_period"}})`. First run migrated 19 contracts; subsequent runs no-op.
+- **Backward-compat**: every backend tuple/`$in` that included `"overdue"` now also includes `"grace_period"` (`server.py`, `reminders.py`, `whatsapp.py`, `reports.py`, `migration_audit.py`). Legacy DB records/tests referencing `"overdue"` still function.
+- **Dashboard summary** returns both `overdue_contracts` (legacy alias) and new `grace_period_contracts` field.
+- **Reports overdue tab** now returns both `grace_period` (19) and `auction_ready` (150) = 169 rows total.
+- **Frontend Contracts**: filter accepts `?status=grace_period` or `?status=overdue` (treated as alias); StatusBadge maps `grace_period` → "grace period" pill with amber styling.
+- **Dashboard links** now use `/contracts?status=grace_period` for the Overdue KPI + Stat cards. BusinessDashboard grace card also links to grace_period.
+- Payments/Contracts action guards (reactivate, move-to-auction, WhatsApp) now accept `grace_period` alongside `overdue`.
+
+### 2. Share Snapshot
+- Business Dashboard range toggle is now **URL-driven** via `?range=daily|weekly|30d|ytd`. Direct visits to `/business?range=weekly` open with Weekly pre-selected.
+- New **"Share Snapshot"** button (`data-testid="share-snapshot-btn"`) copies the exact current URL to the clipboard using `navigator.clipboard.writeText`. Falls back to `window.prompt` if clipboard API is blocked.
+- Toast confirmation ("Share link copied to clipboard" / TET) + inline check-icon swap for 2 s.
+- i18n keys: `share_snapshot`, `share_snapshot_hint`, `share_link_copied`, `copied` (EN + TET).
+
+### 3. Auction Catalogue PDF
+- New **`build_auction_catalogue_pdf`** in `pdf_utils.py`: A4 portrait, branded header, one row per auction-eligible item with columns: Ref (contract number), Type, Description (brand · model · year · color · plate), Market Value, Min. Bid (70% of market).
+- **Excludes all client PII** — safe to post on public noticeboard.
+- New endpoint **`GET /api/auctions/catalogue/pdf`** (protected by `require_module("auctions")`): pulls contracts with status ∈ [`auction_ready`, `auction`], joins to the correct item collection per `item_type`, streams a `~60KB` PDF.
+- Auctions page: added **"Auction Catalogue"** button (`data-testid="auction-catalogue-btn"`) in the header; opens the PDF in the reusable `PdfPreviewDialog` with a Download option.
+- i18n keys: `auction_catalogue`, `auction_catalogue_hint` (EN + TET).
+
+### Verification
+- Backend curl: `/api/dashboard/summary` → `grace_period_contracts: 19`; `/api/business/metrics` → `grace_period_count: 19`; `/api/reports/v2/overdue` → 169 rows (19 grace + 150 auction_ready); `/api/auctions/catalogue/pdf` → HTTP 200, valid `%PDF-1.4`, 60,211 bytes.
+- Playwright: `/business?range=weekly` selects Weekly correctly; Share button present; Auctions page shows Catalogue button; `/contracts?status=grace_period` returns rows.
+- No lint issues (JS or Python).
+
 ## Iteration 51 — Main Dashboard Info Tooltips (2026-02-22) ✅
 - Extended the info-tooltip pattern from Business Dashboard to the main **Dashboard** page (`/app/frontend/src/pages/Dashboard.js`).
 - Added ⓘ Info icons on **6 KPI cards** (Total Clients, Active Contracts, Overdue Contracts, Total Loan Amount, Total Payments, Profit/Interest) and **5 Status stat cards** (Active, Overdue, Auction Ready, Redeemed, Auction).

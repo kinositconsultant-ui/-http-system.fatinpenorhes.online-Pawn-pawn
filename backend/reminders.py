@@ -193,7 +193,7 @@ async def run_daily_reminders() -> dict:
     # Locally recompute overdue days rather than pulling every contract through _recompute
     today = datetime.now(timezone.utc).date()
     contracts = await db.contracts.find(
-        {"status": {"$in": ["overdue", "active"]}},
+        {"status": {"$in": ["overdue", "grace_period", "active"]}},
         {"_id": 0, "id": 1, "contract_number": 1, "client_id": 1, "due_date": 1,
          "contract_date": 1, "loan_amount": 1, "interest_rate": 1},
     ).to_list(2000)
