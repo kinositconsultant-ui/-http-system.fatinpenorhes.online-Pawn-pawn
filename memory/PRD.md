@@ -668,6 +668,31 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 58 — Bulk Label Print (2026-02-22) ✅
+
+### Backend
+- **Refactored `pdf_utils`** to split the label-drawing code:
+  - New `_draw_item_label_on_canvas(c, page_w, page_h, contract, item, client)` — draws one label on an existing canvas page. Shared by single + bulk endpoints.
+  - `build_item_label_pdf()` — thin wrapper: creates canvas, draws one label, `showPage()`, `save()`.
+  - **New `build_bulk_labels_pdf(rows)`** — creates one canvas, iterates through `[(contract, item, client), …]`, drawing one label per A6-landscape page. Empty list returns a graceful "No items to label · La iha sasán atu etiketa" page.
+- **New endpoint** `GET /api/contracts/labels-pdf` (declared BEFORE `/contracts/{cid}` so the literal path wins over the path param). Accepts `?ids=`, `?month=YYYY-MM`, `?status=`, all combining with AND. Fallback (no filters) = all non-closed contracts (`active`, `grace_period`, `overdue`, `auction_ready`), capped at 500 items.
+- Pre-fetches clients in bulk (single `{"$in": [...]}` query) so N contracts don't cause N round-trips.
+
+### Frontend
+- **New "Print Labels" button** in the Contracts page header (`data-testid="contracts-print-labels-btn"`, navy outlined). Opens the bulk PDF in the shared `PdfPreviewDialog` with a Download option. Title shows the item count e.g. "Print Labels · 47 items".
+- Smart filter mapping:
+  - `?month=` selected → passes `month=YYYY-MM` to the endpoint.
+  - `?status=` selected → passes `status=<status>`.
+  - No URL filters → sends the currently-visible `filteredRows.map(r=>r.id)` (up to 500) as `ids=` so any client-side custom filter (search, month + status combos) is respected.
+- **i18n**: `print_labels`, `print_labels_hint` in EN and Tetum.
+
+### Live verification
+- `/api/contracts/labels-pdf?month=2026-07` → HTTP 200, **2.3 MB, 351 labels** (one per contract in July 2026).
+- `/api/contracts/labels-pdf?status=auction_ready` → HTTP 200, **990 KB, 160 labels**.
+- `/api/contracts/labels-pdf?ids=nope` → HTTP 200, **1.5 KB, 1 page** with the friendly empty-state message.
+- Single label endpoint unaffected (`/api/contracts/{cid}/label-pdf` still 200).
+- Playwright: button renders correctly on `/contracts` header ("Print Labels" text + QR icon + navy outline).
+
 ## Iteration 57 — Clients Route Split + QR Item-Label PDF (2026-02-22) ✅
 
 ### Server Split — Clients domain extracted 🎯

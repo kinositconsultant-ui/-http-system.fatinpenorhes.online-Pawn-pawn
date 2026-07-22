@@ -603,6 +603,64 @@ async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depe
     return await _recompute_contract_status(refreshed)
 
 
+@api.get("/contracts/labels-pdf")
+async def contracts_bulk_labels_pdf(
+    ids: str = "",
+    month: str = "",
+    status: str = "",
+    _: dict = Depends(get_current_user),
+):
+    """Batch printable-label PDF — one A6 page per contract.
+
+    Accepts one of:
+      • `?ids=<comma-separated-contract-ids>` — explicit set (up to 500)
+      • `?month=YYYY-MM` — every contract whose contract_date is in that month
+      • `?status=<status>` — every contract with that status
+      • no params — every active/grace_period/auction_ready contract
+
+    All filters combine with AND if multiple are supplied. Route registered
+    before `/contracts/{cid}/label-pdf` so the literal `labels-pdf` wins over
+    the `{cid}` path parameter.
+    """
+    from pdf_utils import build_bulk_labels_pdf  # noqa: PLC0415
+
+    q: dict = {}
+    id_list = [s for s in (ids or "").split(",") if s.strip()]
+    if id_list:
+        q["id"] = {"$in": id_list[:500]}
+    if month:
+        q["contract_date"] = {"$regex": f"^{month}"}
+    if status:
+        q["status"] = status
+    if not q:
+        q["status"] = {"$in": ["active", "grace_period", "overdue", "auction_ready"]}
+
+    contracts = await db.contracts.find(q, {"_id": 0}).sort("contract_number", 1).to_list(500)
+    if not contracts:
+        pdf_bytes = build_bulk_labels_pdf([])
+    else:
+        # Pre-fetch clients in bulk to avoid N round-trips
+        client_ids = list({c["client_id"] for c in contracts if c.get("client_id")})
+        client_docs = {
+            d["id"]: d
+            for d in await db.clients.find({"id": {"$in": client_ids}}, {"_id": 0}).to_list(500)
+        } if client_ids else {}
+        rows: list[tuple[dict, dict, dict | None]] = []
+        for c in contracts:
+            item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
+            client_doc = client_docs.get(c.get("client_id"))
+            rows.append((c, item, client_doc))
+        pdf_bytes = build_bulk_labels_pdf(rows)
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="fatin-penhores-labels-{month or "batch"}.pdf"'},
+    )
+
+
+
+
 @api.get("/contracts/{cid}")
 async def get_contract(cid: str, _: dict = Depends(get_current_user)):
     c = await db.contracts.find_one({"id": cid}, {"_id": 0})

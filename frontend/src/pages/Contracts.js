@@ -330,6 +330,30 @@ export default function Contracts() {
               </SelectContent>
             </Select>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (monthFilter) params.set("month", monthFilter);
+              if (statusFilter) params.set("status", statusFilter);
+              if (!monthFilter && !statusFilter && filteredRows.length) {
+                params.set("ids", filteredRows.map((r) => r.id).slice(0, 500).join(","));
+              }
+              const suffix = params.toString() ? `?${params.toString()}` : "";
+              setPdfPreview({
+                open: true,
+                url: pdfUrl(`/contracts/labels-pdf${suffix}`),
+                title: `${t("print_labels") || "Print Labels"} · ${filteredRows.length} item${filteredRows.length === 1 ? "" : "s"}`,
+                filename: `fatin-penhores-labels-${monthFilter || statusFilter || "batch"}.pdf`,
+              });
+            }}
+            data-testid="contracts-print-labels-btn"
+            title={t("print_labels_hint") || "Batch QR sticker PDF for the currently filtered contracts"}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-[#1B2D5C] text-[#1B2D5C] hover:bg-[#1B2D5C] hover:text-white transition text-sm font-medium"
+          >
+            <QrCode className="w-4 h-4" />
+            {t("print_labels") || "Print Labels"}
+          </button>
           <Dialog
           open={open}
           onOpenChange={(o) => {

@@ -2146,17 +2146,13 @@ def build_auction_catalogue_pdf(
 
 
 
-def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None) -> bytes:
-    """Compact printable label for a pawned physical item.
+def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, client: dict | None = None) -> None:
+    """Draw a single item-label onto the current page of an existing canvas.
 
-    Layout: a 10 × 6 cm sticker containing a scannable QR (encodes JSON
-    `{"cn": contract_number, "item": item_name, "id": contract_id}`),
-    the contract number in large type, and a one-line human description.
-    The PDF page itself is A6 landscape so it prints on standard sticker
-    paper and can be cut to size.
+    Extracted so both the single-label and bulk-label endpoints share the
+    exact same layout. Caller is responsible for `showPage()` between labels
+    and `save()` at the end.
     """
-    from reportlab.lib.pagesizes import A6, landscape
-    from reportlab.pdfgen import canvas as _canvas
     from reportlab.lib.utils import ImageReader
     import qrcode as _qrcode
     import json as _json
@@ -2164,7 +2160,6 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     contract_number = contract.get("contract_number", "—")
     contract_id = contract.get("id", "")
 
-    # Assemble a human item description from whatever fields the item has.
     parts: list[str] = []
     for k in ("brand", "model", "year", "manufacture_year", "color", "plate"):
         v = (item or {}).get(k)
@@ -2180,7 +2175,6 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
         "id": contract_id,
     }, ensure_ascii=False, separators=(",", ":"))
 
-    # Build the QR image (small, high-contrast, embedded in PDF via ReportLab Image)
     qr = _qrcode.QRCode(
         version=None,
         error_correction=_qrcode.constants.ERROR_CORRECT_M,
@@ -2194,23 +2188,16 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     qr_img.save(qr_buf, format="PNG")
     qr_buf.seek(0)
 
-    # Compose the label on an A6 landscape page (~14.8 × 10.5 cm) using canvas
-    buf = BytesIO()
-    page = landscape(A6)
-    c = _canvas.Canvas(buf, pagesize=page)
-    page_w, page_h = page
-
-    # Left column: QR (square, takes ~7.5 cm)
+    # Left column: QR
     qr_size = 7.5 * cm
     qr_x = 0.6 * cm
     qr_y = (page_h - qr_size) / 2
     c.drawImage(ImageReader(qr_buf), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
 
-    # Right column: brand + contract number + item description
+    # Right column
     text_x = qr_x + qr_size + 0.5 * cm
     text_w = page_w - text_x - 0.4 * cm
 
-    # Brand
     c.setFillColor("#1B2D5C")
     c.setFont("Helvetica-Bold", 9)
     c.drawString(text_x, page_h - 0.9 * cm, "FATIN PENHORES")
@@ -2218,22 +2205,18 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     c.setFont("Helvetica", 7)
     c.drawString(text_x, page_h - 1.4 * cm, "Unipessoal, Lda · Caicoli, Dili")
 
-    # Divider
     c.setStrokeColor("#F0B435")
     c.setLineWidth(1.2)
     c.line(text_x, page_h - 1.75 * cm, text_x + text_w, page_h - 1.75 * cm)
 
-    # Contract number (large)
     c.setFillColor("#1B2D5C")
     c.setFont("Helvetica-Bold", 18)
     c.drawString(text_x, page_h - 3.0 * cm, contract_number)
 
-    # Item type label
     c.setFillColor("#64748B")
     c.setFont("Helvetica", 7)
     c.drawString(text_x, page_h - 3.6 * cm, "ITEM · SASÁN")
 
-    # Item description — wrap if too long
     c.setFillColor("#0F1B3A")
     c.setFont("Helvetica-Bold", 10)
     words = item_name.split(" ")
@@ -2252,17 +2235,54 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     if line and y >= 2.0 * cm:
         c.drawString(text_x, y, line)
 
-    # Optional client label at bottom-right (last two names only, no PII stack)
     if client and client.get("full_name"):
         c.setFillColor("#64748B")
         c.setFont("Helvetica-Oblique", 7)
         c.drawString(text_x, 1.3 * cm, f"Owner: {client['full_name'][:32]}")
 
-    # Footer scan hint below QR
     c.setFillColor("#64748B")
     c.setFont("Helvetica", 6)
     c.drawCentredString(qr_x + qr_size / 2, 0.55 * cm, "Scan for details · Skaneia atu haree")
 
+
+def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None) -> bytes:
+    """Single-item printable label — A6 landscape sticker."""
+    from reportlab.lib.pagesizes import A6, landscape
+    from reportlab.pdfgen import canvas as _canvas
+
+    buf = BytesIO()
+    page = landscape(A6)
+    c = _canvas.Canvas(buf, pagesize=page)
+    page_w, page_h = page
+    _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client)
     c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def build_bulk_labels_pdf(rows: list[tuple[dict, dict, dict | None]]) -> bytes:
+    """Multi-page label PDF — one A6 landscape label per contract in `rows`.
+
+    Each row is a `(contract, item, client)` tuple. Empty input returns a
+    single "no items" page so the download still succeeds gracefully.
+    """
+    from reportlab.lib.pagesizes import A6, landscape
+    from reportlab.pdfgen import canvas as _canvas
+
+    buf = BytesIO()
+    page = landscape(A6)
+    c = _canvas.Canvas(buf, pagesize=page)
+    page_w, page_h = page
+
+    if not rows:
+        c.setFillColor("#64748B")
+        c.setFont("Helvetica-Oblique", 10)
+        c.drawCentredString(page_w / 2, page_h / 2, "No items to label · La iha sasán atu etiketa")
+        c.showPage()
+    else:
+        for contract, item, client in rows:
+            _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client)
+            c.showPage()
+
     c.save()
     return buf.getvalue()
