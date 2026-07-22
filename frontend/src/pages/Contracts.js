@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, API_BASE } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -39,6 +40,8 @@ const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15, pezadu:
 
 export default function Contracts() {
   const { t } = useLang();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = searchParams.get("status") || "";
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [itemsByKind, setItemsByKind] = useState({ car: [], motorcycle: [], electronic: [], pezadu: [] });
@@ -239,6 +242,18 @@ export default function Contracts() {
     (r) => r.status === "overdue" && Number(r.days_overdue || 0) >= 1 && Number(r.days_overdue || 0) <= 10
   );
   const auctionReady = rows.filter((r) => r.status === "auction_ready");
+
+  // URL-driven status filter for the main contracts table. Cards on the
+  // Dashboard link here with `?status=active|overdue|redeemed|auction_ready`.
+  const filteredRows = useMemo(() => {
+    if (!statusFilter) return rows;
+    return rows.filter((r) => r.status === statusFilter);
+  }, [rows, statusFilter]);
+  const clearStatusFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("status");
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="space-y-6" data-testid="contracts-root">
@@ -489,6 +504,28 @@ export default function Contracts() {
       )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
+        {statusFilter && (
+          <div
+            className="px-4 py-2 border-b border-stone-200 bg-stone-50 flex items-center justify-between flex-wrap gap-2 text-sm"
+            data-testid="contracts-filter-pill"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-stone-500">Filtered by status:</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium uppercase tracking-wider">
+                {statusFilter.replace(/_/g, " ")}
+              </span>
+              <span className="text-xs text-stone-500">· {filteredRows.length} of {rows.length}</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearStatusFilter}
+              className="text-xs text-[#1B2D5C] hover:underline font-medium"
+              data-testid="contracts-filter-clear"
+            >
+              Clear filter ×
+            </button>
+          </div>
+        )}
         <table className="min-w-full text-[13px]" data-testid="contracts-table">
           <thead className="bg-stone-50 text-left">
             <tr>
@@ -503,7 +540,7 @@ export default function Contracts() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {filteredRows.map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/50">
                 <Td className="font-medium whitespace-nowrap" title={r.contract_number}>{shortContract(r.contract_number)}</Td>
                 <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
@@ -622,10 +659,10 @@ export default function Contracts() {
                 </Td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
                 <td colSpan="8" className="p-8 text-center text-stone-500">
-                  No contracts
+                  {statusFilter ? `No contracts with status "${statusFilter}"` : "No contracts"}
                 </td>
               </tr>
             )}

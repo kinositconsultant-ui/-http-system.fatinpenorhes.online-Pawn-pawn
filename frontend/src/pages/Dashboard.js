@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
@@ -206,17 +207,41 @@ export default function Dashboard() {
       <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
         <div className="text-eyebrow mb-3">{t("status")}</div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Stat label={t("active_contracts")} value={data?.active_contracts} />
-          <Stat label={t("overdue_contracts")} value={data?.overdue_contracts} tone="text-[#993333]" />
+          <Stat
+            label={t("active_contracts")}
+            value={data?.active_contracts}
+            to="/contracts?status=active"
+            testid="stat-active"
+          />
+          <Stat
+            label={t("overdue_contracts")}
+            value={data?.overdue_contracts}
+            tone="text-[#993333]"
+            to="/contracts?status=overdue"
+            testid="stat-overdue"
+          />
           <Stat
             label={t("auction_ready") || "Auction Ready"}
             value={data?.auction_ready_contracts}
             tone="text-amber-700"
             icon={<Gavel className="w-4 h-4" />}
+            to="/contracts?status=auction_ready"
             testid="stat-auction-ready"
           />
-          <Stat label={t("redeemed")} value={data?.redeemed_contracts} tone="text-[#4C7F62]" />
-          <Stat label={t("auction")} value={data?.auction_contracts} tone="text-[#C17767]" />
+          <Stat
+            label={t("redeemed")}
+            value={data?.redeemed_contracts}
+            tone="text-[#4C7F62]"
+            to="/contracts?status=redeemed"
+            testid="stat-redeemed"
+          />
+          <Stat
+            label={t("auction")}
+            value={data?.auction_contracts}
+            tone="text-[#C17767]"
+            to="/auctions"
+            testid="stat-auction"
+          />
         </div>
       </Card>
 
@@ -227,14 +252,28 @@ export default function Dashboard() {
   );
 }
 
-function Stat({ label, value, tone = "text-stone-900", icon, testid }) {
-  return (
-    <div className="p-4 rounded-md bg-stone-50 border border-stone-100" data-testid={testid}>
+function Stat({ label, value, tone = "text-stone-900", icon, testid, to }) {
+  const content = (
+    <>
       <div className="text-xs text-stone-500 flex items-center gap-1.5">
         {icon}
         <span>{label}</span>
       </div>
       <div className={`font-display text-2xl mt-1 ${tone}`}>{value ?? "—"}</div>
+    </>
+  );
+  const cls =
+    "p-4 rounded-md bg-stone-50 border border-stone-100 block transition hover:border-[#1B2D5C] hover:bg-white hover:shadow-sm";
+  if (to) {
+    return (
+      <Link to={to} className={`${cls} cursor-pointer`} data-testid={testid}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <div className={cls} data-testid={testid}>
+      {content}
     </div>
   );
 }

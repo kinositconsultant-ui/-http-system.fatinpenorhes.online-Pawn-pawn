@@ -513,6 +513,14 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 41 — Clickable Dashboard Cards (2026-02-17) ✅
+- Each of the 5 status cards on the Dashboard is now a `<Link>` that jumps to a pre-filtered view:
+  - Active / Overdue / Redeemed / Auction Ready → `/contracts?status=<value>`
+  - Auction → `/auctions`
+- `/app/frontend/src/pages/Contracts.js` reads `?status=X` via `useSearchParams`, filters `rows` accordingly, and shows a "Filtered by status: X · N of M · Clear ×" pill at the top of the main table. Clicking Clear removes the query param.
+- Empty state respects the filter ("No contracts with status \"auction_ready\"") instead of the generic message.
+- Verified: clicking Auction Ready (148) on the Dashboard now lands on `/contracts?status=auction_ready` with all 148 rows shown and the pill visible.
+
 ## Iteration 40 — Dashboard/Finance/Auctions/Payments UX Batch (2026-02-17) ✅
 User requested 5 adjustments — all implemented and validated by testing_agent (9/9 backend pytest, all frontend flows pass):
 
