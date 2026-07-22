@@ -861,6 +861,13 @@ export default function Contracts() {
                 data-testid="reactivate-due-date"
               />
             </div>
+            {/* Live obligation preview based on the current principal + rate
+                so cashiers can quote the exact "penalty if late" number as
+                they confirm the amendment. */}
+            <RulePreviewCard
+              loan={Number(reactRow?.principal_remaining ?? reactRow?.loan_amount ?? 0)}
+              rate={Number(reactRow?.interest_rate ?? 0)}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReactOpen(false)}>

@@ -17,6 +17,31 @@ const Icon = ({ kind, className }) => {
   return <C className={className} />;
 };
 
+/**
+ * Human-friendly countdown to the next auction. Returns null when the date
+ * is missing or already past. Bilingual EN/TET.
+ *   0 days  → "Today · Ohin"
+ *   1 day   → "Tomorrow · Aban"
+ *   N days  → "3 days left · Loron 3 nafatin"
+ */
+function auctionCountdown(dateStr, lang) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((target - today) / (1000 * 60 * 60 * 24));
+  if (days < 0) return null;
+  if (lang === "tet") {
+    if (days === 0) return "Ohin!";
+    if (days === 1) return "Aban";
+    return `Loron ${days} nafatin`;
+  }
+  if (days === 0) return "Today!";
+  if (days === 1) return "Tomorrow";
+  return `${days} days left`;
+}
+
 export default function AuctionPublic() {
   const { t, lang } = useLang();
   const T = (en, tet) => (lang === "tet" ? tet : en);
@@ -121,9 +146,17 @@ export default function AuctionPublic() {
             {nextAuction.next_auction_date && (
               <div
                 data-testid="next-auction-banner-locked"
-                className="inline-block px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
+                className="inline-flex items-center gap-2 flex-wrap justify-center px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
               >
-                🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b>
+                <span>🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b></span>
+                {auctionCountdown(nextAuction.next_auction_date, lang) && (
+                  <span
+                    data-testid="next-auction-countdown-locked"
+                    className="px-2 py-0.5 rounded-full bg-[#B45309] text-white text-xs font-semibold"
+                  >
+                    {auctionCountdown(nextAuction.next_auction_date, lang)}
+                  </span>
+                )}
               </div>
             )}
             <div>
@@ -172,9 +205,17 @@ export default function AuctionPublic() {
           {nextAuction.next_auction_date && (
             <div
               data-testid="next-auction-banner"
-              className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
+              className="inline-flex items-center gap-2 flex-wrap mt-4 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium"
             >
-              🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b>
+              <span>🗓️ {T("Next Auction", "Leilaun tuir mai")}: <b>{nextAuction.next_auction_date}</b></span>
+              {auctionCountdown(nextAuction.next_auction_date, lang) && (
+                <span
+                  data-testid="next-auction-countdown"
+                  className="px-2 py-0.5 rounded-full bg-[#B45309] text-white text-xs font-semibold"
+                >
+                  {auctionCountdown(nextAuction.next_auction_date, lang)}
+                </span>
+              )}
             </div>
           )}
         </div>
