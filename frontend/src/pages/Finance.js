@@ -32,13 +32,15 @@ import {
 } from "../components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Wallet, Landmark, Receipt, TrendingUp, ArrowDownCircle,
-  FileText, Download,
+  FileText, Eye,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
   Tooltip, CartesianGrid, Legend,
 } from "recharts";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
+import PdfPreviewDialog from "../components/PdfPreviewDialog";
 
 const fmt = (v) =>
   `$${Number(v ?? 0).toLocaleString("en-US", {
@@ -199,7 +201,7 @@ export default function Finance() {
           <ExpensesSection expenses={expenses} categories={categories} reload={load} t={t} />
         </TabsContent>
         <TabsContent value="invoices">
-          <InvoicesSection invoices={invoices} t={t} />
+          <InvoicesSection invoices={invoices} t={t} reload={load} />
         </TabsContent>
         <TabsContent value="calculator">
           <LoanCalculatorSection t={t} />
@@ -607,8 +609,42 @@ function ExpensesSection({ expenses, categories, reload, t }) {
 }
 
 /* ---------- Invoices (from sold auctions) ---------- */
-function InvoicesSection({ invoices, t }) {
+function InvoicesSection({ invoices, t, reload }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const total = invoices.reduce((sum, i) => sum + Number(i.total || 0), 0);
+  const [preview, setPreview] = useState({ open: false, url: "", title: "", filename: "" });
+
+  const openPreview = (inv) => {
+    setPreview({
+      open: true,
+      url: pdfUrl(`/invoices/${inv.id}/pdf`),
+      title: `${t("invoice")} ${shortInvoice(inv.invoice_number) || inv.invoice_number}`,
+      filename: `${inv.invoice_number || "invoice"}.pdf`,
+    });
+  };
+  const openListPreview = () => {
+    setPreview({
+      open: true,
+      url: pdfUrl("/invoices/export/pdf"),
+      title: t("invoices"),
+      filename: "invoices.pdf",
+    });
+  };
+  const remove = async (inv) => {
+    const label = inv.invoice_number || inv.id;
+    if (!window.confirm(
+      `Delete invoice ${label}?\nThis removes the invoice record permanently. The linked auction (if any) will keep its sold status but lose its invoice link.`
+    )) return;
+    try {
+      await api.delete(`/invoices/${inv.id}`);
+      toast.success("Invoice deleted");
+      reload();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
@@ -616,16 +652,15 @@ function InvoicesSection({ invoices, t }) {
           <span data-testid="invoice-count">{invoices.length}</span>{" "}
           {t("invoices")} · {t("total")}: <span className="font-semibold text-[#1B2D5C]" data-testid="invoice-total-sum">{fmt(total)}</span>
         </div>
-        <a
-          href={pdfUrl("/invoices/export/pdf")}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Button
+          type="button"
+          onClick={openListPreview}
+          variant="outline"
+          className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white"
           data-testid="invoice-pdf-btn"
         >
-          <Button variant="outline" className="gap-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white">
-            <FileText className="w-4 h-4" /> {t("export_pdf")}
-          </Button>
-        </a>
+          <FileText className="w-4 h-4" /> {t("export_pdf")}
+        </Button>
       </div>
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
@@ -656,15 +691,28 @@ function InvoicesSection({ invoices, t }) {
                   }`}>{inv.status || "issued"}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <a
-                    href={pdfUrl(`/invoices/${inv.id}/pdf`)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid={`invoice-pdf-${inv.id}`}
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C]"
-                  >
-                    <Download className="w-3 h-3" /> PDF
-                  </a>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openPreview(inv)}
+                      data-testid={`invoice-pdf-${inv.id}`}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-[#DC2626] text-white hover:bg-[#B91C1C]"
+                      title={t("preview")}
+                    >
+                      <Eye className="w-3 h-3" /> PDF
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => remove(inv)}
+                        data-testid={`invoice-delete-${inv.id}`}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
+                        title="Delete invoice (admin only)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -674,6 +722,14 @@ function InvoicesSection({ invoices, t }) {
           </tbody>
         </table>
       </div>
+
+      <PdfPreviewDialog
+        open={preview.open}
+        onOpenChange={(o) => setPreview((p) => ({ ...p, open: o }))}
+        url={preview.url}
+        title={preview.title}
+        downloadName={preview.filename}
+      />
     </div>
   );
 }

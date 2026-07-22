@@ -1,0 +1,34 @@
+{
+  "summary": "Validated all 5 UX changes for the Pawn System (Dashboard auction-ready card, invoice delete, invoice PDF preview, auction grouping + PDF preview, payments grouping, and finance summary formula). Backend: 9/9 pytest cases pass (test_iter40_pawn_ui_changes.py). Frontend: dashboard stat card renders (148 auction-ready), Auctions groups by client with expand toggle (42 groups, 39 invoice buttons after expand), invoice PDF preview modal opens with iframe src pointing at /api/invoices/{id}/pdf, invoice delete decrements count (49→48) and removes row, Payments page groups by contract on all 3 tabs (Payments=109, Overdue=1, Disbursements=313). Only issue: React 'unique key' console warning on Auctions and PaymentsTable render — non-blocking but noisy.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Auctions.js (groups.map) & Payments.js (PaymentsTable.groups.map)", "issue": "React warning 'Each child in a list should have a unique key prop' — the .map() returns a Fragment shorthand `<>` which cannot accept a key. Keys are on the inner <tr> elements only.", "selector": "Auctions render / PaymentsTable render", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter40_pawn_ui_changes.py",
+    "/app/test_reports/pytest/iter40_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: replace `<>` fragment shorthand with `<React.Fragment key={...}>` (or `<Fragment key=...>`) inside the .map() in /app/frontend/src/pages/Auctions.js (~line 145) and /app/frontend/src/pages/Payments.js (PaymentsTable ~line 492) to silence React key warning. Currently the inner <tr> carries the key so the DOM is stable, but React logs a warning on every render."
+  ],
+  "critical_code_review_comments": [
+    "Auctions.js group.map() and Payments.js PaymentsTable group.map() return a Fragment shorthand `<>` which cannot carry a key — this triggers React's 'Each child in a list should have a unique key prop' warning. Fix: use React.Fragment with a key.",
+    "Auctions group key falls back to '—' when both client_id and client_name are empty; multiple contracts with missing client info will collapse into one dashboard group (already visible in test data as '—' with 34 items). Consider using contract_id as the fallback key instead of the em-dash string to avoid collapsing unrelated orphaned auctions.",
+    "delete_invoice endpoint correctly writes audit log and unsets invoice_id/invoice_number on the auction; verified end-to-end via test_delete_invoice_admin_and_cleanup.",
+    "Finance summary formula verified: gross_profit == interest_received + total_penalty + auction_interest_profit; net_profit == gross_profit − expenses_total."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter40_pawn_ui_changes.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% for tested flows (dashboard card, auctions group + PDF preview, finance invoice preview + delete, payments grouping on 3 tabs)"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (cookie-session via POST /api/auth/login)",
+  "seed_data_creation": "Used existing seed auctions/invoices/payments. Test deleted 1 auction-linked invoice (id d9843bd5-2094-4c34-b20e-00bd32042917) via UI as part of admin-delete validation; the linked auction was verified to have invoice_id/invoice_number cleared. Backend test also created and deleted temporary invoices via /auctions/{id}/sold cycle when needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter40 regression file at /app/backend/tests/test_iter40_pawn_ui_changes.py covers: auction_ready in /dashboard/summary, /auctions client_name+client_id enrichment, /finance/summary gross_profit=interest_received+total_penalty+auction_interest_profit formula, DELETE /api/invoices/{iid} admin-only lifecycle (creates + deletes an auction-linked invoice), and 3 regression endpoints (/reports/v2/financial, /auctions, /dashboard/summary). Frontend testids confirmed: stat-auction-ready, pdf-preview-dialog, pdf-preview-iframe, pdf-preview-download, pdf-preview-close, auction-group-<key>, auction-group-toggle-<key>, auction-group-detail-<key>, auction-invoice-<id>, auction-delete-<id>, auction-sold-<id>, invoice-pdf-<id>, invoice-delete-<id>, invoice-row-<id>, payment-group-<contract_id>, payment-group-toggle-<contract_id>, payment-group-detail-<contract_id>, payment-pdf-<id>, payment-delete-<id>. Test data has 42 auction client-groups (one with empty client_name shows as '—' bucket holding 34 items).",
+  "rca of the issue": "N/A — no bugs found beyond the low-severity React key warning noted under critical_code_review_comments."
+}

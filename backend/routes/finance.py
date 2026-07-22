@@ -280,11 +280,13 @@ async def finance_summary(
         await _recompute_contract_status(c)
     interest_received = sum(float(c.get("interest_paid", 0) or 0) for c in contracts)
     total_penalty = sum(float(c.get("penalty_paid", 0) or 0) for c in contracts)
-    # Nov-2026 spec: Realized profit = interest paid + penalty PAID + auction
-    # profit (sold_price above original loan) − realized auction loss. Note
-    # auction_interest_profit was the legacy pre-split concept and is now
-    # subsumed by auction_realized_profit.
-    gross_profit = interest_received + total_penalty + auction_realized_profit - auction_realized_loss
+    # Nov-2026 spec (user rule Feb-2026): Auction realized profit = the
+    # `interest_fee` portion of every sold auction. The rest of `sold_price`
+    # is treated as principal recovery (Cash on Hand), NOT profit. This gives
+    # a clean split:
+    #   sold_price   → Cash on Hand
+    #   interest_fee → Net Profit
+    gross_profit = interest_received + total_penalty + auction_interest_profit
     net_profit = gross_profit - expenses_total
 
     # Invoices

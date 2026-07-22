@@ -43,6 +43,8 @@ const dict = {
     redeemed: "Redeemed",
     auction: "Auction",
     overview: "Overview",
+    client_name: "Client",
+    preview: "Preview",
     // Login / Auth extra
     login_subtitle: "Enter your credentials to access the admin console.",
     login_workspace_body: "A secure workspace for the Fatin Penhores team. Manage clients, contracts, payments and auctions with full audit control.",
@@ -378,6 +380,8 @@ const dict = {
     redeemed: "Rezgatadu",
     auction: "Leilaun",
     overview: "Vizão",
+    client_name: "Kliente",
+    preview: "Haree",
     // Login / Auth extra
     login_subtitle: "Insere ó nia kredensiál atu asesu painel administrasaun.",
     login_workspace_body: "Fatin traballu seguru ba ekipa Fatin Penhores. Jere klientes, kontratu, pagamentu no leilaun ho auditoria kompletu.",

@@ -1090,6 +1090,22 @@ class AuctionSoldIn(BaseModel):
 @api.get("/auctions")
 async def list_auctions(_: dict = Depends(require_module("auctions"))):
     items = await db.auctions.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    # Enrich each auction with the pawner's client name so the frontend can
+    # group auctions by client (multiple items pawned by the same client).
+    contract_ids = list({a.get("contract_id") for a in items if a.get("contract_id")})
+    contracts = await db.contracts.find(
+        {"id": {"$in": contract_ids}}, {"_id": 0, "id": 1, "client_id": 1}
+    ).to_list(len(contract_ids) or 1)
+    contract_to_client = {c["id"]: c.get("client_id") for c in contracts}
+    client_ids = list({cid for cid in contract_to_client.values() if cid})
+    clients = await db.clients.find(
+        {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "full_name": 1}
+    ).to_list(len(client_ids) or 1)
+    client_id_to_name = {c["id"]: c.get("full_name", "") for c in clients}
+    for a in items:
+        cid = contract_to_client.get(a.get("contract_id"))
+        a["client_id"] = cid
+        a["client_name"] = client_id_to_name.get(cid, "")
     return items
 
 
@@ -1284,6 +1300,33 @@ async def update_invoice(iid: str, payload: InvoiceUpdateIn, user: dict = Depend
     return await db.invoices.find_one({"id": iid}, {"_id": 0})
 
 
+@api.delete("/invoices/{iid}")
+async def delete_invoice(iid: str, admin: dict = Depends(require_admin)):
+    """Admin-only invoice deletion.
+
+    Also clears the `invoice_id` / `invoice_number` fields on the linked
+    auction so the auction row no longer offers the (now-broken) PDF link.
+    The auction's `status=sold` and financial impact are preserved.
+    """
+    inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    await db.invoices.delete_one({"id": iid})
+    # Best-effort cleanup on the source auction, if any
+    auction_id = inv.get("auction_id")
+    if auction_id:
+        await db.auctions.update_one(
+            {"id": auction_id},
+            {"$unset": {"invoice_id": "", "invoice_number": ""}},
+        )
+    await write_audit(admin, "delete", "invoice", iid, {
+        "invoice_number": inv.get("invoice_number"),
+        "total": inv.get("total"),
+        "buyer_name": inv.get("buyer_name"),
+    })
+    return {"ok": True}
+
+
 @api.get("/invoices/export/pdf")
 async def invoices_list_pdf(_: dict = Depends(get_current_user)):
     invoices = await db.invoices.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
@@ -1350,7 +1393,7 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
     payments = await db.payments.find({}, {"_id": 0}).to_list(5000)
     clients_count = await db.clients.count_documents({})
 
-    active = overdue = redeemed = auction = 0
+    active = overdue = redeemed = auction = auction_ready = 0
     total_loan = 0.0
     total_interest = 0.0
     today = _today_iso()
@@ -1364,6 +1407,8 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
             redeemed += 1
         elif status == "auction":
             auction += 1
+        elif status == "auction_ready":
+            auction_ready += 1
         elif c.get("due_date", today) < today and status != "redeemed":
             overdue += 1
         else:
@@ -1378,6 +1423,7 @@ async def dashboard_summary(_: dict = Depends(require_module("dashboard"))):
         "total_clients": clients_count,
         "active_contracts": active,
         "overdue_contracts": overdue,
+        "auction_ready_contracts": auction_ready,
         "redeemed_contracts": redeemed,
         "auction_contracts": auction,
         "total_loan_amount": round(total_loan, 2),
