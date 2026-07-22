@@ -42,30 +42,34 @@ export default function BusinessDashboard() {
   const { t } = useLang();
   const [metrics, setMetrics] = useState(null);
   const [cashflow, setCashflow] = useState(null);
-  const [interestRange, setInterestRange] = useState("ytd"); // "ytd" | "30d"
+  // Global range affects Loaned / Interest / Projected KPIs. Potential Loss
+  // stays as a snapshot since it doesn't scale by time window.
+  const [range, setRange] = useState("30d"); // "daily" | "weekly" | "30d" | "ytd"
 
   useEffect(() => {
     api.get("/business/metrics").then((r) => setMetrics(r.data));
     api.get("/business/cashflow-forecast").then((r) => setCashflow(r.data));
   }, []);
 
-  const interestValue = metrics
-    ? interestRange === "ytd"
-      ? metrics.interest_earned_ytd
-      : metrics.interest_earned_30d
-    : null;
-  const interestLabel = interestRange === "ytd"
-    ? (t("business_interest_ytd") || "Interest Earned YTD")
-    : "Interest · Last 30 days";
-  const interestSub = interestRange === "ytd"
-    ? (t("business_interest_ytd_sub") || "Realized interest — this year")
-    : "Rolling 30-day window";
+  const rangeData = metrics?.ranges?.[range];
+  const rangeLabel = {
+    daily: "today",
+    weekly: "last 7 days",
+    "30d": "last 30 days",
+    ytd: "year-to-date",
+  }[range];
+  const projRangeLabel = {
+    daily: "next 24h",
+    weekly: "next 7 days",
+    "30d": "next 30 days",
+    ytd: "rest of year",
+  }[range];
 
   const kpis = [
     {
       key: "loaned",
       label: t("business_total_loaned") || "Total Loaned Out",
-      sub: t("business_total_loaned_sub") || "Cash currently in the field",
+      sub: rangeData ? `New ${rangeLabel}: ${money(rangeData.loaned_new)}` : "Cash currently in the field",
       value: metrics ? money(metrics.total_loaned_out) : "—",
       Icon: Wallet,
       tone: "text-[#1B2D5C]",
@@ -73,19 +77,18 @@ export default function BusinessDashboard() {
     },
     {
       key: "earned",
-      label: interestLabel,
-      sub: interestSub,
-      value: interestValue !== null ? money(interestValue) : "—",
+      label: `Interest Earned · ${rangeLabel}`,
+      sub: "Realized interest received via payments",
+      value: rangeData ? money(rangeData.interest_earned) : "—",
       Icon: DollarSign,
       tone: "text-[#4C7F62]",
       to: "/reports?tab=payments",
-      trendToggle: true,
     },
     {
       key: "proj",
-      label: t("business_proj_30d") || "Projected Interest · 30d",
-      sub: t("business_proj_30d_sub") || "Next month at current book",
-      value: metrics ? money(metrics.projected_interest_30d) : "—",
+      label: `Projected Interest · ${projRangeLabel}`,
+      sub: "At current book, capped by Article 4",
+      value: rangeData ? money(rangeData.projected_interest) : "—",
       Icon: TrendingUp,
       tone: "text-[#C17767]",
       to: "/reports?tab=financial",
@@ -126,20 +129,49 @@ export default function BusinessDashboard() {
 
   return (
     <div className="space-y-8" data-testid="business-dashboard-root">
-      <header>
-        <div className="text-eyebrow">{t("business") || "Business"}</div>
-        <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">
-          {t("business_dashboard_title") || "Business Dashboard"}
-        </h1>
-        <p className="text-stone-600 text-sm mt-1">
-          Owner-focused view: cash out, interest earned, projected income, and downside risk.
-        </p>
+      <header className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <div className="text-eyebrow">{t("business") || "Business"}</div>
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">
+            {t("business_dashboard_title") || "Business Dashboard"}
+          </h1>
+          <p className="text-stone-600 text-sm mt-1">
+            Owner-focused view: cash out, interest earned, projected income, and downside risk.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-0.5 p-1 bg-stone-100 rounded-md text-xs" data-testid="range-toggle">
+          {[
+            { k: "daily", l: "Daily" },
+            { k: "weekly", l: "Weekly" },
+            { k: "30d", l: "30d" },
+            { k: "ytd", l: "YTD" },
+          ].map((opt) => (
+            <button
+              key={opt.k}
+              type="button"
+              onClick={() => setRange(opt.k)}
+              data-testid={`range-${opt.k}`}
+              className={`px-3 py-1 rounded transition font-medium ${
+                range === opt.k
+                  ? "bg-[#1B2D5C] text-white"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              {opt.l}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {kpis.map((c) => {
-          const inner = (
+        {kpis.map((c) => (
+          <Link
+            key={c.key}
+            to={c.to}
+            data-testid={`biz-kpi-${c.key}`}
+            className="p-5 border border-stone-200 rounded-lg bg-white block transition hover:border-[#1B2D5C] hover:shadow-sm"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="text-eyebrow">{c.label}</div>
@@ -147,62 +179,11 @@ export default function BusinessDashboard() {
                   {c.value}
                 </div>
                 <div className="text-[11px] text-stone-500 mt-2">{c.sub}</div>
-                {c.trendToggle && (
-                  <div
-                    className="mt-3 inline-flex items-center gap-0.5 p-0.5 bg-stone-100 rounded-md text-[11px]"
-                    onClick={(e) => e.preventDefault()}
-                    data-testid="interest-range-toggle"
-                  >
-                    {[
-                      { k: "ytd", l: "YTD" },
-                      { k: "30d", l: "30d" },
-                    ].map((opt) => (
-                      <button
-                        key={opt.k}
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setInterestRange(opt.k);
-                        }}
-                        data-testid={`interest-range-${opt.k}`}
-                        className={`px-2 py-0.5 rounded transition ${
-                          interestRange === opt.k
-                            ? "bg-[#1B2D5C] text-white"
-                            : "text-stone-600 hover:text-stone-900"
-                        }`}
-                      >
-                        {opt.l}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
               <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
-          );
-          if (c.trendToggle) {
-            // Interest card is NOT a link — clicks inside pick the range.
-            return (
-              <div
-                key={c.key}
-                data-testid={`biz-kpi-${c.key}`}
-                className="p-5 border border-stone-200 rounded-lg bg-white"
-              >
-                {inner}
-              </div>
-            );
-          }
-          return (
-            <Link
-              key={c.key}
-              to={c.to}
-              data-testid={`biz-kpi-${c.key}`}
-              className="p-5 border border-stone-200 rounded-lg bg-white block transition hover:border-[#1B2D5C] hover:shadow-sm"
-            >
-              {inner}
-            </Link>
-          );
-        })}
+          </Link>
+        ))}
       </div>
 
       {/* Grace period + auction-ready status */}

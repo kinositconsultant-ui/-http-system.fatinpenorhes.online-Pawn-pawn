@@ -1597,16 +1597,43 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
         await _recompute_contract_status(c)
 
     year_start = f"{date.today().year}-01-01"
-    thirty_days_ago = (date.today() - timedelta(days=30)).isoformat()
-    payments = await db.payments.find(
-        {"date": {"$gte": thirty_days_ago}}, {"_id": 0}
-    ).to_list(5000)
+    day_start = date.today().isoformat()
+    week_start = (date.today() - timedelta(days=6)).isoformat()
+    month_start = (date.today() - timedelta(days=29)).isoformat()
+    # Load payments once for the widest window (YTD), then bucket by range.
     payments_ytd = await db.payments.find(
         {"date": {"$gte": year_start}}, {"_id": 0}
     ).to_list(5000)
+    payments = [p for p in payments_ytd if (p.get("date") or "") >= month_start]
+
+    def _sum_interest(rows, since):
+        return sum(
+            float(p.get("interest_paid", 0) or 0)
+            for p in rows
+            if (p.get("date") or "") >= since
+        )
+    def _sum_disburse(rows, since):
+        return sum(
+            float(p.get("amount", 0) or 0)
+            for p in rows
+            if p.get("type") == "disbursement" and (p.get("date") or "") >= since
+        )
+
+    interest_daily = _sum_interest(payments, day_start)
+    interest_weekly = _sum_interest(payments, week_start)
+    interest_30d = _sum_interest(payments, month_start)
+    interest_ytd = _sum_interest(payments_ytd, year_start)
+
+    loaned_daily = _sum_disburse(payments, day_start)
+    loaned_weekly = _sum_disburse(payments, week_start)
+    loaned_30d = _sum_disburse(payments, month_start)
+    loaned_ytd = _sum_disburse(payments_ytd, year_start)
 
     total_loaned_out = 0.0
+    projected_daily = 0.0
+    projected_weekly = 0.0
     projected_30d = 0.0
+    projected_ytd_remaining = 0.0
     potential_loss = 0.0
     grace_count = 0
     auction_ready_count = 0
@@ -1621,10 +1648,16 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
             total_loaned_out += prin
             rate = float(c.get("interest_rate", 0) or 0)
             months_elapsed = int(c.get("months_elapsed", 0) or 0)
-            # Projected interest next 30 days = one more billing month IF the
-            # contract is not yet at the Article 4 2-month cap.
+            # Projected interest — one more billing month IF the contract is
+            # not yet at the Article 4 2-month cap. Prorate across ranges.
             if months_elapsed < 2 and status == "active":
-                projected_30d += prin * rate / 100.0
+                monthly_int = prin * rate / 100.0
+                projected_daily += monthly_int / 30.0
+                projected_weekly += monthly_int / 30.0 * 7.0
+                projected_30d += monthly_int
+                # YTD-remaining = # months left in the current year × monthly interest
+                months_left_in_year = max(0, 12 - date.today().month + 1)
+                projected_ytd_remaining += monthly_int * min(months_left_in_year, 2 - months_elapsed)
             if status == "auction_ready":
                 potential_loss += prin
                 auction_ready_count += 1
@@ -1660,12 +1693,8 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
 
     per_loan.sort(key=lambda r: r["principal_remaining"], reverse=True)
 
-    interest_earned_ytd = sum(
-        float(p.get("interest_paid", 0) or 0) for p in payments_ytd
-    )
-    interest_earned_30d = sum(
-        float(p.get("interest_paid", 0) or 0) for p in payments
-    )
+    interest_earned_ytd = interest_ytd
+    interest_earned_30d = interest_30d
 
     # Client concentration — top 10 clients by outstanding principal, plus
     # a synthetic "Others" bucket so the pie/bar always sums to 100%.
@@ -1699,6 +1728,31 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
         "auction_ready_count": auction_ready_count,
         "per_loan": per_loan[:50],
         "client_concentration": top_clients,
+        # New per-range breakdowns so the UI can toggle Daily/Weekly/30d/YTD
+        # without re-hitting the API. "loaned_out" is a running snapshot (same
+        # across ranges); "loaned_new" is the amount disbursed within the range.
+        "ranges": {
+            "daily": {
+                "loaned_new": round(loaned_daily, 2),
+                "interest_earned": round(interest_daily, 2),
+                "projected_interest": round(projected_daily, 2),
+            },
+            "weekly": {
+                "loaned_new": round(loaned_weekly, 2),
+                "interest_earned": round(interest_weekly, 2),
+                "projected_interest": round(projected_weekly, 2),
+            },
+            "30d": {
+                "loaned_new": round(loaned_30d, 2),
+                "interest_earned": round(interest_30d, 2),
+                "projected_interest": round(projected_30d, 2),
+            },
+            "ytd": {
+                "loaned_new": round(loaned_ytd, 2),
+                "interest_earned": round(interest_ytd, 2),
+                "projected_interest": round(projected_ytd_remaining, 2),
+            },
+        },
     }
 
 

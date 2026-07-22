@@ -513,6 +513,17 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 53 — Business Dashboard Range Toggle (2026-02-17) ✅
+Added a global **Daily / Weekly / 30d / YTD** range toggle to the top-right of `/business`. All four money KPIs reactively update — the toggle affects:
+- **Total Loaned Out** — snapshot stays the same, but the sub-line now shows *New in range: $X* (disbursements within the window)
+- **Interest Earned** — realized interest within the window
+- **Projected Interest** — prorated forward (daily = monthly / 30, weekly = × 7 / 30, 30d = full month, YTD = months-left × cap)
+- **Potential Loss** — snapshot (time-independent by design)
+
+Backend `/api/business/metrics` now returns a `ranges` dict with `daily / weekly / 30d / ytd` sub-payloads (each containing `loaned_new`, `interest_earned`, `projected_interest`), so the client flips instantly without a re-fetch. Removed the old per-card YTD/30d toggle on the Interest KPI (superseded by the global one).
+
+Verified: clicking Daily → labels change to "today / next 24h", clicking Weekly → "last 7 days / next 7 days", numbers update accordingly ($27,700 new in last 7d, $6,867 projected next 7d).
+
 ## Iteration 52 — Client Risk Score Pill (2026-02-17) ✅
 - Backend `GET /api/clients` now enriches each client with `risk_level` (green / amber / red / none), `risk_concentration_pct`, `risk_overdue_days`, and `risk_auction_ready`, all computed in a single batched query over active/overdue/auction_ready contracts.
 - **Scoring rule**: any auction_ready contract OR >15% of the total book → **red (High)**; between 5–15% or has overdue contracts → **amber (Watch)**; otherwise **green (Low)**.
