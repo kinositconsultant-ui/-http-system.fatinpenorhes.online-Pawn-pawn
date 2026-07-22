@@ -19,6 +19,7 @@ import {
   ArrowDownRight,
   Minus,
   FileDown,
+  Info,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -75,6 +76,7 @@ export default function Dashboard() {
       tone: "text-[#1B2D5C]",
       testid: "kpi-clients",
       to: "/clients",
+      info: t("info_total_clients"),
     },
     {
       key: "active",
@@ -84,6 +86,7 @@ export default function Dashboard() {
       tone: "text-[#4C7F62]",
       testid: "kpi-active",
       to: "/contracts?status=active",
+      info: t("info_active_contracts"),
     },
     {
       key: "overdue",
@@ -95,6 +98,7 @@ export default function Dashboard() {
       to: "/contracts?status=overdue",
       // For overdue an increase is BAD, so we invert the tone semantics.
       invertTrend: true,
+      info: t("info_overdue_contracts"),
     },
     {
       key: "loan",
@@ -107,6 +111,7 @@ export default function Dashboard() {
       trend: monthlyDelta(trends?.months, "loans"),
       sparkKey: "loans",
       sparkColor: "#1B2D5C",
+      info: t("info_total_loan_amount"),
     },
     {
       key: "payments",
@@ -119,6 +124,7 @@ export default function Dashboard() {
       trend: monthlyDelta(trends?.months, "payments"),
       sparkKey: "payments",
       sparkColor: "#4C7F62",
+      info: t("info_total_payments"),
     },
     {
       key: "profit",
@@ -131,6 +137,7 @@ export default function Dashboard() {
       trend: monthlyDelta(trends?.months, "interest"),
       sparkKey: "interest",
       sparkColor: "#C17767",
+      info: t("info_profit_summary"),
     },
   ];
 
@@ -159,7 +166,21 @@ export default function Dashboard() {
           const inner = (
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="text-eyebrow">{c.label}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-eyebrow">{c.label}</div>
+                  {c.info && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      title={c.info}
+                      aria-label={c.info}
+                      data-testid={`${c.testid}-info`}
+                      className="text-stone-400 hover:text-[#1B2D5C] transition"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
                 <div className="font-display text-2xl md:text-3xl font-semibold mt-3 break-words">
                   {c.value}
                 </div>
@@ -286,6 +307,7 @@ export default function Dashboard() {
             value={data?.active_contracts}
             to="/contracts?status=active"
             testid="stat-active"
+            info={t("info_stat_active")}
           />
           <Stat
             label={t("overdue_contracts")}
@@ -293,6 +315,7 @@ export default function Dashboard() {
             tone="text-[#993333]"
             to="/contracts?status=overdue"
             testid="stat-overdue"
+            info={t("info_stat_overdue")}
           />
           <Stat
             label={t("auction_ready") || "Auction Ready"}
@@ -301,6 +324,7 @@ export default function Dashboard() {
             icon={<Gavel className="w-4 h-4" />}
             to="/contracts?status=auction_ready"
             testid="stat-auction-ready"
+            info={t("info_stat_auction_ready")}
           />
           <Stat
             label={t("redeemed")}
@@ -308,6 +332,7 @@ export default function Dashboard() {
             tone="text-[#4C7F62]"
             to="/contracts?status=redeemed"
             testid="stat-redeemed"
+            info={t("info_stat_redeemed")}
           />
           <Stat
             label={t("auction")}
@@ -315,6 +340,7 @@ export default function Dashboard() {
             tone="text-[#C17767]"
             to="/auctions"
             testid="stat-auction"
+            info={t("info_stat_auction")}
           />
         </div>
       </Card>
@@ -334,12 +360,24 @@ export default function Dashboard() {
   );
 }
 
-function Stat({ label, value, tone = "text-stone-900", icon, testid, to }) {
+function Stat({ label, value, tone = "text-stone-900", icon, testid, to, info }) {
   const content = (
     <>
       <div className="text-xs text-stone-500 flex items-center gap-1.5">
         {icon}
         <span>{label}</span>
+        {info && (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            title={info}
+            aria-label={info}
+            data-testid={`${testid}-info`}
+            className="text-stone-400 hover:text-[#1B2D5C] transition"
+          >
+            <Info className="w-3 h-3" />
+          </button>
+        )}
       </div>
       <div className={`font-display text-2xl mt-1 ${tone}`}>{value ?? "—"}</div>
     </>

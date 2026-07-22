@@ -668,6 +668,15 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 51 — Main Dashboard Info Tooltips (2026-02-22) ✅
+- Extended the info-tooltip pattern from Business Dashboard to the main **Dashboard** page (`/app/frontend/src/pages/Dashboard.js`).
+- Added ⓘ Info icons on **6 KPI cards** (Total Clients, Active Contracts, Overdue Contracts, Total Loan Amount, Total Payments, Profit/Interest) and **5 Status stat cards** (Active, Overdue, Auction Ready, Redeemed, Auction).
+- All tooltips localized EN + Tetum via new `info_*` keys in `/app/frontend/src/lib/i18n.js`.
+- Critical clarifying tooltip on **Total Loan Amount**: explicitly states this is the ORIGINAL disbursed amount (historical) — not what clients still owe — and points users to the Business Dashboard's *Current Portfolio* for principal remaining after payments.
+- Same UX pattern: native `title` attribute + `preventDefault + stopPropagation` so clicking the icon does NOT navigate the parent Link.
+- Verified via Playwright: 6 KPI info buttons + 5 Stat info buttons rendered, tooltips populated ("Every client ever registered in the system…").
+- No backend / schema / dependency changes.
+
 ## Iteration 50 — Business Dashboard Clarity: Labels + Info Tooltips (2026-02-22) ✅
 - User asked "what is different loan amount in dashboard business" — realized the KPI wording was ambiguous vs. Contracts/Reports terminology.
 - **Renamed KPIs** in `/app/frontend/src/pages/BusinessDashboard.js` for clarity:
