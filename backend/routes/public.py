@@ -16,7 +16,7 @@ from pydantic import BaseModel, EmailStr
 
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
 from services import _fetch_item, get_settings_doc
-from pdf_utils import build_rules_card_pdf
+from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
 
 router = APIRouter()
 
@@ -34,6 +34,46 @@ async def rules_print_card():
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="fatin-penhores-interest-rules.pdf"'},
+    )
+
+
+@router.get("/public/auction-catalogue/pdf")
+async def public_auction_catalogue_pdf():
+    """Public, no-auth catalogue PDF of items eligible for the next auction.
+
+    Same content as the admin `/api/auctions/catalogue/pdf`, but this route is
+    open so passers-by can browse from the marketing site. Contains no PII.
+    """
+    from datetime import date  # noqa: PLC0415
+    from io import BytesIO  # noqa: PLC0415
+    from fastapi.responses import StreamingResponse  # noqa: PLC0415
+
+    contracts = await db.contracts.find(
+        {"status": {"$in": ["auction_ready", "auction"]}}, {"_id": 0}
+    ).to_list(5000)
+    contracts.sort(key=lambda c: c.get("contract_number", ""))
+    rows: list[dict] = []
+    for c in contracts:
+        item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
+        market = float(item.get("market_value") or c.get("loan_amount") or 0)
+        rows.append({
+            "reference": c.get("contract_number"),
+            "contract_number": c.get("contract_number"),
+            "item_type": c.get("item_type"),
+            "brand": item.get("brand"),
+            "model": item.get("model"),
+            "year": item.get("year") or item.get("manufacture_year"),
+            "color": item.get("color"),
+            "plate": item.get("plate"),
+            "description": item.get("description") or item.get("name"),
+            "market_value": market,
+            "min_bid": round(market * 0.70, 2),
+        })
+    pdf_bytes = build_auction_catalogue_pdf(rows, generated_at=date.today().isoformat())
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="fatin-penhores-auction-catalogue.pdf"'},
     )
 
 

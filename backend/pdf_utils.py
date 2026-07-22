@@ -1869,6 +1869,7 @@ def build_dashboard_snapshot_pdf(
     summary: dict,
     trends: dict,
     generated_at: str = "",
+    dashboard_url: str = "",
 ) -> bytes:
     """One-page "Owner Snapshot" PDF: KPI grid + 6-month trend chart +
     overdue-by-type breakdown. Designed for board updates / investor emails.
@@ -1877,20 +1878,60 @@ def build_dashboard_snapshot_pdf(
         summary: payload from /api/dashboard/summary
         trends:  payload from /api/dashboard/trends
         generated_at: ISO date string for the "Generated" line
+        dashboard_url: if set, a QR code linking to the live dashboard is
+            embedded top-right so board members can jump straight to the app.
     """
     from reportlab.graphics.shapes import Drawing
     from reportlab.graphics.charts.linecharts import HorizontalLineChart
     from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.platypus import Image as RLImage, Table as RLTable
+    from reportlab.lib import colors as _colors  # local alias to avoid clash
+    from io import BytesIO as _BytesIO
 
     s = _styles()
     buf, doc = _new_doc()
 
-    story = [
-        _branded_header(s),
+    story = [_branded_header(s)]
+
+    title_flow = [
         Paragraph("Owner Snapshot · Vizão Nain-Kompañia", s["DocTitle"]),
         Paragraph(f"Generated: <b>{generated_at or 'now'}</b>", s["Small"]),
-        Spacer(1, 0.35 * cm),
     ]
+
+    # ---------- QR code (top-right, links to live dashboard) ----------
+    if dashboard_url:
+        try:
+            import qrcode  # noqa: PLC0415
+
+            qr = qrcode.QRCode(box_size=4, border=1)
+            qr.add_data(dashboard_url)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="#1B2D5C", back_color="white")
+            qr_buf = _BytesIO()
+            qr_img.save(qr_buf, format="PNG")
+            qr_buf.seek(0)
+            qr_flow = [
+                RLImage(qr_buf, width=2.4 * cm, height=2.4 * cm),
+                Paragraph("<font size=7 color='#64748B'>Scan for live view</font>", s["Small"]),
+            ]
+            header_tbl = RLTable(
+                [[title_flow, qr_flow]],
+                colWidths=[13.5 * cm, 3.5 * cm],
+            )
+            header_tbl.setStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ])
+            story.append(header_tbl)
+        except Exception:
+            # QR is a nice-to-have; if anything fails just fall back to title only
+            story.extend(title_flow)
+    else:
+        story.extend(title_flow)
+
+    story.append(Spacer(1, 0.35 * cm))
 
     # ---------- KPI grid (3 columns × 2 rows) ----------
     def _delta(cur, prev):

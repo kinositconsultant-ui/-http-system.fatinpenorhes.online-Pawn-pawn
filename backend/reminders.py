@@ -62,6 +62,28 @@ _MSG_TET = (
     "WhatsApp: +670 78372678"
 )
 
+# Friendlier day-1 grace-period nudge — softer wording, explicit reassurance
+# that the client still has a 10-day window before the item can go to auction.
+_MSG_GRACE_EN = (
+    "Fatin Penhores — Friendly Reminder\n"
+    "Hello {name},\n"
+    "Your contract {contract_number} was due yesterday. No stress — you're now\n"
+    "in the 10-day grace period. You have {days_left} days to pay and keep\n"
+    "your item.\n"
+    "Amount owed today: ${loan} + {months}×${per_month} interest = ${total_due}.\n"
+    "Come by the shop or WhatsApp us anytime: +670 78372678."
+)
+
+_MSG_GRACE_TET = (
+    "Fatin Penhores — Lembransa Diak\n"
+    "Ola {name},\n"
+    "Kontratu {contract_number} nia due date liu ona horisehik. La preokupa —\n"
+    "ita agora iha períodu toleránsia loron 10. Ita sei iha loron {days_left}\n"
+    "tan atu selu no rai ita-nia sasán.\n"
+    "Osan ohin: ${loan} + {months}×${per_month} juru = ${total_due}.\n"
+    "Mai iha loja ka WhatsApp mai ami: +670 78372678."
+)
+
 
 def _short_contract(number: str | None) -> str:
     """CTR-2026-0042 → CT-2026-42 for compact display in messages."""
@@ -84,7 +106,18 @@ def build_reminder_body(contract: dict, client_name: str, language: str, today: 
     - Ad-hoc "Preview & Send" endpoint (whatsapp/preview) — passes RECOMPUTED contract
     """
     today = today or datetime.now(timezone.utc).date()
-    tmpl = _MSG_TET if (language or "en").lower() == "tet" else _MSG_EN
+    is_tet = (language or "en").lower() == "tet"
+    # Day-1 grace-period start gets the friendlier template. Days ≥7 use the
+    # standard hard reminder.
+    try:
+        due_check = date.fromisoformat(contract.get("due_date") or "")
+        days_check = max(0, (today - due_check).days)
+    except Exception:
+        days_check = 0
+    if days_check == 1:
+        tmpl = _MSG_GRACE_TET if is_tet else _MSG_GRACE_EN
+    else:
+        tmpl = _MSG_TET if is_tet else _MSG_EN
 
     loan = float(contract.get("loan_amount", 0) or 0)
     rate = float(contract.get("interest_rate", 0) or 0)

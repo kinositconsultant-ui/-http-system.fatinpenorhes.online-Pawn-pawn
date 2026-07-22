@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useLang } from "../../context/LangContext";
-import { Car, Bike, Cpu, Truck, Lock, KeyRound, Gavel } from "lucide-react";
+import { Car, Bike, Cpu, Truck, Lock, KeyRound, Gavel, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 const TOKEN_KEY = "fp_warehouse_token"; // shared with Warehouse — one visitor pass unlocks both
@@ -115,6 +115,18 @@ export default function AuctionPublic() {
             {T("Contact us on WhatsApp", "Kontaktu liu husi WhatsApp")}:{" "}
             <a className="text-[#1A2A52] font-semibold" href="https://wa.me/67078372678" target="_blank" rel="noreferrer">+670 78372678</a>
           </p>
+          <div className="pt-4 border-t border-stone-200 text-center">
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/public/auction-catalogue/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="public-catalogue-locked-btn"
+              className="inline-flex items-center gap-2 text-sm text-[#1A2A52] hover:text-[#B45309] font-medium"
+            >
+              <FileDown className="w-4 h-4" />
+              {T("Or download the printable catalogue (no password)", "Ka baixa katálogu impressu (la presiza liafuan-xave)")}
+            </a>
+          </div>
         </div>
       </section>
     );
@@ -155,6 +167,16 @@ export default function AuctionPublic() {
             <Lock className="w-3.5 h-3.5" /> {T("Lock", "Xave")}
           </button>
         )}
+        <a
+          href={`${process.env.REACT_APP_BACKEND_URL}/api/public/auction-catalogue/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="public-catalogue-btn"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#1A2A52] text-[#1A2A52] hover:bg-[#1A2A52] hover:text-white transition text-sm font-medium"
+        >
+          <FileDown className="w-4 h-4" />
+          {T("Download Catalogue (PDF)", "Baixa Katálogu (PDF)")}
+        </a>
       </header>
 
       <div className="flex gap-2 flex-wrap" data-testid="auction-filters">

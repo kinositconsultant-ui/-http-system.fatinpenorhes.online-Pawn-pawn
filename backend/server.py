@@ -1559,14 +1559,24 @@ async def dashboard_trends(_: dict = Depends(get_current_user)):
 
 
 @api.get("/dashboard/snapshot/pdf")
-async def dashboard_snapshot_pdf(_: dict = Depends(require_module("dashboard"))):
+async def dashboard_snapshot_pdf(request: Request, _: dict = Depends(require_module("dashboard"))):
     """One-page Owner Snapshot PDF (KPIs + monthly trend chart + overdue-by-type)."""
     summary = await _dashboard_summary_data()
     trends = await _dashboard_trends_data()
+    # Prefer the public frontend origin (Referer / Origin header). Fall back
+    # to the API host with /business path so the QR always points somewhere.
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    if origin:
+        # Strip trailing path from referer
+        from urllib.parse import urlparse  # noqa: PLC0415
+        u = urlparse(origin)
+        origin = f"{u.scheme}://{u.netloc}"
+    dashboard_url = f"{origin}/business" if origin else ""
     pdf_bytes = build_dashboard_snapshot_pdf(
         summary,
         trends,
         generated_at=_today_iso(),
+        dashboard_url=dashboard_url,
     )
     return StreamingResponse(
         BytesIO(pdf_bytes),
