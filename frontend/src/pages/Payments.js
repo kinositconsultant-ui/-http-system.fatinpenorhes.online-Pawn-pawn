@@ -49,8 +49,13 @@ export default function Payments() {
   const contractFilter = searchParams.get("contract") || "";
   const [rows, setRows] = useState([]);
   const [contracts, setContracts] = useState([]);
+  const [clients, setClients] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
+  // Free-text search in the New Payment dialog. Matches contract_number,
+  // client name, or item_type — cashiers can type "535" or "Maria" or the
+  // last four digits of a plate to find the row fast.
+  const [searchQuery, setSearchQuery] = useState("");
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
 
   const openPaymentPdf = (r) => {
@@ -69,9 +74,14 @@ export default function Payments() {
   const [odDate, setOdDate] = useState(new Date().toISOString().slice(0, 10));
 
   const load = async () => {
-    const [p, c] = await Promise.all([api.get("/payments"), api.get("/contracts")]);
+    const [p, c, cl] = await Promise.all([
+      api.get("/payments"),
+      api.get("/contracts"),
+      api.get("/clients"),
+    ]);
     setRows(p.data);
     setContracts(c.data);
+    setClients(cl.data);
   };
   useEffect(() => {
     load();
@@ -108,7 +118,28 @@ export default function Payments() {
     return c ? shortContract(c.contract_number) : id;
   };
   const contractById = (id) => contracts.find((x) => x.id === id) || null;
+  const clientById = (id) => clients.find((x) => x.id === id) || null;
+  const clientNameById = (id) => clientById(id)?.full_name || "";
   const selectedContract = contracts.find((c) => c.id === form.contract_id);
+  const selectedClient = selectedContract ? clientById(selectedContract.client_id) : null;
+  // Filter open contracts by the search query so cashiers can quickly find
+  // the row by contract number, client name, or item type.
+  const payableContracts = useMemo(
+    () => contracts.filter((c) => ["active", "overdue", "grace_period", "auction_ready"].includes(c.status)),
+    [contracts],
+  );
+  const matchedContracts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return payableContracts.slice(0, 8);
+    return payableContracts.filter((c) => {
+      const name = (clientById(c.client_id)?.full_name || "").toLowerCase();
+      return (
+        (c.contract_number || "").toLowerCase().includes(q) ||
+        name.includes(q) ||
+        (c.item_type || "").toLowerCase().includes(q)
+      );
+    }).slice(0, 20);
+  }, [searchQuery, payableContracts, clients]);
   const overdueContracts = useMemo(
     () => contracts.filter((c) => c.status === "overdue" || c.status === "grace_period" || c.status === "auction_ready"),
     [contracts]
@@ -192,7 +223,10 @@ export default function Payments() {
             open={open}
             onOpenChange={(o) => {
               setOpen(o);
-              if (!o) setForm(blank);
+              if (!o) {
+                setForm(blank);
+                setSearchQuery("");
+              }
             }}
           >
             <DialogTrigger asChild>
@@ -203,90 +237,176 @@ export default function Payments() {
                 <Plus className="w-4 h-4 mr-1" /> {t("new_payment")}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>{t("new_payment")}</DialogTitle>
                 <DialogDescription className="sr-only">
                   Record a new client payment against an active or overdue contract.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label={t("contract_number")} full>
-                  <Select
-                    value={form.contract_id}
-                    onValueChange={(v) => onChange("contract_id", v)}
-                  >
-                    <SelectTrigger data-testid="payment-contract">
-                      <SelectValue placeholder="—" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {contracts
-                        .filter((c) => ["active", "overdue", "grace_period", "auction_ready"].includes(c.status))
-                        .map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.contract_number} · ${Number(c.remaining_balance || 0).toLocaleString()} left
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                {selectedContract && (
-                  <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm bg-stone-50 border border-stone-100 rounded-md p-3">
-                    <div>
-                      <div className="text-eyebrow">{t("interest_left")}</div>
-                      <div className="font-display text-lg text-amber-700" data-testid="np-interest-remaining">
-                        ${Number(selectedContract.interest_remaining || 0).toLocaleString()}
-                      </div>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                {/* LEFT — search + contract detail */}
+                <div className="lg:col-span-3 space-y-3" data-testid="np-contract-panel">
+                  <div>
+                    <div className="text-eyebrow mb-1.5">
+                      {t("search_contract") || "Search contract"}
                     </div>
-                    <div>
-                      <div className="text-eyebrow">{t("total_due")}</div>
-                      <div className="font-display text-lg" data-testid="np-total-due">
-                        ${Number(selectedContract.total_due || 0).toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-eyebrow">{t("paid_amount")}</div>
-                      <div className="font-display text-lg" data-testid="np-paid">
-                        ${Number(selectedContract.paid_amount || 0).toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-eyebrow">{t("remaining_balance")}</div>
-                      <div className="font-display text-lg text-[#C17767]" data-testid="np-remaining">
-                        ${Number(selectedContract.remaining_balance || 0).toLocaleString()}
-                      </div>
-                    </div>
+                    <Input
+                      autoFocus
+                      type="text"
+                      placeholder={t("search_contract_ph") || "Type contract number, client name, or item type…"}
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        // Typing again clears the selection so the list re-opens
+                        if (form.contract_id) onChange("contract_id", "");
+                      }}
+                      data-testid="np-search"
+                    />
                   </div>
-                )}
-                <Field label={t("payment_type")}>
-                  <Select value={form.type} onValueChange={(v) => onChange("type", v)}>
-                    <SelectTrigger data-testid="payment-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full">{t("full")}</SelectItem>
-                      <SelectItem value="partial">{t("partial")}</SelectItem>
-                      <SelectItem value="interest_only">{t("interest_only")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label={t("amount")}>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.amount}
-                    onChange={(e) => onChange("amount", e.target.value)}
-                    data-testid="payment-amount"
-                  />
-                </Field>
-                <Field label={t("date")}>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => onChange("date", e.target.value)}
-                    data-testid="payment-date"
-                  />
-                </Field>
+                  {!form.contract_id && (
+                    <div
+                      className="max-h-60 overflow-auto rounded-md border border-stone-200 bg-white divide-y divide-stone-100"
+                      data-testid="np-search-results"
+                    >
+                      {matchedContracts.length === 0 ? (
+                        <div className="p-3 text-sm text-stone-500">
+                          {t("no_matches") || "No matching contracts"}
+                        </div>
+                      ) : (
+                        matchedContracts.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              onChange("contract_id", c.id);
+                              setSearchQuery(c.contract_number || "");
+                            }}
+                            data-testid={`np-pick-${c.id}`}
+                            className="w-full text-left px-3 py-2 hover:bg-stone-50 flex items-center justify-between gap-3 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium">{c.contract_number}</div>
+                              <div className="text-xs text-stone-500 truncate">
+                                {clientNameById(c.client_id) || "—"} · {c.item_type}
+                              </div>
+                            </div>
+                            <div className="text-xs text-stone-600 whitespace-nowrap">
+                              ${Number(c.remaining_balance || 0).toLocaleString()} left
+                              <span className="ml-1 text-[10px] uppercase tracking-wider text-stone-400">
+                                {c.status === "grace_period" ? "grace" : c.status}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {selectedContract && (
+                    <div
+                      className="p-3 rounded-md border border-[#1B2D5C]/20 bg-[#1B2D5C]/[0.04] space-y-2"
+                      data-testid="np-contract-preview"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-display text-lg text-[#1B2D5C]">
+                            {selectedContract.contract_number}
+                          </div>
+                          <div className="text-xs text-stone-600">
+                            {selectedClient?.full_name || "—"}
+                            {selectedClient?.phone ? ` · ${selectedClient.phone}` : ""}
+                          </div>
+                        </div>
+                        <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                          selectedContract.status === "auction_ready"
+                            ? "bg-red-50 text-red-800 border-red-200"
+                            : selectedContract.status === "grace_period" || selectedContract.status === "overdue"
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        }`}>
+                          {selectedContract.status === "grace_period" ? "grace period" : selectedContract.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-stone-500">{t("interest_left")}</div>
+                          <div className="font-display text-base text-amber-700" data-testid="np-interest-remaining">
+                            ${Number(selectedContract.interest_remaining || 0).toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-stone-500">{t("total_due")}</div>
+                          <div className="font-display text-base" data-testid="np-total-due">
+                            ${Number(selectedContract.total_due || 0).toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-stone-500">{t("paid_amount")}</div>
+                          <div className="font-display text-base" data-testid="np-paid">
+                            ${Number(selectedContract.paid_amount || 0).toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-stone-500">{t("remaining_balance")}</div>
+                          <div className="font-display text-base text-[#C17767]" data-testid="np-remaining">
+                            ${Number(selectedContract.remaining_balance || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-stone-600 pt-1 border-t border-stone-200">
+                        <div><span className="text-stone-400">Item:</span> {selectedContract.item_type}</div>
+                        <div><span className="text-stone-400">Rate:</span> {selectedContract.interest_rate}%</div>
+                        <div><span className="text-stone-400">Days overdue:</span> {selectedContract.days_overdue || 0}</div>
+                        <div><span className="text-stone-400">Due:</span> {selectedContract.due_date || "—"}</div>
+                        <div><span className="text-stone-400">Loan:</span> ${Number(selectedContract.loan_amount || 0).toLocaleString()}</div>
+                        <div><span className="text-stone-400">Principal left:</span> ${Number(selectedContract.principal_remaining || 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* RIGHT — payment form */}
+                <div className="lg:col-span-2 space-y-3" data-testid="np-form-panel">
+                  <Field label={t("payment_type")}>
+                    <Select value={form.type} onValueChange={(v) => onChange("type", v)}>
+                      <SelectTrigger data-testid="payment-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full">{t("full")}</SelectItem>
+                        <SelectItem value="partial">{t("partial")}</SelectItem>
+                        <SelectItem value="interest_only">{t("interest_only")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label={t("amount")}>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={form.amount}
+                      onChange={(e) => onChange("amount", e.target.value)}
+                      data-testid="payment-amount"
+                    />
+                  </Field>
+                  <Field label={t("date")}>
+                    <Input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => onChange("date", e.target.value)}
+                      data-testid="payment-date"
+                    />
+                  </Field>
+                  {selectedContract && form.type === "full" && (
+                    <button
+                      type="button"
+                      onClick={() => onChange("amount", String(selectedContract.remaining_balance || 0))}
+                      className="text-xs text-[#1B2D5C] hover:underline"
+                      data-testid="np-fill-full"
+                    >
+                      {t("fill_remaining") || "Fill remaining"}: ${Number(selectedContract.remaining_balance || 0).toLocaleString()}
+                    </button>
+                  )}
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>
@@ -296,6 +416,7 @@ export default function Payments() {
                   onClick={submit}
                   className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
                   data-testid="payment-save"
+                  disabled={!form.contract_id || !form.amount}
                 >
                   {t("save")}
                 </Button>

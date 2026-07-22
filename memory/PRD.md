@@ -668,6 +668,36 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 59 — Scan Page + Gold Auction Labels + Payment Search Redesign (2026-02-22) ✅
+
+### 1. `/scan` Admin Route — QR camera lookup
+- New page `pages/Scan.js` at `/scan` (guarded by `contracts` module). Two-panel UI:
+  - **Camera** panel — uses `html5-qrcode@2.3.8` (`yarn add`) to open the rear/environment camera and scan pawn labels. On decode, parses the JSON payload `{"cn","item","id"}`, verifies via `GET /api/contracts/{id}`, and navigates to `/contracts?highlight=<cn>`.
+  - **Manual entry** panel — fallback text input for desktop / damaged labels.
+- `App.js` route + `AdminLayout.js` sidebar entry ("Scan · Skaneia") added.
+- **Highlight on Contracts page**: rows now inspect `?highlight=<contract_number>`; matching row gets `bg-amber-50 ring-2 ring-amber-300` + auto `scrollIntoView({block:"center"})`.
+- i18n: `scan` (EN + TET).
+
+### 2. Gold labels for Auction-Ready items
+- `_draw_item_label_on_canvas` in `pdf_utils.py` now branches on `contract.status`:
+  - `auction_ready` / `auction` → gold-brown primary (`#B45309`), gold QR, thick gold border (`#F0B435`, 3pt) around the sticker, extra "AUCTION READY · PRONTU BA LEILAUN" badge above the item description.
+  - Everything else → the existing navy palette.
+- Verified on CTR-2026-0514 (auction_ready): PDF text extraction confirms "AUCTION READY · PRONTU BA LEILAUN" line, gold accents render, single-label size 8 KB.
+- Single-label + bulk-label endpoints both pick up the colouring automatically because they share the helper.
+
+### 3. New Payment dialog redesign — search + contract preview
+- Rewrote the New Payment dialog from a narrow single-column Select to a wide **2-column layout** (`max-w-4xl`):
+  - **Left column (contract)**: free-text search input (`data-testid="np-search"`) that matches contract_number, client name, or item type across open contracts (active + grace_period + overdue + auction_ready). Live-filtered result list with client name + status pill. Clicking a match populates the form.
+  - **Preview card** below the search: contract number, client name + phone, status badge (gold for auction-ready, amber for grace, green for active), grid of Interest Left / Total Due / Paid / Remaining Balance, plus item type / rate / days overdue / due date / loan / principal left.
+  - **Right column (form)**: Payment Type / Amount / Date + "Fill remaining" quick-fill button that appears when Type=Full.
+  - Save button disabled until a contract is picked and an amount is entered.
+- Loads `/api/clients` alongside contracts on page mount so the search can filter by client name.
+- Dialog close now also clears `searchQuery`.
+- Verified via Playwright: typing "535" filters to 1 result, clicking it renders the preview with full contract detail ("CTR-2026-0535 · TEST_iter6_1784730802 · +670 7700 0000 · ACTIVE · Interest Left $0 · Total Due $1,000 · Paid $100 · Remaining $1,000 · Rate 10% · Loan $1,000 · Principal left $1,000").
+
+### i18n keys added (EN + TET)
+`scan`, `search_contract`, `search_contract_ph`, `no_matches`, `fill_remaining`.
+
 ## Iteration 58 — Bulk Label Print (2026-02-22) ✅
 
 ### Backend
