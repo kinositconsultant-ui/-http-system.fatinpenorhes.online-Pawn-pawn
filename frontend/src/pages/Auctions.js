@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { api, pdfUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
@@ -136,13 +136,13 @@ export default function Auctions() {
           </thead>
           <tbody>
             {groups.map((g) => {
-              const key = `${g.client_id || g.client_name}`;
+              const key = `${g.client_id || `orphan-${g.items[0]?.id || g.client_name}`}`;
               const isOpen = !!expanded[key];
               const listed = g.items.filter((i) => i.status === "listed").length;
               const sold = g.items.filter((i) => i.status === "sold").length;
               const totalSold = g.items.reduce((s, i) => s + Number(i.sold_price || 0), 0);
               return (
-                <>
+                <Fragment key={key}>
                   <tr
                     key={`grp-${key}`}
                     className="border-t border-stone-100 hover:bg-stone-50/50 cursor-pointer"
@@ -260,7 +260,7 @@ export default function Auctions() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
             {groups.length === 0 && (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { api, API_BASE } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
@@ -489,7 +489,7 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
             const isOpen = !!expanded[g.contract_id];
             const contract = contractById ? contractById(g.contract_id) : null;
             return (
-              <>
+              <Fragment key={g.contract_id}>
                 <tr
                   key={`grp-${g.contract_id}`}
                   className="border-t border-stone-100 hover:bg-stone-50/50 cursor-pointer"
@@ -585,7 +585,7 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
           {groups.length === 0 && (

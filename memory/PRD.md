@@ -513,6 +513,19 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 40 — Dashboard/Finance/Auctions/Payments UX Batch (2026-02-17) ✅
+User requested 5 adjustments — all implemented and validated by testing_agent (9/9 backend pytest, all frontend flows pass):
+
+1. **Dashboard "Auction Ready" card** — new stat card (gavel icon, amber tone, data-testid=`stat-auction-ready`) between Overdue and Redeemed. Backend `/api/dashboard/summary` now returns `auction_ready_contracts` counting contracts with status = `auction_ready` separately from `auction`.
+2. **Finance → Invoices delete** — new endpoint `DELETE /api/invoices/{iid}` (admin-only, `require_admin` dependency). Best-effort clears `invoice_id`/`invoice_number` on the linked auction and writes an audit-log entry. Frontend adds a red trash-icon button per row (admin only).
+3. **Auction → Sold profit flow** — updated `/app/backend/routes/finance.py` `gross_profit` formula from `interest_received + total_penalty + auction_realized_profit − auction_realized_loss` to `interest_received + total_penalty + auction_interest_profit`. This matches user's rule: whole `sold_price` → Cash on Hand, `interest_fee` portion → Net Profit.
+4. **Auctions page** — rewrote to group by `client_name` (one row per pawner, expand chevron reveals items). Backend `list_auctions` now enriches each auction with `client_name` and `client_id` via contract → client lookup. Invoice PDF button opens the new `PdfPreviewDialog` (iframe preview with a Download button) instead of directly opening the raw PDF URL.
+5. **Payments section** — `PaymentsTable` grouped by `contract_id` on all three tabs (Payments, Overdue, Disbursements). Summary row shows count / total / latest date; expand reveals individual payment rows with PDF + delete actions.
+
+**New file**: `/app/frontend/src/components/PdfPreviewDialog.js` — reusable iframe-based preview modal. Currently wired to Auction invoices and Finance invoices; can be extended app-wide later.
+**i18n**: Added `client_name` (Kliente / Client) and `preview` (Haree / Preview) keys.
+**React key fix**: replaced `<>` fragment shorthand inside `.map()` with `<Fragment key=...>` in Auctions.js and Payments.js (silences React "unique key" warning).
+
 ## Iteration 39 — Financial Report Table Fit + Overdue Audio Chime (2026-02-17) ✅
 - **Fix**: Financial report table no longer overflows past its card container. Root cause: `<th>` cells were `whitespace-nowrap` and column labels like "Original Loan Amount" / "Interest Received" / "Penalty Outstanding" pushed the total table width beyond `1280px`.
 - **Changes** in `/app/frontend/src/pages/Reports.js`:
