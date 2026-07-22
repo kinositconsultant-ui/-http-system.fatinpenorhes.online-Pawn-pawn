@@ -36,7 +36,7 @@ ITEM_KINDS = ("car", "motorcycle", "electronic", "pezadu")
 DEFAULT_SETTINGS = {
     "id": "singleton",
     "interest_rate_car": 10,
-    "interest_rate_motorcycle": 15,
+    "interest_rate_motorcycle": 10,
     "interest_rate_electronic": 15,
     "interest_rate_pezadu": 10,
     "terms_and_conditions_en": DEFAULT_TNC_EN,

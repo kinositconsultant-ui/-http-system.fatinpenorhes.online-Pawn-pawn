@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, pdfUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
@@ -22,6 +23,8 @@ export default function Auctions() {
   const { t } = useLang();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const clientFilter = searchParams.get("client") || "";
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
@@ -88,8 +91,11 @@ export default function Auctions() {
   // Group auctions by client_name so the same pawner is shown once per row
   // and their items can be expanded on demand.
   const groups = useMemo(() => {
+    const source = clientFilter
+      ? rows.filter((r) => (r.client_name || "").toLowerCase().includes(clientFilter.toLowerCase()))
+      : rows;
     const map = new Map();
-    for (const r of rows) {
+    for (const r of source) {
       const key = r.client_name || "—";
       const g = map.get(key) || {
         client_name: key,
@@ -100,7 +106,7 @@ export default function Auctions() {
       map.set(key, g);
     }
     return Array.from(map.values());
-  }, [rows]);
+  }, [rows, clientFilter]);
 
   const toggle = (key) =>
     setExpanded((e) => ({ ...e, [key]: !e[key] }));
@@ -121,6 +127,33 @@ export default function Auctions() {
           Overdue items are moved here from contracts. Mark them as sold to close the loop.
         </p>
       </header>
+
+      {clientFilter && (
+        <div
+          className="px-4 py-2 rounded-md bg-[#1B2D5C]/[0.06] border border-[#1B2D5C]/20 flex items-center justify-between flex-wrap gap-2 text-sm"
+          data-testid="auctions-filter-pill"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-stone-500">Filtered by client:</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium">
+              {clientFilter}
+            </span>
+            <span className="text-xs text-stone-500">· {groups.reduce((s, g) => s + g.items.length, 0)} auctions</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("client");
+              setSearchParams(next, { replace: true });
+            }}
+            className="text-xs text-[#1B2D5C] hover:underline font-medium"
+            data-testid="auctions-filter-clear"
+          >
+            Clear filter ×
+          </button>
+        </div>
+      )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
         <table className="min-w-full text-sm" data-testid="auctions-table">

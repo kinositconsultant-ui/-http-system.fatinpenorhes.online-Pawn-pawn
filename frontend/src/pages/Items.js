@@ -269,6 +269,7 @@ function ItemTable({ kind }) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyFor(kind));
+  const [statusFilter, setStatusFilter] = useState("all"); // all|in_stock|pawned|sold
   const meta = KIND_META[kind];
   const fields = meta.fields(t);
   const KindIcon = meta.Icon;
@@ -343,6 +344,16 @@ function ItemTable({ kind }) {
             </div>
           </div>
         </div>
+        <FilterChips
+          value={statusFilter}
+          onChange={setStatusFilter}
+          counts={{
+            all: rows.length,
+            in_stock: rows.filter((r) => !r.status || r.status === "in_stock").length,
+            pawned: rows.filter((r) => r.status === "pawned").length,
+            sold: rows.filter((r) => r.status === "sold").length,
+          }}
+        />
         <Dialog
           open={open}
           onOpenChange={(o) => {
@@ -469,7 +480,13 @@ function ItemTable({ kind }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows
+              .filter((r) => {
+                if (statusFilter === "all") return true;
+                if (statusFilter === "in_stock") return !r.status || r.status === "in_stock";
+                return r.status === statusFilter;
+              })
+              .map((r) => (
               <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
                 <td className="px-2 py-1.5 w-12">
                   {(() => {
@@ -570,3 +587,39 @@ function ItemTable({ kind }) {
     </div>
   );
 }
+
+function FilterChips({ value, onChange, counts }) {
+  const chips = [
+    { key: "all", label: "All", color: "bg-stone-800 text-white border-stone-800" },
+    { key: "in_stock", label: "In Stock", color: "bg-emerald-600 text-white border-emerald-600" },
+    { key: "pawned", label: "Pawned", color: "bg-amber-600 text-white border-amber-600" },
+    { key: "sold", label: "Sold", color: "bg-stone-500 text-white border-stone-500" },
+  ];
+  return (
+    <div className="flex items-center gap-2 flex-wrap" data-testid="item-filter-chips">
+      {chips.map((c) => {
+        const active = value === c.key;
+        const n = counts?.[c.key] ?? 0;
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onChange(c.key)}
+            data-testid={`item-filter-${c.key}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition ${
+              active
+                ? c.color
+                : "bg-white text-stone-700 border-stone-300 hover:border-stone-500"
+            }`}
+          >
+            <span>{c.label}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${active ? "bg-white/25" : "bg-stone-100"}`}>
+              {n}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+

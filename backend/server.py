@@ -700,7 +700,7 @@ async def _fetch_item_LOCAL_DEAD(kind: str, iid: str) -> Optional[dict]:
 # =====================================================================
 class SettingsIn(BaseModel):
     interest_rate_car: int = 10
-    interest_rate_motorcycle: int = 15
+    interest_rate_motorcycle: int = 10
     interest_rate_electronic: int = 15
     interest_rate_pezadu: int = 10
     warehouse_password: str = ""
@@ -828,7 +828,7 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
         sett = await get_settings_doc()
         defaults = {
             "car": sett.get("interest_rate_car", 10),
-            "motorcycle": sett.get("interest_rate_motorcycle", 15),
+            "motorcycle": sett.get("interest_rate_motorcycle", 10),
             "electronic": sett.get("interest_rate_electronic", 15),
             "pezadu": sett.get("interest_rate_pezadu", 10),
         }
@@ -1099,9 +1099,10 @@ async def list_auctions(_: dict = Depends(require_module("auctions"))):
     # group auctions by client (multiple items pawned by the same client).
     contract_ids = list({a.get("contract_id") for a in items if a.get("contract_id")})
     contracts = await db.contracts.find(
-        {"id": {"$in": contract_ids}}, {"_id": 0, "id": 1, "client_id": 1}
+        {"id": {"$in": contract_ids}}, {"_id": 0, "id": 1, "client_id": 1, "contract_number": 1}
     ).to_list(len(contract_ids) or 1)
     contract_to_client = {c["id"]: c.get("client_id") for c in contracts}
+    known_contract_ids = {c["id"] for c in contracts}
     client_ids = list({cid for cid in contract_to_client.values() if cid})
     clients = await db.clients.find(
         {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "full_name": 1}
@@ -1110,7 +1111,19 @@ async def list_auctions(_: dict = Depends(require_module("auctions"))):
     for a in items:
         cid = contract_to_client.get(a.get("contract_id"))
         a["client_id"] = cid
-        a["client_name"] = client_id_to_name.get(cid, "")
+        name = client_id_to_name.get(cid, "") if cid else ""
+        if not name:
+            # Fallback: contract or client was deleted → label the row with
+            # the auction's stored contract_number so orphan rows are still
+            # useful (grouped separately per contract, not lumped as "—").
+            cnum = a.get("contract_number", "")
+            if a.get("contract_id") and a["contract_id"] not in known_contract_ids and cnum:
+                name = f"Deleted Contract · {cnum}"
+            elif not cnum:
+                name = "Unknown"
+            else:
+                name = f"Unlinked · {cnum}"
+        a["client_name"] = name
     return items
 
 

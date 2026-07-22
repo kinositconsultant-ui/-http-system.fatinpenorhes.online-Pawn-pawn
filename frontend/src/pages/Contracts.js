@@ -22,8 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye } from "lucide-react";
 import { toast } from "sonner";
+import PdfPreviewDialog from "../components/PdfPreviewDialog";
 
 const blank = {
   client_id: "",
@@ -36,7 +37,7 @@ const blank = {
   notes: "",
 };
 
-const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 15, electronic: 15, pezadu: 10 };
+const DEFAULT_RATE_FALLBACK = { car: 10, motorcycle: 10, electronic: 15, pezadu: 10 };
 
 const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -59,6 +60,16 @@ export default function Contracts() {
   const [defaults, setDefaults] = useState(DEFAULT_RATE_FALLBACK);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
+  const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
+
+  const openContractPdf = (r) => {
+    setPdfPreview({
+      open: true,
+      url: `${API_BASE}/contracts/${r.id}/pdf`,
+      title: `${t("contract")} ${r.contract_number || ""}`,
+      filename: `${r.contract_number || "contract"}.pdf`,
+    });
+  };
 
   const load = async () => {
     const [c, cl, cars, mc, el, pz, s] = await Promise.all([
@@ -75,7 +86,7 @@ export default function Contracts() {
     setItemsByKind({ car: cars.data, motorcycle: mc.data, electronic: el.data, pezadu: pz.data });
     setDefaults({
       car: s.data.interest_rate_car ?? 10,
-      motorcycle: s.data.interest_rate_motorcycle ?? 15,
+      motorcycle: s.data.interest_rate_motorcycle ?? 10,
       electronic: s.data.interest_rate_electronic ?? 15,
       pezadu: s.data.interest_rate_pezadu ?? 10,
     });
@@ -425,6 +436,14 @@ export default function Contracts() {
                 />
               </Field>
             </div>
+
+            {/* Live Article-4 rule preview — computed from loan + rate so the
+                cashier and client agree upfront on the maximum obligation. */}
+            <RulePreviewCard
+              loan={Number(form.loan_amount) || 0}
+              rate={Number(form.interest_rate) || 0}
+            />
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>
                 {t("cancel")}
@@ -905,3 +924,60 @@ function Td({ children, right, className = "" }) {
     </td>
   );
 }
+
+/**
+ * Live preview of Article 2 + Article 4 + Article 8 maximum obligation so
+ * the cashier can walk the client through the numbers before signing. The
+ * shown values match what the backend caps at (2 months of interest max +
+ * one-time 10% penalty).
+ */
+function RulePreviewCard({ loan, rate }) {
+  if (!loan || !rate) {
+    return (
+      <div
+        className="mt-1 mb-2 p-3 rounded-md border border-dashed border-stone-300 bg-stone-50 text-xs text-stone-500"
+        data-testid="rule-preview-empty"
+      >
+        Fill in loan amount and interest rate to see the Article 4 maximum obligation.
+      </div>
+    );
+  }
+  const monthly = loan * rate / 100;
+  const twoMonthInterest = 2 * monthly;
+  const penalty = loan * 0.10;
+  const maxDue = loan + twoMonthInterest + penalty;
+  const money = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div
+      className="mt-1 mb-2 p-3 rounded-md border border-[#1B2D5C]/20 bg-[#1B2D5C]/[0.04]"
+      data-testid="rule-preview"
+    >
+      <div className="text-[11px] uppercase tracking-wider font-semibold text-[#1B2D5C] mb-2">
+        Article 4 — Maximum obligation preview
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <RuleRow label="Monthly interest" value={money(monthly)} sub={`${rate}% × principal`} />
+        <RuleRow label="Interest × 2 max" value={money(twoMonthInterest)} sub="Article 4 cap" />
+        <RuleRow label="Penalty (Art. 8)" value={money(penalty)} sub="10% one-time" />
+        <RuleRow
+          label="Total Selu max"
+          value={money(maxDue)}
+          sub="principal + 2×int + penalty"
+          highlight
+        />
+      </div>
+    </div>
+  );
+}
+function RuleRow({ label, value, sub, highlight = false }) {
+  return (
+    <div className={`p-2 rounded ${highlight ? "bg-white border border-[#1B2D5C]" : "bg-white/60"}`}>
+      <div className="text-[10px] uppercase tracking-wider text-stone-500">{label}</div>
+      <div className={`font-display text-base leading-tight ${highlight ? "text-[#1B2D5C] font-semibold" : "text-stone-900"}`}>
+        {value}
+      </div>
+      {sub && <div className="text-[10px] text-stone-500 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+

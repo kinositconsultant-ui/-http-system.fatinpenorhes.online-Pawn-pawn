@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, API_BASE } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
@@ -43,6 +44,8 @@ export default function Payments() {
   const { t } = useLang();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contractFilter = searchParams.get("contract") || "";
   const [rows, setRows] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [open, setOpen] = useState(false);
@@ -139,13 +142,24 @@ export default function Payments() {
     }
   };
 
-  const overduePayments = rows.filter((r) =>
+  // URL-driven filter — if ?contract=CTR-... is present, only show payments
+  // on that contract across all 3 tabs. Cashiers deep-link here from the
+  // Contracts page → "History" button.
+  const filteredForContract = useMemo(() => {
+    if (!contractFilter) return rows;
+    return rows.filter((r) => {
+      const c = contracts.find((x) => x.id === r.contract_id);
+      return c?.contract_number === contractFilter;
+    });
+  }, [rows, contracts, contractFilter]);
+
+  const overduePayments = filteredForContract.filter((r) =>
     ["overdue_full", "overdue_interest_pen", "overdue_penalty_only"].includes(r.type)
   );
-  const regularPayments = rows.filter(
+  const regularPayments = filteredForContract.filter(
     (r) => !["overdue_full", "overdue_interest_pen", "overdue_penalty_only", "disbursement"].includes(r.type)
   );
-  const disbursements = rows.filter((r) => r.type === "disbursement");
+  const disbursements = filteredForContract.filter((r) => r.type === "disbursement");
 
   return (
     <div className="space-y-6" data-testid="payments-root">
@@ -279,6 +293,33 @@ export default function Payments() {
           </Dialog>
         </div>
       </header>
+
+      {contractFilter && (
+        <div
+          className="px-4 py-2 rounded-md bg-[#1B2D5C]/[0.06] border border-[#1B2D5C]/20 flex items-center justify-between flex-wrap gap-2 text-sm"
+          data-testid="payments-filter-pill"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-stone-500">Filtered by contract:</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium">
+              {contractFilter}
+            </span>
+            <span className="text-xs text-stone-500">· {filteredForContract.length} of {rows.length} payments</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("contract");
+              setSearchParams(next, { replace: true });
+            }}
+            className="text-xs text-[#1B2D5C] hover:underline font-medium"
+            data-testid="payments-filter-clear"
+          >
+            Clear filter ×
+          </button>
+        </div>
+      )}
 
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList>
