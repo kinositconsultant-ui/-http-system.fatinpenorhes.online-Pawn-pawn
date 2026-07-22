@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, API_BASE } from "../lib/api";
+import { api, API_BASE, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
 
@@ -701,6 +701,20 @@ export default function Contracts() {
                       title={`${t("preview") || "Preview"} — Nov-2026 math`}
                     >
                       <Eye className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfPreview({
+                        open: true,
+                        url: pdfUrl(`/contracts/${r.id}/label-pdf`),
+                        title: `${t("qr_label") || "QR Label"} · ${r.contract_number}`,
+                        filename: `${r.contract_number}-label.pdf`,
+                      })}
+                      data-testid={`contract-label-${r.id}`}
+                      title={t("qr_label_hint") || "Printable QR sticker for the physical item"}
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A] transition-colors"
+                    >
+                      <QrCode className="w-3 h-3" />
                     </button>
                     {(r.status === "overdue" || r.status === "grace_period") && (
                       <button

@@ -2143,3 +2143,126 @@ def build_auction_catalogue_pdf(
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
+
+
+
+def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None) -> bytes:
+    """Compact printable label for a pawned physical item.
+
+    Layout: a 10 × 6 cm sticker containing a scannable QR (encodes JSON
+    `{"cn": contract_number, "item": item_name, "id": contract_id}`),
+    the contract number in large type, and a one-line human description.
+    The PDF page itself is A6 landscape so it prints on standard sticker
+    paper and can be cut to size.
+    """
+    from reportlab.lib.pagesizes import A6, landscape
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.utils import ImageReader
+    import qrcode as _qrcode
+    import json as _json
+
+    contract_number = contract.get("contract_number", "—")
+    contract_id = contract.get("id", "")
+
+    # Assemble a human item description from whatever fields the item has.
+    parts: list[str] = []
+    for k in ("brand", "model", "year", "manufacture_year", "color", "plate"):
+        v = (item or {}).get(k)
+        if v:
+            parts.append(str(v))
+    if not parts:
+        parts.append(str((item or {}).get("description") or (item or {}).get("name") or contract.get("item_type", "").title() or "Item"))
+    item_name = " · ".join(parts)
+
+    payload = _json.dumps({
+        "cn": contract_number,
+        "item": item_name[:60],
+        "id": contract_id,
+    }, ensure_ascii=False, separators=(",", ":"))
+
+    # Build the QR image (small, high-contrast, embedded in PDF via ReportLab Image)
+    qr = _qrcode.QRCode(
+        version=None,
+        error_correction=_qrcode.constants.ERROR_CORRECT_M,
+        box_size=6,
+        border=1,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="#1B2D5C", back_color="white")
+    qr_buf = BytesIO()
+    qr_img.save(qr_buf, format="PNG")
+    qr_buf.seek(0)
+
+    # Compose the label on an A6 landscape page (~14.8 × 10.5 cm) using canvas
+    buf = BytesIO()
+    page = landscape(A6)
+    c = _canvas.Canvas(buf, pagesize=page)
+    page_w, page_h = page
+
+    # Left column: QR (square, takes ~7.5 cm)
+    qr_size = 7.5 * cm
+    qr_x = 0.6 * cm
+    qr_y = (page_h - qr_size) / 2
+    c.drawImage(ImageReader(qr_buf), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+
+    # Right column: brand + contract number + item description
+    text_x = qr_x + qr_size + 0.5 * cm
+    text_w = page_w - text_x - 0.4 * cm
+
+    # Brand
+    c.setFillColor("#1B2D5C")
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(text_x, page_h - 0.9 * cm, "FATIN PENHORES")
+    c.setFillColor("#64748B")
+    c.setFont("Helvetica", 7)
+    c.drawString(text_x, page_h - 1.4 * cm, "Unipessoal, Lda · Caicoli, Dili")
+
+    # Divider
+    c.setStrokeColor("#F0B435")
+    c.setLineWidth(1.2)
+    c.line(text_x, page_h - 1.75 * cm, text_x + text_w, page_h - 1.75 * cm)
+
+    # Contract number (large)
+    c.setFillColor("#1B2D5C")
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(text_x, page_h - 3.0 * cm, contract_number)
+
+    # Item type label
+    c.setFillColor("#64748B")
+    c.setFont("Helvetica", 7)
+    c.drawString(text_x, page_h - 3.6 * cm, "ITEM · SASÁN")
+
+    # Item description — wrap if too long
+    c.setFillColor("#0F1B3A")
+    c.setFont("Helvetica-Bold", 10)
+    words = item_name.split(" ")
+    line = ""
+    y = page_h - 4.3 * cm
+    for w in words:
+        candidate = f"{line} {w}".strip()
+        if c.stringWidth(candidate, "Helvetica-Bold", 10) < text_w:
+            line = candidate
+        else:
+            c.drawString(text_x, y, line)
+            y -= 0.5 * cm
+            line = w
+            if y < 2.0 * cm:
+                break
+    if line and y >= 2.0 * cm:
+        c.drawString(text_x, y, line)
+
+    # Optional client label at bottom-right (last two names only, no PII stack)
+    if client and client.get("full_name"):
+        c.setFillColor("#64748B")
+        c.setFont("Helvetica-Oblique", 7)
+        c.drawString(text_x, 1.3 * cm, f"Owner: {client['full_name'][:32]}")
+
+    # Footer scan hint below QR
+    c.setFillColor("#64748B")
+    c.setFont("Helvetica", 6)
+    c.drawCentredString(qr_x + qr_size / 2, 0.55 * cm, "Scan for details · Skaneia atu haree")
+
+    c.showPage()
+    c.save()
+    return buf.getvalue()

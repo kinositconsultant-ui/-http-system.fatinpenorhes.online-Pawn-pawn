@@ -668,6 +668,36 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 57 — Clients Route Split + QR Item-Label PDF (2026-02-22) ✅
+
+### Server Split — Clients domain extracted 🎯
+- Created `/app/backend/routes/clients.py` with 12 endpoints moved from server.py verbatim (paths, methods, deps, response shapes unchanged):
+  - CRUD: `GET/POST /api/clients`, `GET/PUT/DELETE /api/clients/{cid}`, `GET /api/clients/{cid}/contracts`, `GET /api/clients/{cid}/payments`
+  - Member cards: `POST /api/clients/{cid}/issue-card|renew-card|revoke-card`, `GET /api/clients/{cid}/card-pdf`
+  - Public verify (QR-scan flow): `GET /api/public/verify/{token}`, `GET /api/public/verify/{token}/photo`
+- Also moved: `ClientIn` model, helpers `_ensure_member_verify_token`, `_generate_member_no`, `_public_verify_url`, `_card_status`.
+- server.py deleted the same 334-line block; router registered via `app.include_router(clients_router, prefix="/api")`.
+- **server.py shrank from 2,206 → 1,871 lines** (–335 lines). No behavioural changes.
+- **Regression check**: baseline 18 failures / 420 passing → after split 19 failures / 419 passing. Diff of failed test names shows the same set of pre-existing failures (grace_period rename, penalty rate change, article-4 cap) plus test-flakiness on `test_public_warehouse` (already flaky in baseline runs). **No new failures introduced by the extraction.**
+- Live verification: `/api/clients` (592 clients, risk enrichment intact), `/api/clients/{cid}`, `/api/clients/{cid}/contracts` all return correct data.
+
+### New Feature — QR Code Label for Pawned Items 🆕
+User request: *"For every new pawned item, the system should automatically generate a unique QR code containing the loan ID and item name. Display this QR code on the loan details page so I can print it as a label for the physical item."*
+
+- **New PDF**: `build_item_label_pdf()` in `pdf_utils.py` — A6 landscape (14.8 × 10.5 cm) printable sticker with:
+  - QR code (7.5 × 7.5 cm, navy `#1B2D5C`) encoding compact JSON `{"cn": <contract_number>, "item": <name>, "id": <contract_id>}` — machine-readable both inside our admin app and by any generic QR scanner.
+  - Right column: FATIN PENHORES header + gold divider + contract number (18pt bold) + auto-assembled item description (brand · model · year · plate) + owner name.
+  - Footer scan hint "Scan for details · Skaneia atu haree".
+- **New endpoint**: `GET /api/contracts/{cid}/label-pdf` (auth: `get_current_user`) — pulls contract + item (via `_fetch_item`) + client and streams the label as `<contract_number>-label.pdf`.
+- **Frontend**: added a small navy QR icon button (`data-testid="contract-label-{id}"`) in the Contracts action column, next to the existing Preview button. Opens the label in the shared `PdfPreviewDialog` with a Download option.
+- **i18n**: `qr_label`, `qr_label_hint` (EN + Tetum).
+- **Uses existing `qrcode==8.2` dependency** — no new installs.
+
+### Live verification
+- `curl /api/contracts/{cid}/label-pdf` → HTTP 200, valid `%PDF-1.4`, 7,705 bytes.
+- pdfminer text extraction shows: `FATIN PENHORES · Unipessoal, Lda · Caicoli, Dili` header · `CTR-2026-0535` · `ITEM · SASÁN` · `TEST_Toyota · Hilux · 2020 · T-802` · `Scan for details · Skaneia atu haree` · `Owner: TEST_iter6_1784730802`.
+- Playwright: 541 QR-label buttons rendered (one per contract row); clicking opens "QR Label · CTR-2026-0536" preview dialog with Download button.
+
 ## Iteration 56 — Penalty Preview in Reactivate + Auction Countdown (2026-02-22) ✅
 Note: The codebase does not have a separate "Edit Contract" dialog — only "New" and "Reactivate". User request interpreted as adding the preview to the amend-terms flow (Reactivate).
 
