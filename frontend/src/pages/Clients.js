@@ -58,6 +58,7 @@ const blank = {
   id_type: "BI",
   id_number: "",
   phone: "",
+  email: "",
   address: "",
   municipality: "",
   posto: "",
@@ -302,6 +303,15 @@ export default function Clients() {
                 <Field label={t("phone")}>
                   <Input value={form.phone} onChange={(e) => onChange("phone", e.target.value)} data-testid="client-phone" />
                 </Field>
+                <Field label="Email">
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => onChange("email", e.target.value)}
+                    placeholder="client@example.com"
+                    data-testid="client-email"
+                  />
+                </Field>
                 <Field label={t("address")} full>
                   <Input value={form.address} onChange={(e) => onChange("address", e.target.value)} data-testid="client-address" />
                 </Field>
@@ -474,6 +484,7 @@ export default function Clients() {
                   <Info label={t("id_type")} value={viewing.id_type} />
                   <Info label={t("id_number")} value={viewing.id_number} />
                   <Info label={t("phone")} value={viewing.phone} />
+                  <Info label="Email" value={viewing.email} />
                   <Info label={t("address")} value={viewing.address} />
                   <Info label={t("municipality")} value={viewing.municipality} />
                   <Info label={t("posto")} value={viewing.posto} />
