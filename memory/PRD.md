@@ -513,6 +513,15 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 46 — Car Fields + Month Filter + Article 4 Interest Cap (2026-02-17) ✅
+Three adjustments delivered — testing agent verified 11/11 backend pytest, all frontend flows pass.
+
+1. **Car & Motorcycle fields**: `engine_cc` (int) and `transmission` (str: manual/automatic) added to `CarIn` and `MotorcycleIn` Pydantic models. Frontend Items page renders them as new form fields (Engine Capacity CC input + Transmission select). Backward compatible with existing records.
+2. **Contracts month filter**: New URL-driven `?month=YYYY-MM` dropdown at the top of the Contracts page. Options are dynamically built from the months present in the dataset (only months that actually have contracts are listed). Filter pill shows active month + count; Clear × removes both month AND status filters at once. i18n: `all_months` (EN/TET).
+3. **Article 4 interest cap (CRITICAL rule change)**: `services.py` now caps `months_elapsed` at 2 — pawn contracts can NEVER accrue more than 2 months of interest per Article 4 "Prazu Kontratu · 2 fulan maximu". A contract that stays dormant for 900 days still owes only 2 × monthly_interest. PDF Article 2 rewritten: removed the "interese fulan tolu" (3-month forward) addition; new text reads "interese fulan 2 maximu + multa" — matching the printed rules card.
+
+**Verified via curl**: A 903-day-overdue car contract at 15% rate on $500 principal now shows `months_elapsed=2`, `per_month_billed=[75, 75]`, `interest_charged=$150` (= exactly 20% of $500 = 2 × 15%). Previously interest would have accrued indefinitely.
+
 ## Iteration 45 — Owner Snapshot PDF (2026-02-17) ✅
 - New endpoint `GET /api/dashboard/snapshot/pdf` (module-gated by `dashboard`) generates a one-page "Owner Snapshot" PDF containing:
   - 3×2 KPI grid (Clients / Active / Overdue / Total Loan / Total Payments / Profit) with month-over-month arrows (▲ ▼) on the money row
