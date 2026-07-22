@@ -1,0 +1,37 @@
+{
+  "summary": "End-to-end testing of Business Dashboard feature (iteration 49). Backend: 16/16 pytest tests pass covering /api/business/metrics, /api/business/cashflow-forecast, REMINDER_DAYS=[1,7,9], auth-guard, and dashboard regression. Frontend: /business page renders correctly with all 4 KPI cards, 2 status cards, 30-bar cashflow chart, 20-row per-loan table. All KPI/status card Links navigate to correct filtered contracts pages. i18n works in EN and TET (no raw keys leak). Sidebar nav-business link added between Dashboard and Clients. Existing /dashboard regression passes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter49_business_dashboard.py",
+    "/app/test_reports/pytest/iter49_business.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py has grown to 1913 lines — consider splitting business dashboard endpoints into a dedicated router file (routes/business.py) to keep server.py focused.",
+    "/api/business/metrics and /api/business/cashflow-forecast both iterate through ALL contracts (up to 5000) and call _recompute_contract_status for each on every request; recommend caching (5-min TTL) or an aggregated projection since the queries scan the same data twice per page load.",
+    "The projected_interest_30d only credits contracts with status='active' and months_elapsed<2. This excludes any overdue contract from projected interest — which is intentional per Article 4 cap, but should be documented in the API contract for future maintainers.",
+    "BusinessDashboard.js: fetch calls (api.get) have no try/catch — if backend errors, silent failure (values stay '—'). Add error state UI or toast so admin knows when data fetch failed.",
+    "Only KPI cards biz-kpi-loaned and biz-kpi-risk map to filterable contract views. biz-kpi-earned -> /reports?tab=payments and biz-kpi-proj -> /reports?tab=financial — verify those query params are actually consumed by the Reports page (not tested here since request focused on the two mentioned)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter49_business_dashboard.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16)",
+    "frontend": "100% (all critical flows verified)"
+  },
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing seed data (206 active + 18 overdue + 150 auction_ready contracts).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Business Dashboard is stable. All 16 backend tests + all UI flows pass. Data observed: total_loaned_out=$544,700, interest_earned_ytd=$0 (no YTD payments in 2026 yet), projected_interest_30d=$29,430, potential_loss=$188,900, grace_period_count=18, auction_ready_count=150. Cashflow forecast returns 30 consecutive days starting from today with expected inflows totalling $324,110. REMINDER_DAYS=[1,7,9] confirmed. If retesting, use pytest with REACT_APP_BACKEND_URL exported (pytest fails collection otherwise).",
+  "rca of the issue": "N/A — no issues found."
+}

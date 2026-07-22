@@ -24,6 +24,7 @@ import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
+import BusinessDashboard from "@/pages/BusinessDashboard";
 import Clients from "@/pages/Clients";
 import Items from "@/pages/Items";
 import Contracts from "@/pages/Contracts";
@@ -71,6 +72,7 @@ function App() {
                 }
               >
                 <Route path="/dashboard" element={<ModuleGuard module="dashboard" label="Dashboard"><Dashboard /></ModuleGuard>} />
+                <Route path="/business" element={<ModuleGuard module="dashboard" label="Dashboard"><BusinessDashboard /></ModuleGuard>} />
                 <Route path="/clients" element={<ModuleGuard module="clients" label="Clients"><Clients /></ModuleGuard>} />
                 <Route path="/items" element={<ModuleGuard module="items" label="Pawn Items"><Items /></ModuleGuard>} />
                 <Route path="/contracts" element={<ModuleGuard module="contracts" label="Contracts"><Contracts /></ModuleGuard>} />

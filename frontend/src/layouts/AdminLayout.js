@@ -37,6 +37,7 @@ const playOverdueChime = () => {
 };
 import {
   LayoutDashboard,
+  Briefcase,
   Users,
   Package,
   FileText,
@@ -53,6 +54,7 @@ import {
 
 const links = [
   { to: "/dashboard", key: "dashboard", icon: LayoutDashboard, testid: "nav-dashboard", module: "dashboard" },
+  { to: "/business", key: "business", icon: Briefcase, testid: "nav-business", module: "dashboard" },
   { to: "/clients", key: "clients", icon: Users, testid: "nav-clients", module: "clients" },
   { to: "/items", key: "items", icon: Package, testid: "nav-items", module: "items" },
   { to: "/contracts", key: "contracts", icon: FileText, testid: "nav-contracts", module: "contracts" },

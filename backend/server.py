@@ -1531,6 +1531,152 @@ async def dashboard_snapshot_pdf(_: dict = Depends(require_module("dashboard")))
 
 
 # =====================================================================
+# Business Dashboard — owner-focused metrics + cash-flow forecast
+# =====================================================================
+@api.get("/business/metrics")
+async def business_metrics(_: dict = Depends(require_module("dashboard"))):
+    """Owner-focused metrics that go beyond simple counts.
+
+    Returns:
+      total_loaned_out      — cash currently out in the field (Σ current_principal
+                              of active + overdue + auction_ready contracts)
+      interest_earned_ytd   — realized interest income year-to-date
+      projected_interest_30d — Σ (current_principal × rate/100) for contracts
+                              whose next interest anchor falls in the next 30 days
+      potential_loss        — Σ current_principal for auction_ready contracts
+                              (worst-case if the sasán fails to sell at auction)
+      grace_period_count    — contracts in overdue window (Masa Tenggang)
+      auction_ready_count   — contracts past 10-day grace (Siap Lelang)
+      per_loan              — top 20 largest active loans with per-loan breakdown
+                              of interest_earned vs interest_projected
+    """
+    contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
+    # Recompute so Article 4 cap and interest math reflect today's state
+    for c in contracts:
+        await _recompute_contract_status(c)
+
+    year_start = f"{date.today().year}-01-01"
+    payments = await db.payments.find(
+        {"date": {"$gte": year_start}}, {"_id": 0}
+    ).to_list(5000)
+
+    total_loaned_out = 0.0
+    projected_30d = 0.0
+    potential_loss = 0.0
+    grace_count = 0
+    auction_ready_count = 0
+    per_loan: list[dict] = []
+
+    for c in contracts:
+        status = c.get("status")
+        if status in ("active", "overdue", "auction_ready"):
+            prin = float(c.get("principal_remaining", 0) or 0)
+            total_loaned_out += prin
+            rate = float(c.get("interest_rate", 0) or 0)
+            months_elapsed = int(c.get("months_elapsed", 0) or 0)
+            # Projected interest next 30 days = one more billing month IF the
+            # contract is not yet at the Article 4 2-month cap.
+            if months_elapsed < 2 and status == "active":
+                projected_30d += prin * rate / 100.0
+            if status == "auction_ready":
+                potential_loss += prin
+                auction_ready_count += 1
+            elif status == "overdue":
+                grace_count += 1
+            per_loan.append({
+                "contract_id": c.get("id"),
+                "contract_number": c.get("contract_number"),
+                "client_id": c.get("client_id"),
+                "item_type": c.get("item_type"),
+                "principal_remaining": round(prin, 2),
+                "interest_rate": rate,
+                "interest_earned": round(float(c.get("interest_paid", 0) or 0), 2),
+                "interest_projected_30d": round(
+                    prin * rate / 100.0 if months_elapsed < 2 and status == "active" else 0.0, 2
+                ),
+                "status": status,
+                "days_overdue": int(c.get("days_overdue", 0) or 0),
+                "due_date": c.get("due_date"),
+            })
+
+    # Enrich per_loan rows with client_name (batched lookup)
+    cids = list({r["client_id"] for r in per_loan if r.get("client_id")})
+    clients = await db.clients.find(
+        {"id": {"$in": cids}}, {"_id": 0, "id": 1, "full_name": 1}
+    ).to_list(len(cids) or 1)
+    id_to_name = {c["id"]: c.get("full_name", "") for c in clients}
+    for r in per_loan:
+        r["client_name"] = id_to_name.get(r.get("client_id"), "")
+
+    per_loan.sort(key=lambda r: r["principal_remaining"], reverse=True)
+
+    interest_earned_ytd = sum(
+        float(p.get("interest_paid", 0) or 0) for p in payments
+    )
+
+    return {
+        "total_loaned_out": round(total_loaned_out, 2),
+        "interest_earned_ytd": round(interest_earned_ytd, 2),
+        "projected_interest_30d": round(projected_30d, 2),
+        "potential_loss": round(potential_loss, 2),
+        "grace_period_count": grace_count,
+        "auction_ready_count": auction_ready_count,
+        "per_loan": per_loan[:50],
+    }
+
+
+@api.get("/business/cashflow-forecast")
+async def business_cashflow_forecast(_: dict = Depends(require_module("dashboard"))):
+    """30-day cash-flow forecast.
+
+    For every active/overdue contract that has a due_date within the next 30
+    days, credit the expected inflow (current_principal + accrued interest)
+    into that day's bucket. Owner sees WHICH days ahead will be busy.
+    """
+    contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
+    for c in contracts:
+        await _recompute_contract_status(c)
+
+    today = date.today()
+    buckets: dict[str, dict] = {}
+    for i in range(0, 30):
+        d = today + timedelta(days=i)
+        buckets[d.isoformat()] = {
+            "date": d.isoformat(),
+            "expected_in": 0.0,
+            "contract_count": 0,
+        }
+
+    horizon_end = today + timedelta(days=29)
+    for c in contracts:
+        if c.get("status") not in ("active", "overdue"):
+            continue
+        due = c.get("due_date")
+        if not due:
+            continue
+        try:
+            due_d = date.fromisoformat(due)
+        except ValueError:
+            continue
+        if due_d < today or due_d > horizon_end:
+            continue
+        prin = float(c.get("principal_remaining", 0) or 0)
+        io = float(c.get("interest_outstanding", 0) or 0)
+        expected = prin + io
+        b = buckets[due_d.isoformat()]
+        b["expected_in"] += expected
+        b["contract_count"] += 1
+
+    days = [
+        {**v, "expected_in": round(v["expected_in"], 2)}
+        for v in buckets.values()
+    ]
+    total = sum(d["expected_in"] for d in days)
+    return {"days": days, "total_expected_in": round(total, 2)}
+
+
+
+# =====================================================================
 # File uploads (object storage)
 # =====================================================================
 ALLOWED_MIME = {

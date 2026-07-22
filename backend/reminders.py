@@ -24,8 +24,13 @@ import email_svc
 
 logger = logging.getLogger(__name__)
 
-# Overdue days that trigger a reminder (day 7 = first warning, day 9 = final)
-REMINDER_DAYS = [7, 9]
+# Overdue days that trigger a reminder:
+#   day  1 = "welcome to grace period" (masa tenggang di'ak) — softer tone
+#   day  7 = first hard warning
+#   day  9 = FINAL warning (last day before auction_ready per Article 4)
+# Contracts move to auction_ready on day 11+, so day 9 is the last chance
+# to send an overdue reminder that could still avoid the sasán going to leilaun.
+REMINDER_DAYS = [1, 7, 9]
 
 # Message templates — kept short to fit WhatsApp free-form limits + Timor mobile screens.
 # Placeholder tokens:
