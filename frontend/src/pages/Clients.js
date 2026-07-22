@@ -358,6 +358,7 @@ export default function Clients() {
               <Th>{t("id_number")}</Th>
               <Th>{t("phone")}</Th>
               <Th>{t("municipality")}</Th>
+              <Th>Risk</Th>
               <Th right>{t("actions")}</Th>
             </tr>
           </thead>
@@ -389,6 +390,15 @@ export default function Clients() {
                 <Td className="whitespace-nowrap">{r.id_number}</Td>
                 <Td className="whitespace-nowrap">{r.phone}</Td>
                 <Td className="whitespace-nowrap">{r.municipality}</Td>
+                <Td className="whitespace-nowrap">
+                  <RiskPill
+                    level={r.risk_level}
+                    pct={r.risk_concentration_pct}
+                    overdueDays={r.risk_overdue_days}
+                    auctionReady={r.risk_auction_ready}
+                    testid={`client-risk-${r.id}`}
+                  />
+                </Td>
                 <Td right>
                   <div className="flex justify-end gap-1.5">
                     <button
@@ -677,3 +687,42 @@ function Th({ children, right }) {
 function Td({ children, right, className = "", ...rest }) {
   return <td className={`px-3 py-3 ${right ? "text-right" : ""} ${className}`} {...rest}>{children}</td>;
 }
+
+/**
+ * Risk indicator for a client, computed server-side.
+ * green  = healthy (< 5% of book AND no overdue)
+ * amber  = watch (5-15% or has overdue contracts, no auction-ready)
+ * red    = danger (>15% concentration OR any auction-ready contract)
+ * none   = no active contracts
+ */
+function RiskPill({ level, pct, overdueDays, auctionReady, testid }) {
+  if (!level || level === "none") {
+    return (
+      <span className="text-[10px] text-stone-400" data-testid={testid}>
+        —
+      </span>
+    );
+  }
+  const meta = {
+    green: { label: "Low", cls: "bg-emerald-50 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" },
+    amber: { label: "Watch", cls: "bg-amber-50 text-amber-800 border-amber-200", dot: "bg-amber-500" },
+    red: { label: "High", cls: "bg-rose-50 text-rose-800 border-rose-200", dot: "bg-rose-500" },
+  }[level];
+  const title = [
+    `${pct}% of book`,
+    overdueDays ? `${overdueDays} days overdue` : null,
+    auctionReady ? `${auctionReady} auction-ready` : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${meta.cls}`}
+      title={title}
+      data-testid={testid}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+      {pct > 0 && <span className="font-normal opacity-70">· {pct}%</span>}
+    </span>
+  );
+}
+

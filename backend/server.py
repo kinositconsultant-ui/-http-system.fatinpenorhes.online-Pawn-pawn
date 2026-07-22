@@ -267,6 +267,47 @@ def _ensure_member_verify_token(doc: dict) -> None:
 @api.get("/clients")
 async def list_clients(_: dict = Depends(require_module("clients"))):
     items = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    # Enrich each client with a lightweight risk profile so the frontend can
+    # render a green/amber/red pill without a second round-trip.
+    contracts = await db.contracts.find(
+        {"status": {"$in": ["active", "overdue", "auction_ready"]}},
+        {"_id": 0, "client_id": 1, "status": 1, "principal_remaining": 1,
+         "loan_amount": 1, "days_overdue": 1},
+    ).to_list(5000)
+    total_book = sum(float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0) for c in contracts)
+    by_client: dict[str, dict] = {}
+    for c in contracts:
+        cid = c.get("client_id")
+        if not cid:
+            continue
+        s = by_client.setdefault(cid, {
+            "principal": 0.0, "overdue_days": 0, "auction_ready": 0, "active": 0,
+        })
+        s["principal"] += float(c.get("principal_remaining", c.get("loan_amount", 0)) or 0)
+        s["overdue_days"] = max(s["overdue_days"], int(c.get("days_overdue", 0) or 0))
+        if c.get("status") == "auction_ready":
+            s["auction_ready"] += 1
+        elif c.get("status") == "active":
+            s["active"] += 1
+    for it in items:
+        s = by_client.get(it["id"])
+        if not s:
+            it["risk_level"] = "none"
+            it["risk_concentration_pct"] = 0.0
+            continue
+        pct = (s["principal"] / total_book * 100.0) if total_book else 0.0
+        # 3-tier scoring: any auction_ready OR >15% concentration → red;
+        # >5% or has overdue → amber; otherwise green.
+        if s["auction_ready"] > 0 or pct > 15.0:
+            level = "red"
+        elif pct > 5.0 or s["overdue_days"] > 0:
+            level = "amber"
+        else:
+            level = "green"
+        it["risk_level"] = level
+        it["risk_concentration_pct"] = round(pct, 1)
+        it["risk_overdue_days"] = s["overdue_days"]
+        it["risk_auction_ready"] = s["auction_ready"]
     return items
 
 

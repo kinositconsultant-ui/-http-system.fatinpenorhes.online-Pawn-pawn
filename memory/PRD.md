@@ -513,6 +513,12 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 52 — Client Risk Score Pill (2026-02-17) ✅
+- Backend `GET /api/clients` now enriches each client with `risk_level` (green / amber / red / none), `risk_concentration_pct`, `risk_overdue_days`, and `risk_auction_ready`, all computed in a single batched query over active/overdue/auction_ready contracts.
+- **Scoring rule**: any auction_ready contract OR >15% of the total book → **red (High)**; between 5–15% or has overdue contracts → **amber (Watch)**; otherwise **green (Low)**.
+- Frontend: new `<RiskPill>` component in `/clients` table with a colored dot, tier label, and inline concentration percentage. Hover title reveals the full breakdown ("X% of book · N days overdue · N auction-ready").
+- Verified on current data: **141 Low, 0 Watch, 145 High, 234 dashes** (no active contracts). No N+1 queries — single `contracts.find` + in-memory rollup.
+
 ## Iteration 51 — Business Dashboard v2 (Trend Toggle + Concentration + Actual-vs-Forecast + Reminder Preview) (2026-02-17) ✅
 1. **Historical Trend Toggle on Interest KPI** — new YTD / 30d pill switch inside the "Interest Earned" card. Backend `/api/business/metrics` now returns both `interest_earned_ytd` and `interest_earned_30d`; frontend flips the value + label on click without a page reload.
 2. **Client Concentration Chart** — new horizontal-bar recharts chart at the bottom of `/business` showing the top 10 clients by outstanding principal, each in a distinct navy/teal/coral hue, plus a grey **"Others"** bucket so the chart always sums to 100%. Backend adds `client_concentration` array (name / principal / percent) to the metrics endpoint.
