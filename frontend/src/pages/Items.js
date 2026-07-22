@@ -26,9 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck, Image as ImageIcon, Images } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
+import BulkPhotoDialog from "../components/BulkPhotoDialog";
 
 const PEZADU_CATEGORIES = ["forklift", "tractor", "loader", "heavy_duty_truck"];
 
@@ -270,6 +271,7 @@ function ItemTable({ kind }) {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyFor(kind));
   const [statusFilter, setStatusFilter] = useState("all"); // all|in_stock|pawned|sold
+  const [bulkPhotoOpen, setBulkPhotoOpen] = useState(false);
   const meta = KIND_META[kind];
   const fields = meta.fields(t);
   const KindIcon = meta.Icon;
@@ -354,6 +356,14 @@ function ItemTable({ kind }) {
             sold: rows.filter((r) => r.status === "sold").length,
           }}
         />
+        <Button
+          variant="outline"
+          onClick={() => setBulkPhotoOpen(true)}
+          data-testid={`item-bulk-photo-${kind}`}
+          className="border-stone-300"
+        >
+          <Images className="w-4 h-4 mr-1" /> Bulk photos
+        </Button>
         <Dialog
           open={open}
           onOpenChange={(o) => {
@@ -371,8 +381,7 @@ function ItemTable({ kind }) {
             >
               <Plus className="w-4 h-4 mr-1" /> {t("new")} {t(kind)}
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          </DialogTrigger>          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
                 {editingId ? t("edit") : t("new")} — {t(kind)}
@@ -584,6 +593,14 @@ function ItemTable({ kind }) {
           </tbody>
         </table>
       </div>
+
+      <BulkPhotoDialog
+        open={bulkPhotoOpen}
+        onOpenChange={setBulkPhotoOpen}
+        kind={kind}
+        items={rows}
+        onDone={load}
+      />
     </div>
   );
 }

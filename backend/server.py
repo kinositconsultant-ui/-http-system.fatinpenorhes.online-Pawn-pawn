@@ -239,163 +239,8 @@ async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
 
 
 # =====================================================================
-# Items — separate collections for car / motorcycle / electronic
+# Items — moved to routes/items.py (iter 58 server split)
 # =====================================================================
-# ITEM_KINDS imported from services
-
-PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
-
-
-class CarIn(BaseModel):
-    name: str = ""  # human-friendly label e.g. "Toyota Hilux 2020 Black"
-    brand: str
-    model: str
-    description: str = ""
-    plate: str = ""
-    machine_number: str = ""  # engine/motor number
-    chassis: str = ""         # VIN / frame number
-    fuel_percent: int = 0
-    color: str = ""
-    manufacture_year: Optional[int] = None
-    engine_cc: Optional[int] = None  # engine capacity in CC
-    transmission: str = ""  # "manual" | "automatic" (free-text; UI limits it)
-    market_value: float = 0.0
-    location: str = ""  # warehouse / shop / off-site
-    photo_url: str = ""
-    thumbnail_url: str = ""
-    document_url: str = ""
-
-
-class MotorcycleIn(BaseModel):
-    name: str = ""
-    brand: str
-    model: str
-    description: str = ""
-    plate: str = ""
-    machine_number: str = ""
-    chassis: str = ""
-    fuel_percent: int = 0
-    color: str = ""
-    manufacture_year: Optional[int] = None
-    engine_cc: Optional[int] = None
-    transmission: str = ""
-    market_value: float = 0.0
-    location: str = ""
-    photo_url: str = ""
-    thumbnail_url: str = ""
-    document_url: str = ""
-
-
-class ElectronicIn(BaseModel):
-    category: str
-    brand: str
-    model: str
-    description: str = ""
-    serial: str = ""
-    condition: str = ""
-    manufacture_year: Optional[int] = None
-    market_value: float = 0.0
-    location: str = ""
-    photo_url: str = ""
-    thumbnail_url: str = ""
-    document_url: str = ""
-
-
-class PezaduIn(BaseModel):
-    name: str = ""  # human-friendly label
-    category: str  # forklift / tractor / loader / heavy_duty_truck
-    brand: str
-    model: str
-    description: str = ""
-    plate: str = ""
-    machine_number: str = ""  # engine/motor number
-    chassis: str = ""
-    serial: str = ""
-    fuel_percent: int = 0
-    color: str = ""
-    operating_hours: Optional[int] = None
-    manufacture_year: Optional[int] = None
-    market_value: float = 0.0
-    location: str = ""
-    photo_url: str = ""
-    thumbnail_url: str = ""
-    document_url: str = ""
-
-
-def _item_model(kind: str):
-    return {
-        "car": CarIn,
-        "motorcycle": MotorcycleIn,
-        "electronic": ElectronicIn,
-        "pezadu": PezaduIn,
-    }[kind]
-
-
-@api.get("/items/{kind}")
-async def list_items(kind: str, _: dict = Depends(require_module("items"))):
-    if kind not in ITEM_KINDS:
-        raise HTTPException(status_code=400, detail="Invalid item kind")
-    coll = db[COLLECTION_MAP[kind]]
-    items = await coll.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
-    return items
-
-
-@api.post("/items/{kind}")
-async def create_item(kind: str, payload: dict, user: dict = Depends(require_not_cashier)):
-    if kind not in ITEM_KINDS:
-        raise HTTPException(status_code=400, detail="Invalid item kind")
-    model = _item_model(kind)
-    try:
-        validated = model(**payload).model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    doc = {**validated, "id": new_id(), "kind": kind, "status": "in_stock",
-           "created_at": utcnow_iso()}
-    await db[COLLECTION_MAP[kind]].insert_one(doc)
-    await write_audit(user, "create", f"item.{kind}", doc["id"], {"brand": doc.get("brand"), "model": doc.get("model")})
-    doc.pop("_id", None)
-    return doc
-
-
-@api.get("/items/{kind}/{iid}")
-async def get_item(kind: str, iid: str, _: dict = Depends(get_current_user)):
-    if kind not in ITEM_KINDS:
-        raise HTTPException(status_code=400, detail="Invalid item kind")
-    it = await db[COLLECTION_MAP[kind]].find_one({"id": iid}, {"_id": 0})
-    if not it:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return it
-
-
-@api.put("/items/{kind}/{iid}")
-async def update_item(kind: str, iid: str, payload: dict, _: dict = Depends(get_current_user)):
-    if kind not in ITEM_KINDS:
-        raise HTTPException(status_code=400, detail="Invalid item kind")
-    model = _item_model(kind)
-    try:
-        validated = model(**payload).model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    res = await db[COLLECTION_MAP[kind]].update_one({"id": iid}, {"$set": validated})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Item not found")
-    it = await db[COLLECTION_MAP[kind]].find_one({"id": iid}, {"_id": 0})
-    return it
-
-
-@api.delete("/items/{kind}/{iid}")
-async def delete_item(kind: str, iid: str, _: dict = Depends(require_admin)):
-    if kind not in ITEM_KINDS:
-        raise HTTPException(status_code=400, detail="Invalid item kind")
-    res = await db[COLLECTION_MAP[kind]].delete_one({"id": iid})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return {"ok": True}
-
-
-async def _fetch_item_LOCAL_DEAD(kind: str, iid: str) -> Optional[dict]:
-    # dead stub — kept only as a marker; real impl lives in services.py
-    return None
 
 
 # =====================================================================
@@ -414,6 +259,8 @@ class SettingsIn(BaseModel):
     whatsapp_template_tet: str = ""
     whatsapp_token: str = ""
     whatsapp_phone_id: str = ""
+    whatsapp_verify_token: str = ""   # for Meta webhook GET handshake
+    whatsapp_app_secret: str = ""     # HMAC validation of Meta POST callbacks
     reminder_days_before: int = 3
     reminders_enabled: bool = True  # Master switch for daily overdue reminders (iter17)
     next_auction_date: str = ""  # ISO date shown on public catalogue and PDF; empty = "TBA"
@@ -2035,6 +1882,7 @@ from routes.report_views import router as report_views_router  # noqa: E402
 from routes.alerts import router as alerts_router  # noqa: E402
 from routes.migration_audit import router as migration_audit_router  # noqa: E402
 from routes.clients import router as clients_router  # noqa: E402
+from routes.items import router as items_router  # noqa: E402
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
@@ -2046,6 +1894,7 @@ app.include_router(report_views_router, prefix="/api")
 app.include_router(alerts_router, prefix="/api")
 app.include_router(migration_audit_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
+app.include_router(items_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

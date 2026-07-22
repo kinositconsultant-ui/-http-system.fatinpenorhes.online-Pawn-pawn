@@ -45,6 +45,8 @@ DEFAULT_SETTINGS = {
     "whatsapp_template_tet": "due_date_reminder_tet",
     "whatsapp_token": "",
     "whatsapp_phone_id": "",
+    "whatsapp_verify_token": "",
+    "whatsapp_app_secret": "",
     "reminder_days_before": 3,
     "reminders_enabled": True,
 }
@@ -410,6 +412,9 @@ async def _send_reminder_for_contract(contract: dict, language: str, settings: d
         "template": template,
         "parameters": params,
         "result": result,
+        "meta_message_id": result.get("meta_message_id"),
+        "delivery_status": result.get("status") or "queued",
+        "sent_at": result.get("sent_at"),
         "actor_id": actor.get("id"),
         "created_at": utcnow_iso(),
     })

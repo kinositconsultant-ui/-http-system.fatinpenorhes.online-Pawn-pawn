@@ -25,6 +25,7 @@ import {
 import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
+import WhatsAppStatusPill from "../components/WhatsAppStatusPill";
 
 const blank = {
   client_id: "",
@@ -61,6 +62,27 @@ export default function Contracts() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(blank);
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
+  const [waStatuses, setWaStatuses] = useState({}); // {contract_id: {delivery_status, ...}}
+
+  // Fetch the latest WhatsApp reminder delivery status for every visible
+  // contract that could have a reminder pending. Called after load() and
+  // after any WhatsApp send, plus a 30 s poll so Meta callbacks surface
+  // without a manual refresh.
+  const refreshWaStatuses = async (contracts) => {
+    const ids = (contracts || [])
+      .filter((r) => ["active", "grace_period", "overdue", "auction_ready"].includes(r.status))
+      .map((r) => r.id);
+    if (!ids.length) {
+      setWaStatuses({});
+      return;
+    }
+    try {
+      const { data } = await api.get(`/whatsapp/status?contract_ids=${ids.join(",")}`);
+      setWaStatuses(data || {});
+    } catch {
+      /* non-fatal; keep last known map */
+    }
+  };
 
   const openContractPdf = (r) => {
     setPdfPreview({
@@ -90,11 +112,21 @@ export default function Contracts() {
       electronic: s.data.interest_rate_electronic ?? 15,
       pezadu: s.data.interest_rate_pezadu ?? 10,
     });
+    refreshWaStatuses(c.data);
     // align default if dialog is closed (will be applied when opening)
   };
 
   useEffect(() => {
     load();
+    // Poll every 30 s so Meta delivery / read callbacks are reflected without
+    // a full page reload.
+    const t = setInterval(() => {
+      setRows((prev) => {
+        refreshWaStatuses(prev);
+        return prev;
+      });
+    }, 30000);
+    return () => clearInterval(t);
   }, []);
 
   const onChange = (k, v) =>
@@ -213,6 +245,8 @@ export default function Contracts() {
         data.status === "mocked" ? t("whatsapp_mocked") : t("whatsapp_sent"),
       );
       setWaOpen(false);
+      // Refresh pills right away so the row jumps to "sent"/"mocked" without waiting for poll.
+      refreshWaStatuses(rows);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     } finally {
@@ -548,6 +582,7 @@ export default function Contracts() {
                   <Th right>{t("loan_amount")}</Th>
                   <Th right>{t("penalty")}</Th>
                   <Th>{t("status")}</Th>
+                  <Th>WhatsApp</Th>
                   <Th right>{t("actions")}</Th>
                 </tr>
               </thead>
@@ -579,6 +614,9 @@ export default function Contracts() {
                         ${Number(r.penalty || 0).toLocaleString()}
                       </Td>
                       <Td><StatusBadge status={r.status} /></Td>
+                      <Td>
+                        <WhatsAppStatusPill status={waStatuses[r.id]?.delivery_status} />
+                      </Td>
                       <Td right>
                         <div className="flex justify-end gap-0.5">
                           <button
@@ -756,7 +794,12 @@ export default function Contracts() {
                   )}
                 </Td>
                 <Td className="whitespace-nowrap">
-                  <StatusBadge status={r.status} />
+                  <div className="flex flex-col items-start gap-1">
+                    <StatusBadge status={r.status} />
+                    {waStatuses[r.id]?.delivery_status && (
+                      <WhatsAppStatusPill status={waStatuses[r.id].delivery_status} />
+                    )}
+                  </div>
                 </Td>
                 <Td right>
                   <div className="flex justify-end gap-0.5">

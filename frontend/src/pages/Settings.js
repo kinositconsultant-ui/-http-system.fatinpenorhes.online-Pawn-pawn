@@ -379,6 +379,39 @@ export default function Settings() {
               data-testid="settings-reminder-days"
             />
           </Field>
+          <Field label="Webhook Verify Token">
+            <Input
+              value={s.whatsapp_verify_token || ""}
+              onChange={(e) => onChange("whatsapp_verify_token", e.target.value)}
+              data-testid="settings-wa-verify-token"
+              placeholder="Random string you also paste in Meta webhook config"
+            />
+          </Field>
+          <Field label="Webhook App Secret">
+            <Input
+              type="password"
+              value={s.whatsapp_app_secret || ""}
+              onChange={(e) => onChange("whatsapp_app_secret", e.target.value)}
+              data-testid="settings-wa-app-secret"
+              placeholder="From Meta App → Settings → Basic → App Secret"
+              autoComplete="new-password"
+            />
+          </Field>
+        </div>
+
+        {/* Webhook callback URL for delivery status */}
+        <div className="rounded-lg border border-stone-200 bg-emerald-50 p-4 space-y-2">
+          <div className="text-sm font-medium text-stone-800">
+            Delivery-status webhook URL
+          </div>
+          <p className="text-xs text-stone-600">
+            Paste this into Meta → WhatsApp → Configuration → Webhooks, then subscribe to
+            the <code className="text-[11px] bg-white px-1 rounded border border-stone-200">messages</code> field. Meta will call it every time a
+            reminder is delivered or read, and the pills next to each contract will update.
+          </p>
+          <code className="block break-all bg-white border border-stone-200 rounded px-2 py-1.5 text-[12px] text-stone-800" data-testid="wa-webhook-url">
+            {(process.env.REACT_APP_BACKEND_URL || "") + "/api/whatsapp/webhook"}
+          </code>
         </div>
 
         {/* Test connection */}
