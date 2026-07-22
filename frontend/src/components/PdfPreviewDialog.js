@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Download, X } from "lucide-react";
 
@@ -51,6 +51,10 @@ export default function PdfPreviewDialog({ open, onOpenChange, url, title = "PDF
               </button>
             </div>
           </div>
+          <DialogDescription className="sr-only">
+            Preview the PDF in an embedded viewer, then use the Download button
+            to save a copy to disk.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex-1 bg-stone-100 overflow-hidden">
           {open && url && (

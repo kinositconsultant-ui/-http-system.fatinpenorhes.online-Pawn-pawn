@@ -513,6 +513,21 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 49 — Backlog Cleanup Batch (2026-02-17) ✅
+Testing agent verified: **100% frontend flows (6/6), 5/5 new backend tests pass, 29/30 legacy pytest** (1 pre-existing unrelated 401 on locked public listing).
+
+1. **Item Filter Chips** — new `FilterChips` component in `Items.js` with 4 status chips (All / In Stock / Pawned / Sold), each with a count badge. Renders on all 4 kind tabs (car/motorcycle/electronic/pezadu). Verified: clicking "sold" filters 517→0 rows on current data.
+2. **Rule Preview Card** — new `RulePreviewCard` inside the New Contract dialog shows the Article 4 max obligation live as loan/rate change. Example: $3,000 @ 10% → monthly $300, interest×2 $600, penalty $300, **Total Selu max $3,900**. Empty state prompts "Fill in loan amount and interest rate…".
+3. **Filter Pill on Payments & Auctions** —
+   - Payments: `?contract=CTR-XXXX` URL filter, pill shows "Filtered by contract · N of M payments · Clear ×".
+   - Auctions: `?client=Name` case-insensitive URL filter, pill shows "Filtered by client · N auctions · Clear ×".
+4. **PDF Preview Everywhere** — Contracts (contract PDF + pre-auction PDF) and Payments now open the reusable `PdfPreviewDialog` (iframe preview + Download button) instead of directly downloading the PDF. Existing Auction and Finance-Invoice previews unchanged.
+5. **Fix Orphan Auction Group** — `list_auctions` enrichment now labels orphans as `Deleted Contract · CTR-XXXX` (contract deleted) or `Unlinked · CTR-XXXX` (contract exists, no client_id) instead of grouping them all under "—". Verified: 34/76 orphan rows correctly labelled, 0 empty client_name.
+
+**Also**: Motorcycle default interest rate changed **15% → 10%** to match Car (per user request). Backend `DEFAULT_SETTINGS`, `SettingsIn`, live DB `settings` doc, and frontend `DEFAULT_RATE_FALLBACK` all updated. Existing motorcycle contracts keep their historical stored rate (27 legacy at 15%, 1 new at 10%).
+
+**a11y fix**: added hidden `DialogDescription` inside `PdfPreviewDialog` to silence the Radix "Missing Description" console warning.
+
 ## Iteration 48 — Tap-to-Dial Phone Cells (2026-02-17) ✅
 - Every `phone` column in the Reports table now renders as a **navy `tel:` link** (opens the dialer on mobile / FaceTime/Skype/etc. on desktop) followed by a small copy-to-clipboard button that shows a "Copied +670..." toast.
 - New helper component `PhoneCell` in `Reports.js`. `fmtCell(col, v, row)` dispatches to it whenever `col === "phone"`.
