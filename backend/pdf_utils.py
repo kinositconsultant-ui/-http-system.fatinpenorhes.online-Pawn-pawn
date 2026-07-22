@@ -2280,7 +2280,7 @@ def build_auction_catalogue_pdf(
 
 
 
-def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, client: dict | None = None) -> None:
+def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, client: dict | None = None, item_photo_bytes: bytes | None = None) -> None:
     """Draw a single item-label onto the current page of an existing canvas.
 
     Auction-ready (or in-auction) contracts are highlighted with gold accents
@@ -2364,6 +2364,27 @@ def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, cl
     c.setLineWidth(1.2)
     c.line(text_x, page_h - 1.75 * cm, text_x + text_w, page_h - 1.75 * cm)
 
+    # Small item photo thumbnail in the top-right corner (~2 × 2 cm). Lets
+    # warehouse staff eyeball-match the label to the physical item at a glance
+    # without decoding the QR.
+    photo_size = 2.0 * cm
+    photo_x = page_w - photo_size - 0.4 * cm
+    photo_y = page_h - photo_size - 0.35 * cm
+    if item_photo_bytes:
+        try:
+            c.saveState()
+            c.rect(photo_x - 0.05 * cm, photo_y - 0.05 * cm,
+                   photo_size + 0.1 * cm, photo_size + 0.1 * cm,
+                   stroke=1, fill=0)
+            c.drawImage(ImageReader(BytesIO(item_photo_bytes)),
+                        photo_x, photo_y, width=photo_size, height=photo_size,
+                        preserveAspectRatio=True, anchor="c", mask="auto")
+            c.restoreState()
+            # Trim available text width so the description doesn't overlap
+            text_w = photo_x - text_x - 0.3 * cm
+        except Exception:
+            pass
+
     c.setFillColor(primary)
     c.setFont("Helvetica-Bold", 18)
     c.drawString(text_x, page_h - 3.0 * cm, contract_number)
@@ -2415,7 +2436,7 @@ def _draw_item_label_on_canvas(c, page_w, page_h, contract: dict, item: dict, cl
     c.drawCentredString(qr_x + qr_size / 2, 0.55 * cm, "Scan for details · Skaneia atu haree")
 
 
-def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None) -> bytes:
+def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None, item_photo_bytes: bytes | None = None) -> bytes:
     """Single-item printable label — A6 landscape sticker."""
     from reportlab.lib.pagesizes import A6, landscape
     from reportlab.pdfgen import canvas as _canvas
@@ -2424,30 +2445,34 @@ def build_item_label_pdf(contract: dict, item: dict, client: dict | None = None)
     page = landscape(A6)
     c = _canvas.Canvas(buf, pagesize=page)
     page_w, page_h = page
-    _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client)
+    _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client, item_photo_bytes)
     c.showPage()
     c.save()
     return buf.getvalue()
 
 
 def build_bulk_labels_pdf(
-    rows: list[tuple[dict, dict, dict | None]],
+    rows: list[tuple],
     layout: str = "single",
 ) -> bytes:
     """Multi-page label PDF.
 
-    Layouts:
-      • `single` (default) — one A6-landscape label per page (sticker paper).
-      • `4up` — 2 × 2 grid on A4 portrait so staff can print on standard
-        printer paper and cut the four labels apart.
+    Rows may be either:
+      • `(contract, item, client)` (legacy 3-tuple), OR
+      • `(contract, item, client, item_photo_bytes)` (4-tuple with thumbnail).
     """
     from reportlab.lib.pagesizes import A4, A6, landscape
     from reportlab.pdfgen import canvas as _canvas
 
+    def _unpack(row):
+        if len(row) >= 4:
+            return row[0], row[1], row[2], row[3]
+        return row[0], row[1], row[2], None
+
     buf = BytesIO()
 
     if layout == "4up":
-        page = A4  # portrait: 21.0 × 29.7 cm
+        page = A4
         page_w, page_h = page
         c = _canvas.Canvas(buf, pagesize=page)
 
@@ -2459,37 +2484,28 @@ def build_bulk_labels_pdf(
             c.save()
             return buf.getvalue()
 
-        # A4 portrait split into 2 columns × 2 rows. Each cell renders as if it
-        # were an A6-landscape page (14.85 × 10.5 cm) so we get an exact match
-        # to the single-label layout — same helper, translated into place.
         cell_w = page_w / 2
         cell_h = page_h / 2
-        positions = [
-            (0, cell_h),      # top-left
-            (cell_w, cell_h), # top-right
-            (0, 0),           # bottom-left
-            (cell_w, 0),      # bottom-right
-        ]
-        for i, (contract, item, client) in enumerate(rows):
+        positions = [(0, cell_h), (cell_w, cell_h), (0, 0), (cell_w, 0)]
+        for i, row in enumerate(rows):
+            contract, item, client, photo = _unpack(row)
             slot = i % 4
             if i > 0 and slot == 0:
                 c.showPage()
             x0, y0 = positions[slot]
             c.saveState()
             c.translate(x0, y0)
-            # Cut-line so staff know where to slice
             c.setStrokeColor("#94A3B8")
             c.setDash(2, 2)
             c.setLineWidth(0.3)
             c.rect(0, 0, cell_w, cell_h, stroke=1, fill=0)
-            c.setDash()  # reset
-            _draw_item_label_on_canvas(c, cell_w, cell_h, contract, item, client)
+            c.setDash()
+            _draw_item_label_on_canvas(c, cell_w, cell_h, contract, item, client, photo)
             c.restoreState()
         c.showPage()
         c.save()
         return buf.getvalue()
 
-    # Default single-label-per-page layout
     page = landscape(A6)
     page_w, page_h = page
     c = _canvas.Canvas(buf, pagesize=page)
@@ -2500,8 +2516,9 @@ def build_bulk_labels_pdf(
         c.drawCentredString(page_w / 2, page_h / 2, "No items to label · La iha sasán atu etiketa")
         c.showPage()
     else:
-        for contract, item, client in rows:
-            _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client)
+        for row in rows:
+            contract, item, client, photo = _unpack(row)
+            _draw_item_label_on_canvas(c, page_w, page_h, contract, item, client, photo)
             c.showPage()
 
     c.save()

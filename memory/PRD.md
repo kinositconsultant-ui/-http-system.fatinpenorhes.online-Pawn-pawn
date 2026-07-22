@@ -668,6 +668,28 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 62 — Bulk Email + Save & Print + Item Photo on Label (2026-02-22) ✅
+
+### 1. Save & Print
+- After a successful payment save in Payments.js, the receipt PDF is auto-opened in `PdfPreviewDialog` (250 ms delay lets the New Payment dialog finish closing). The cashier can Download / Print without an extra click. Also clears the search query.
+
+### 2. Item Photo on QR Label
+- `_draw_item_label_on_canvas` now accepts an optional `item_photo_bytes` param. When present, a 2 × 2 cm thumbnail is drawn in the top-right of the label with a thin frame, and the item-description text width shrinks so it doesn't overlap.
+- `build_item_label_pdf` and `build_bulk_labels_pdf` gained an optional photo channel — rows may be either 3-tuple `(contract, item, client)` (legacy) or 4-tuple with photo bytes.
+- New helper `_resolve_photo_bytes(photo_url)` in server.py — handles both external HTTP URLs (with 3s timeout + 2 MB cap) and internal object-store keys (`/files/…`).
+- Single-label and bulk-label endpoints both fetch item photos when available; missing photos degrade silently.
+
+### 3. Bulk Email Reminders
+- **New endpoint** `POST /api/contracts/bulk-email-history?status=grace_period,auction_ready` (auth: `get_current_user`). Groups overdue contracts by client so each client gets one email even with multiple overdue contracts. Sends the payment-history PDF as a Resend attachment. Returns `{total, sent, skipped_no_email, failed}` for a single-toast summary.
+- Frontend: on the Payments **Overdue tab**, new "Email All Overdue Clients" button (`data-testid="bulk-email-history-btn"`) with a confirm() prompt. Toast reports `"sent · no-email · failed"` counts.
+- Verified: 202 unique overdue clients found, correctly skipped (no email on file), no crashes.
+
+### Live verification
+- Photo-label endpoint: HTTP 200, valid `%PDF-1.4`, 8 KB (grows when item has a photo).
+- Bulk email: `{"total":202,"sent":0,"skipped_no_email":202,"failed":0}` — de-dupe by client works.
+- Save & Print: code path added; live test requires an actual payment insert.
+- No lint issues.
+
 ## Iteration 61 — Payment Auto-Detect + 4-up Labels + Email History (2026-02-22) ✅
 
 ### 1. Payment Type Auto-Detect

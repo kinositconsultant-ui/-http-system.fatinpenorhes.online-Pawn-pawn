@@ -603,6 +603,36 @@ async def reactivate_contract(cid: str, payload: ReactivateIn, user: dict = Depe
     return await _recompute_contract_status(refreshed)
 
 
+def _resolve_photo_bytes(photo_url: str) -> bytes | None:
+    """Fetch bytes for an image referenced by a stored `photo_url`.
+
+    Handles both external http(s) URLs (redirect avoidance — return None so
+    the label falls back gracefully) and internal object-store keys
+    (`/files/…`, `/api/files/…`). Returns None on any failure.
+    """
+    if not photo_url:
+        return None
+    photo = str(photo_url).strip()
+    if photo.lower().startswith(("http://", "https://")):
+        try:
+            import urllib.request  # noqa: PLC0415
+            with urllib.request.urlopen(photo, timeout=3) as resp:
+                return resp.read(2_000_000)  # cap at 2 MB
+        except Exception:
+            return None
+    storage_key = photo
+    for prefix in ("/api/files/", "/files/", "/api/"):
+        if storage_key.startswith(prefix):
+            storage_key = storage_key[len(prefix):]
+            break
+    storage_key = storage_key.lstrip("/")
+    try:
+        data, _ct = objstore.get_object(storage_key)
+        return data
+    except Exception:
+        return None
+
+
 @api.get("/contracts/labels-pdf")
 async def contracts_bulk_labels_pdf(
     ids: str = "",
@@ -646,11 +676,12 @@ async def contracts_bulk_labels_pdf(
             d["id"]: d
             for d in await db.clients.find({"id": {"$in": client_ids}}, {"_id": 0}).to_list(500)
         } if client_ids else {}
-        rows: list[tuple[dict, dict, dict | None]] = []
+        rows: list[tuple] = []
         for c in contracts:
             item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
             client_doc = client_docs.get(c.get("client_id"))
-            rows.append((c, item, client_doc))
+            photo = _resolve_photo_bytes(item.get("photo_url", "")) if item else None
+            rows.append((c, item, client_doc, photo))
         pdf_bytes = build_bulk_labels_pdf(rows, layout=layout)
 
     return StreamingResponse(
@@ -718,7 +749,8 @@ async def contract_label_pdf(cid: str, _: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Contract not found")
     item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
     client_doc = await db.clients.find_one({"id": c.get("client_id")}, {"_id": 0}) or {}
-    pdf_bytes = build_item_label_pdf(c, item, client_doc)
+    photo_bytes = _resolve_photo_bytes(item.get("photo_url", "")) if item else None
+    pdf_bytes = build_item_label_pdf(c, item, client_doc, item_photo_bytes=photo_bytes)
     safe_no = str(c.get("contract_number", "label")).replace("/", "-")
     return StreamingResponse(
         BytesIO(pdf_bytes),
@@ -815,6 +847,93 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     })
     doc.pop("_id", None)
     return {"payment": doc, "contract": updated}
+
+
+@api.post("/contracts/bulk-email-history")
+async def contracts_bulk_email_history(
+    status: str = "grace_period,auction_ready",
+    user: dict = Depends(get_current_user),
+):
+    """Bulk email payment-history PDFs to every client with a matching contract.
+
+    Accepts `?status=grace_period,auction_ready` (default = overdue window).
+    For each contract:
+      1. Look up the client — skip if no email on file.
+      2. Skip duplicates when the same client has multiple overdue contracts
+         (we send the FIRST match; a future enhancement can attach all).
+      3. Send the PDF via Resend. Continue past individual failures.
+    Returns a summary `{sent, skipped_no_email, failed, total}` so the
+    caller can toast a single result.
+    """
+    from pdf_utils import build_payment_history_pdf  # noqa: PLC0415
+    import email_svc  # noqa: PLC0415
+
+    statuses = [s.strip() for s in status.split(",") if s.strip()]
+    if not statuses:
+        statuses = ["grace_period", "auction_ready"]
+
+    contracts = await db.contracts.find(
+        {"status": {"$in": statuses}}, {"_id": 0}
+    ).to_list(500)
+    if not contracts:
+        return {"total": 0, "sent": 0, "skipped_no_email": 0, "failed": 0}
+
+    # De-dupe: one email per client (first matching contract wins)
+    seen_clients: set[str] = set()
+    to_send: list[dict] = []
+    for c in contracts:
+        cid = c.get("client_id")
+        if not cid or cid in seen_clients:
+            continue
+        seen_clients.add(cid)
+        to_send.append(c)
+
+    client_ids = list(seen_clients)
+    client_docs = {
+        d["id"]: d
+        for d in await db.clients.find({"id": {"$in": client_ids}}, {"_id": 0}).to_list(500)
+    }
+
+    sent = failed = skipped = 0
+    for c in to_send:
+        client_doc = client_docs.get(c.get("client_id")) or {}
+        email = (client_doc.get("email") or "").strip()
+        if not email:
+            skipped += 1
+            continue
+        try:
+            c_full = await _recompute_contract_status(c)
+            item = await _fetch_item(c_full.get("item_type"), c_full.get("item_id")) or {}
+            payments = await db.payments.find(
+                {"contract_id": c_full["id"]}, {"_id": 0}
+            ).to_list(500)
+            pdf_bytes = build_payment_history_pdf(c_full, client_doc, item, payments)
+            first_name = (client_doc.get("full_name") or "Client").split(" ")[0]
+            subject = f"{email_svc.BRAND} — Overdue Reminder · {c_full.get('contract_number','')}"
+            html = f"""
+<!doctype html><html><body style='font-family: Arial, sans-serif; color:#0F1B3A;'>
+  <p>Hi {first_name},</p>
+  <p>Your contract <b>{c_full.get('contract_number','')}</b> is currently past due.
+     Please find the full payment history attached and let us know if you'd like
+     to pay or extend.</p>
+  <p>WhatsApp: +670 78372678</p>
+  {email_svc.FOOTER_HTML}
+</body></html>"""
+            safe_no = str(c_full.get("contract_number", "history")).replace("/", "-")
+            r = await email_svc.send_email(
+                email, subject, html,
+                attachments=[{"filename": f"{safe_no}-history.pdf", "content": pdf_bytes}],
+            )
+            if r.get("status") in ("sent", "mocked"):
+                sent += 1
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+    await write_audit(user, "bulk_email_history", "contract", "-", {
+        "total": len(to_send), "sent": sent, "skipped": skipped, "failed": failed,
+    })
+    return {"total": len(to_send), "sent": sent, "skipped_no_email": skipped, "failed": failed}
 
 
 @api.post("/contracts/{cid}/email-history")

@@ -115,11 +115,25 @@ export default function Payments() {
 
   const submit = async () => {
     try {
-      await api.post("/payments", { ...form, amount: Number(form.amount) });
+      const res = await api.post("/payments", { ...form, amount: Number(form.amount) });
       toast.success("Payment recorded");
       setOpen(false);
       setForm(blank);
+      setSearchQuery("");
       load();
+      // Save & Print — auto-open the receipt PDF so the cashier can hand it
+      // to the customer without an extra click. Small delay lets the dialog
+      // finish closing first.
+      if (res?.data?.id && res.data?.receipt_number) {
+        setTimeout(() => {
+          setPdfPreview({
+            open: true,
+            url: `${API_BASE}/payments/${res.data.id}/pdf`,
+            title: `Receipt · ${res.data.receipt_number}`,
+            filename: `${res.data.receipt_number}.pdf`,
+          });
+        }, 250);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     }
@@ -504,6 +518,27 @@ export default function Payments() {
           <PaymentsTable rows={regularPayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="overdue">
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm("Send payment-history email to every overdue client with an email on file?")) return;
+                try {
+                  const r = await api.post("/contracts/bulk-email-history");
+                  const d = r.data || {};
+                  toast.success(`Bulk email: ${d.sent} sent · ${d.skipped_no_email} no email · ${d.failed} failed`);
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Bulk email failed");
+                }
+              }}
+              data-testid="bulk-email-history-btn"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#C17767] text-[#C17767] hover:bg-[#C17767] hover:text-white transition text-xs font-medium"
+              title="Email the payment history PDF to every overdue client with an email on file"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Email All Overdue Clients
+            </button>
+          </div>
           <PaymentsTable rows={overduePayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="disbursements">
