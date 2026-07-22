@@ -198,7 +198,7 @@ async def reminders_status(_: dict = Depends(require_admin)):
         "last_run_at": s.get("reminders_last_run_at"),
         "last_run_summary": s.get("reminders_last_run_summary", {}),
         "next_run_at": info.get("next_reminders_run_at"),
-        "reminder_days": [7, 9],
+        "reminder_days": [1, 7, 9],
         "local_time": "09:00 Timor (UTC+9)",
     }
 

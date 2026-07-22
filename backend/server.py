@@ -1556,7 +1556,11 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
         await _recompute_contract_status(c)
 
     year_start = f"{date.today().year}-01-01"
+    thirty_days_ago = (date.today() - timedelta(days=30)).isoformat()
     payments = await db.payments.find(
+        {"date": {"$gte": thirty_days_ago}}, {"_id": 0}
+    ).to_list(5000)
+    payments_ytd = await db.payments.find(
         {"date": {"$gte": year_start}}, {"_id": 0}
     ).to_list(5000)
 
@@ -1566,6 +1570,8 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
     grace_count = 0
     auction_ready_count = 0
     per_loan: list[dict] = []
+    # Track per-client exposure so the frontend can chart concentration risk.
+    client_principal: dict[str, float] = {}
 
     for c in contracts:
         status = c.get("status")
@@ -1598,6 +1604,9 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
                 "days_overdue": int(c.get("days_overdue", 0) or 0),
                 "due_date": c.get("due_date"),
             })
+            cid = c.get("client_id")
+            if cid:
+                client_principal[cid] = client_principal.get(cid, 0.0) + prin
 
     # Enrich per_loan rows with client_name (batched lookup)
     cids = list({r["client_id"] for r in per_loan if r.get("client_id")})
@@ -1611,43 +1620,89 @@ async def business_metrics(_: dict = Depends(require_module("dashboard"))):
     per_loan.sort(key=lambda r: r["principal_remaining"], reverse=True)
 
     interest_earned_ytd = sum(
+        float(p.get("interest_paid", 0) or 0) for p in payments_ytd
+    )
+    interest_earned_30d = sum(
         float(p.get("interest_paid", 0) or 0) for p in payments
     )
+
+    # Client concentration — top 10 clients by outstanding principal, plus
+    # a synthetic "Others" bucket so the pie/bar always sums to 100%.
+    top_clients: list[dict] = []
+    if client_principal:
+        ordered = sorted(client_principal.items(), key=lambda kv: kv[1], reverse=True)
+        top_10 = ordered[:10]
+        others_sum = sum(v for _, v in ordered[10:])
+        for cid, amt in top_10:
+            top_clients.append({
+                "client_id": cid,
+                "client_name": id_to_name.get(cid, ""),
+                "principal": round(amt, 2),
+                "percent": round(amt / total_loaned_out * 100.0, 1) if total_loaned_out else 0.0,
+            })
+        if others_sum > 0:
+            top_clients.append({
+                "client_id": None,
+                "client_name": "Others",
+                "principal": round(others_sum, 2),
+                "percent": round(others_sum / total_loaned_out * 100.0, 1) if total_loaned_out else 0.0,
+            })
 
     return {
         "total_loaned_out": round(total_loaned_out, 2),
         "interest_earned_ytd": round(interest_earned_ytd, 2),
+        "interest_earned_30d": round(interest_earned_30d, 2),
         "projected_interest_30d": round(projected_30d, 2),
         "potential_loss": round(potential_loss, 2),
         "grace_period_count": grace_count,
         "auction_ready_count": auction_ready_count,
         "per_loan": per_loan[:50],
+        "client_concentration": top_clients,
     }
 
 
 @api.get("/business/cashflow-forecast")
 async def business_cashflow_forecast(_: dict = Depends(require_module("dashboard"))):
-    """30-day cash-flow forecast.
+    """60-day cash-flow view.
 
-    For every active/overdue contract that has a due_date within the next 30
-    days, credit the expected inflow (current_principal + accrued interest)
-    into that day's bucket. Owner sees WHICH days ahead will be busy.
+    Left half (past 30 days) — actual inflows aggregated from `payments`
+    (excluding disbursements which are outflows, not inflows).
+    Right half (next 30 days) — forecast built from active/overdue contract
+    due_dates + accrued interest, same as before.
+
+    A single time-series is returned so the frontend can render one chart
+    with two colored series: `actual_in` (blue) and `expected_in` (navy).
     """
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
     for c in contracts:
         await _recompute_contract_status(c)
 
     today = date.today()
+    horizon_start = today - timedelta(days=30)
+    horizon_end = today + timedelta(days=29)
+
     buckets: dict[str, dict] = {}
-    for i in range(0, 30):
+    for i in range(-30, 30):
         d = today + timedelta(days=i)
         buckets[d.isoformat()] = {
             "date": d.isoformat(),
+            "actual_in": 0.0,
             "expected_in": 0.0,
             "contract_count": 0,
         }
 
-    horizon_end = today + timedelta(days=29)
+    # Actual inflows from payments (last 30 days). Exclude disbursements.
+    payments = await db.payments.find(
+        {"date": {"$gte": horizon_start.isoformat()}}, {"_id": 0}
+    ).to_list(5000)
+    for p in payments:
+        if p.get("type") == "disbursement":
+            continue
+        d = p.get("date", "")[:10]
+        if d in buckets:
+            buckets[d]["actual_in"] += float(p.get("amount", 0) or 0)
+
+    # Forecast inflows for the next 30 days.
     for c in contracts:
         if c.get("status") not in ("active", "overdue"):
             continue
@@ -1662,17 +1717,25 @@ async def business_cashflow_forecast(_: dict = Depends(require_module("dashboard
             continue
         prin = float(c.get("principal_remaining", 0) or 0)
         io = float(c.get("interest_outstanding", 0) or 0)
-        expected = prin + io
         b = buckets[due_d.isoformat()]
-        b["expected_in"] += expected
+        b["expected_in"] += prin + io
         b["contract_count"] += 1
 
     days = [
-        {**v, "expected_in": round(v["expected_in"], 2)}
+        {
+            **v,
+            "actual_in": round(v["actual_in"], 2),
+            "expected_in": round(v["expected_in"], 2),
+        }
         for v in buckets.values()
     ]
-    total = sum(d["expected_in"] for d in days)
-    return {"days": days, "total_expected_in": round(total, 2)}
+    total_forecast = sum(d["expected_in"] for d in days)
+    total_actual = sum(d["actual_in"] for d in days)
+    return {
+        "days": days,
+        "total_expected_in": round(total_forecast, 2),
+        "total_actual_in": round(total_actual, 2),
+    }
 
 
 

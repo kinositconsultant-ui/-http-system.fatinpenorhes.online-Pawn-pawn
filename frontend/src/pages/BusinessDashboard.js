@@ -11,6 +11,7 @@ import {
   Gavel,
   DollarSign,
   Calendar,
+  PieChart as PieIcon,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -20,6 +21,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Legend,
+  Cell,
 } from "recharts";
 
 const money = (n) =>
@@ -28,15 +31,35 @@ const money = (n) =>
     maximumFractionDigits: 2,
   })}`;
 
+// Distinct-but-related navy/teal/coral palette so the concentration bars
+// look intentional rather than random. Cycled per top-N client.
+const CONCENTRATION_PALETTE = [
+  "#1B2D5C", "#243E7B", "#3B5FA5", "#4C7F62", "#7AA98C",
+  "#C17767", "#D8967B", "#B45309", "#7C3AED", "#0F766E",
+];
+
 export default function BusinessDashboard() {
   const { t } = useLang();
   const [metrics, setMetrics] = useState(null);
   const [cashflow, setCashflow] = useState(null);
+  const [interestRange, setInterestRange] = useState("ytd"); // "ytd" | "30d"
 
   useEffect(() => {
     api.get("/business/metrics").then((r) => setMetrics(r.data));
     api.get("/business/cashflow-forecast").then((r) => setCashflow(r.data));
   }, []);
+
+  const interestValue = metrics
+    ? interestRange === "ytd"
+      ? metrics.interest_earned_ytd
+      : metrics.interest_earned_30d
+    : null;
+  const interestLabel = interestRange === "ytd"
+    ? (t("business_interest_ytd") || "Interest Earned YTD")
+    : "Interest · Last 30 days";
+  const interestSub = interestRange === "ytd"
+    ? (t("business_interest_ytd_sub") || "Realized interest — this year")
+    : "Rolling 30-day window";
 
   const kpis = [
     {
@@ -50,12 +73,13 @@ export default function BusinessDashboard() {
     },
     {
       key: "earned",
-      label: t("business_interest_ytd") || "Interest Earned YTD",
-      sub: t("business_interest_ytd_sub") || "Realized interest — this year",
-      value: metrics ? money(metrics.interest_earned_ytd) : "—",
+      label: interestLabel,
+      sub: interestSub,
+      value: interestValue !== null ? money(interestValue) : "—",
       Icon: DollarSign,
       tone: "text-[#4C7F62]",
       to: "/reports?tab=payments",
+      trendToggle: true,
     },
     {
       key: "proj",
@@ -114,13 +138,8 @@ export default function BusinessDashboard() {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {kpis.map((c) => (
-          <Link
-            key={c.key}
-            to={c.to}
-            data-testid={`biz-kpi-${c.key}`}
-            className="p-5 border border-stone-200 rounded-lg bg-white block transition hover:border-[#1B2D5C] hover:shadow-sm"
-          >
+        {kpis.map((c) => {
+          const inner = (
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="text-eyebrow">{c.label}</div>
@@ -128,11 +147,62 @@ export default function BusinessDashboard() {
                   {c.value}
                 </div>
                 <div className="text-[11px] text-stone-500 mt-2">{c.sub}</div>
+                {c.trendToggle && (
+                  <div
+                    className="mt-3 inline-flex items-center gap-0.5 p-0.5 bg-stone-100 rounded-md text-[11px]"
+                    onClick={(e) => e.preventDefault()}
+                    data-testid="interest-range-toggle"
+                  >
+                    {[
+                      { k: "ytd", l: "YTD" },
+                      { k: "30d", l: "30d" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.k}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setInterestRange(opt.k);
+                        }}
+                        data-testid={`interest-range-${opt.k}`}
+                        className={`px-2 py-0.5 rounded transition ${
+                          interestRange === opt.k
+                            ? "bg-[#1B2D5C] text-white"
+                            : "text-stone-600 hover:text-stone-900"
+                        }`}
+                      >
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <c.Icon className={`w-6 h-6 shrink-0 ${c.tone}`} />
             </div>
-          </Link>
-        ))}
+          );
+          if (c.trendToggle) {
+            // Interest card is NOT a link — clicks inside pick the range.
+            return (
+              <div
+                key={c.key}
+                data-testid={`biz-kpi-${c.key}`}
+                className="p-5 border border-stone-200 rounded-lg bg-white"
+              >
+                {inner}
+              </div>
+            );
+          }
+          return (
+            <Link
+              key={c.key}
+              to={c.to}
+              data-testid={`biz-kpi-${c.key}`}
+              className="p-5 border border-stone-200 rounded-lg bg-white block transition hover:border-[#1B2D5C] hover:shadow-sm"
+            >
+              {inner}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Grace period + auction-ready status */}
@@ -158,21 +228,24 @@ export default function BusinessDashboard() {
         ))}
       </div>
 
-      {/* Cash-flow forecast chart */}
+      {/* Cash-flow: past actual vs future forecast */}
       <Card className="p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="biz-cashflow">
         <div className="flex items-end justify-between mb-4 flex-wrap gap-2">
           <div>
-            <div className="text-eyebrow">Cash Flow Forecast · 30 Days</div>
+            <div className="text-eyebrow">Cash Flow · 30d Actual vs 30d Forecast</div>
             <h2 className="font-display text-lg md:text-xl mt-1">
+              {cashflow ? money(cashflow.total_actual_in) : "—"}
+              <span className="text-sm text-stone-500 font-normal ml-2">actual (last 30d)</span>
+              <span className="mx-2 text-stone-300">·</span>
               {cashflow ? money(cashflow.total_expected_in) : "—"}
-              <span className="text-sm text-stone-500 font-normal ml-2">expected inflow</span>
+              <span className="text-sm text-stone-500 font-normal ml-2">expected (next 30d)</span>
             </h2>
           </div>
           <div className="flex items-center gap-1 text-xs text-stone-500">
-            <Calendar className="w-3.5 h-3.5" /> Based on due dates of active/overdue contracts
+            <Calendar className="w-3.5 h-3.5" /> Overlay of receipted payments vs projected due-date inflows
           </div>
         </div>
-        <div className="h-64" data-testid="biz-cashflow-chart">
+        <div className="h-72" data-testid="biz-cashflow-chart">
           {cashflow?.days && (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashflow.days} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
@@ -181,7 +254,7 @@ export default function BusinessDashboard() {
                   dataKey="date"
                   tickFormatter={(d) => d.slice(5)}
                   tick={{ fontSize: 10, fill: "#78716C" }}
-                  interval={2}
+                  interval={4}
                 />
                 <YAxis
                   tick={{ fontSize: 10, fill: "#78716C" }}
@@ -189,12 +262,75 @@ export default function BusinessDashboard() {
                 />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 6, borderColor: "#D6D3D1" }}
-                  formatter={(v) => [money(v), "Expected"]}
-                  labelFormatter={(l) => `Due ${l}`}
+                  formatter={(v, name) => [money(v), name === "actual_in" ? "Actual" : "Forecast"]}
+                  labelFormatter={(l) => `Date ${l}`}
                 />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  formatter={(v) => (v === "actual_in" ? "Actual (past 30d)" : "Forecast (next 30d)")}
+                />
+                <Bar dataKey="actual_in" fill="#4C7F62" radius={[3, 3, 0, 0]} />
                 <Bar dataKey="expected_in" fill="#1B2D5C" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
+        </div>
+      </Card>
+
+      {/* Client concentration — who holds the biggest slice of the book? */}
+      <Card className="p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="biz-concentration">
+        <div className="flex items-end justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <div className="text-eyebrow">Client Concentration Risk</div>
+            <h2 className="font-display text-lg md:text-xl mt-1">
+              Top 10 clients · <span className="text-sm text-stone-500 font-normal">by outstanding principal</span>
+            </h2>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-stone-500">
+            <PieIcon className="w-3.5 h-3.5" /> Higher concentration = higher default risk in a few borrowers
+          </div>
+        </div>
+        <div className="h-72" data-testid="biz-concentration-chart">
+          {metrics?.client_concentration?.length ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={metrics.client_concentration}
+                layout="vertical"
+                margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 10, fill: "#78716C" }}
+                  tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="client_name"
+                  tick={{ fontSize: 11, fill: "#44403C" }}
+                  width={150}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 6, borderColor: "#D6D3D1" }}
+                  formatter={(v, _, entry) => [
+                    `${money(v)} (${entry.payload.percent}%)`,
+                    "Principal",
+                  ]}
+                />
+                <Bar dataKey="principal" radius={[0, 3, 3, 0]}>
+                  {metrics.client_concentration.map((row, i) => (
+                    <Cell
+                      key={i}
+                      fill={row.client_name === "Others" ? "#A8A29E" : CONCENTRATION_PALETTE[i % CONCENTRATION_PALETTE.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-stone-400 text-sm">
+              No active loans to chart yet.
+            </div>
           )}
         </div>
       </Card>

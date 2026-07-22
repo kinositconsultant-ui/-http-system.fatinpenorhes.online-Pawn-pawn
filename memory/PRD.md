@@ -513,6 +513,14 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 51 — Business Dashboard v2 (Trend Toggle + Concentration + Actual-vs-Forecast + Reminder Preview) (2026-02-17) ✅
+1. **Historical Trend Toggle on Interest KPI** — new YTD / 30d pill switch inside the "Interest Earned" card. Backend `/api/business/metrics` now returns both `interest_earned_ytd` and `interest_earned_30d`; frontend flips the value + label on click without a page reload.
+2. **Client Concentration Chart** — new horizontal-bar recharts chart at the bottom of `/business` showing the top 10 clients by outstanding principal, each in a distinct navy/teal/coral hue, plus a grey **"Others"** bucket so the chart always sums to 100%. Backend adds `client_concentration` array (name / principal / percent) to the metrics endpoint.
+3. **Cash-Flow Actual vs Forecast** — the cash-flow chart now spans **60 days** (past 30 + next 30). Green bars = actual receipted payments over the past 30 days (from `payments` collection, disbursements excluded), navy bars = projected inflows for the next 30 days. Legend + tooltip differentiate the two. Owners can now judge whether the forecast has been trustworthy historically.
+4. **Day-1 Reminder Template Preview** — new "Reminder templates" section in Settings → Daily Overdue Reminders that shows the day-1 (amber), day-7 (orange), day-9 (rose) message body with a Tetum/English toggle. `reminder_days` in `/whatsapp/reminders/status` now returns `[1, 7, 9]` and the Settings copy reads "day 1, day 7 or day 9" so operators aren't surprised by the new day-1 send.
+
+Bonus: `client_concentration` uses a batched clients lookup (no N+1 queries).
+
 ## Iteration 50 — Business Dashboard + Cash Flow Forecast + Grace-Period Alerts (2026-02-17) ✅
 Testing agent verified: **16/16 backend pytest, 100% frontend flows pass, zero regressions**.
 

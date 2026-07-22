@@ -579,7 +579,7 @@ function RemindersCard({ s, onChange }) {
           <div>
             <h2 className="font-display text-xl">Daily Overdue Reminders</h2>
             <p className="text-xs text-stone-500 mt-0.5">
-              Auto-send WhatsApp reminders to clients whose contracts are day 7 or day 9 overdue — daily at{" "}
+              Auto-send WhatsApp reminders to clients whose contracts are day 1, day 7 or day 9 overdue — daily at{" "}
               <span className="font-semibold text-stone-700">{status?.local_time || "09:00 Timor"}</span>.
             </p>
           </div>
@@ -651,12 +651,134 @@ function RemindersCard({ s, onChange }) {
       </div>
 
       <p className="text-[11px] text-stone-500">
-        Reminder days: <strong>{(status?.reminder_days || [7, 9]).join(" &amp; ")}</strong> after due date.
+        Reminder days: <strong>{(status?.reminder_days || [1, 7, 9]).join(", ")}</strong> after due date.
         Duplicate prevention uses <code className="px-1 rounded bg-stone-100">reminder_log</code> — the same client won&apos;t be messaged twice per cycle.
       </p>
+
+      <ReminderTemplatePreview />
     </Card>
   );
 }
+
+/**
+ * Small three-panel preview of the day-1 (grace period start), day-7 (warning)
+ * and day-9 (final) reminder messages so admins can eyeball tone / wording
+ * without having to trigger a real send. Content mirrors what `reminders.py`
+ * would render for a hypothetical contract on the current data.
+ */
+function ReminderTemplatePreview() {
+  const [lang, setLang] = useState("tet"); // "en" | "tet"
+  const templates = REMINDER_TEMPLATES[lang];
+  return (
+    <div className="mt-4 pt-4 border-t border-stone-200" data-testid="reminder-templates-preview">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <div className="text-xs uppercase tracking-wider font-semibold text-stone-700">
+            Reminder templates
+          </div>
+          <div className="text-[11px] text-stone-500">
+            Preview the messages that go out on days 1, 7 and 9 after due date.
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-0.5 p-0.5 bg-stone-100 rounded-md text-[11px]">
+          {[
+            { k: "tet", l: "Tetum" },
+            { k: "en", l: "English" },
+          ].map((opt) => (
+            <button
+              key={opt.k}
+              type="button"
+              onClick={() => setLang(opt.k)}
+              data-testid={`reminder-preview-lang-${opt.k}`}
+              className={`px-2 py-0.5 rounded transition ${
+                lang === opt.k ? "bg-[#1B2D5C] text-white" : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              {opt.l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {templates.map((tpl) => (
+          <div
+            key={tpl.day}
+            data-testid={`reminder-preview-day-${tpl.day}`}
+            className={`p-3 rounded-md border ${tpl.borderClass} ${tpl.bgClass}`}
+          >
+            <div className={`text-[10px] uppercase tracking-wider font-semibold ${tpl.textClass}`}>
+              Day {tpl.day} · {tpl.label}
+            </div>
+            <p className="text-xs mt-2 text-stone-700 whitespace-pre-line leading-snug">
+              {tpl.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const REMINDER_TEMPLATES = {
+  tet: [
+    {
+      day: 1,
+      label: "Períodu Toleránsia komesa",
+      borderClass: "border-amber-200",
+      bgClass: "bg-amber-50",
+      textClass: "text-amber-800",
+      body:
+        "Fatin Penhores: Kontratu {contract_number} atrasa hela loron 1. Ita iha períodu toleránsia loron 10. Favor selu antes tanba se laiha, sasán bele tama iha leilaun. Obrigadu.",
+    },
+    {
+      day: 7,
+      label: "Aviso primeiru",
+      borderClass: "border-orange-200",
+      bgClass: "bg-orange-50",
+      textClass: "text-orange-800",
+      body:
+        "Fatin Penhores: Kontratu {contract_number} atrasa loron 7. Ita iha loron 3 deit iha períodu toleránsia. Kontaktu ami hodi selu ka rekonvida kontratu. Obrigadu.",
+    },
+    {
+      day: 9,
+      label: "Aviso final",
+      borderClass: "border-rose-200",
+      bgClass: "bg-rose-50",
+      textClass: "text-rose-800",
+      body:
+        "Fatin Penhores: URGENTE — Kontratu {contract_number} sei tama iha leilaun aban. Total Selu: ${amount_due}. Selu ohin hodi hasai sasán husi leilaun. Obrigadu.",
+    },
+  ],
+  en: [
+    {
+      day: 1,
+      label: "Grace period starts",
+      borderClass: "border-amber-200",
+      bgClass: "bg-amber-50",
+      textClass: "text-amber-800",
+      body:
+        "Fatin Penhores: Contract {contract_number} is 1 day past due. You have a 10-day grace period. Please pay soon — after that the item may go to auction. Thank you.",
+    },
+    {
+      day: 7,
+      label: "First warning",
+      borderClass: "border-orange-200",
+      bgClass: "bg-orange-50",
+      textClass: "text-orange-800",
+      body:
+        "Fatin Penhores: Contract {contract_number} is 7 days past due. Only 3 days of grace period remaining. Contact us to pay or renew the contract. Thank you.",
+    },
+    {
+      day: 9,
+      label: "Final warning",
+      borderClass: "border-rose-200",
+      bgClass: "bg-rose-50",
+      textClass: "text-rose-800",
+      body:
+        "Fatin Penhores: URGENT — Contract {contract_number} moves to auction tomorrow. Total Due: ${amount_due}. Pay today to recover the item. Thank you.",
+    },
+  ],
+};
 
 function StatTile({ label, value, testid, accent = "text-stone-800" }) {
   return (
