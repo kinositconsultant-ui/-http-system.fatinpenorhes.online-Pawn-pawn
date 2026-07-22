@@ -80,7 +80,7 @@ export default function BusinessDashboard() {
   const statusCards = [
     {
       key: "grace",
-      label: t("grace_period") || "Grace Period · Masa Tenggang",
+      label: t("grace_period") || "Grace Period",
       hint: t("grace_period_hint") || "1–10 days past due",
       value: metrics?.grace_period_count ?? "—",
       Icon: Clock,
@@ -90,7 +90,7 @@ export default function BusinessDashboard() {
     },
     {
       key: "auction_ready",
-      label: t("ready_for_auction") || "Ready for Auction · Siap Lelang",
+      label: t("ready_for_auction") || "Ready for Auction",
       hint: t("ready_for_auction_hint") || ">10 days past due",
       value: metrics?.auction_ready_count ?? "—",
       Icon: Gavel,

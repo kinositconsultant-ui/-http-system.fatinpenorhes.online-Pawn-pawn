@@ -513,6 +513,35 @@ This is a big batch of P0/P2 backlog items shipped together. Broken down:
 - WhatsApp creds: set via Settings → WhatsApp Configuration. Empty = MOCKED.
 - Resend: `RESEND_API_KEY=""` in `/app/backend/.env` — set to a real `re_...` key from https://resend.com/api-keys to enable actual email delivery. Empty = MOCKED.
 
+## Iteration 50 — Business Dashboard + Cash Flow Forecast + Grace-Period Alerts (2026-02-17) ✅
+Testing agent verified: **16/16 backend pytest, 100% frontend flows pass, zero regressions**.
+
+### Backend
+- New endpoint `GET /api/business/metrics` — owner-focused metrics:
+  - `total_loaned_out` (Σ current_principal of active/overdue/auction_ready)
+  - `interest_earned_ytd` (Σ interest_paid on payments this calendar year)
+  - `projected_interest_30d` (Σ current_principal × rate for active contracts not yet at 2-month cap)
+  - `potential_loss` (Σ current_principal of auction_ready contracts — worst case if sasán fails to sell)
+  - `grace_period_count`, `auction_ready_count`
+  - `per_loan` (top 50 largest active loans with per-loan `interest_earned` vs `interest_projected_30d`)
+- New endpoint `GET /api/business/cashflow-forecast` — 30-day bucketed forecast of expected inflows based on active/overdue contract due_dates + accrued interest.
+- Scheduler `REMINDER_DAYS` extended from `[7, 9]` → `[1, 7, 9]` — sends the day-1 "welcome to grace period" WhatsApp/email reminder automatically the day a contract enters overdue status.
+
+### Frontend
+- New page `/app/frontend/src/pages/BusinessDashboard.js` mounted at `/business` and linked in the sidebar (Briefcase icon between Dashboard and Clients).
+- 4 KPI cards (Total Loaned Out / Interest YTD / Projected 30d / Potential Loss) — all clickable, deep-link into filtered Contracts or Reports.
+- 2 status cards (Grace Period · amber / Ready for Auction · rose) — click through to `/contracts?status=overdue|auction_ready`.
+- Cash-flow forecast bar chart (recharts) — 30 bars, hover tooltip shows `Due YYYY-MM-DD · Expected $N`.
+- Top-20 per-loan breakdown table with contract, client, item, principal, rate, interest earned + projected, status pill.
+- i18n keys added in EN/TET (`business_*`, `grace_period`, `ready_for_auction`, etc.).
+- Labels are **English + Tetum only** (no Indonesian) per user preference — original design showed "Masa Tenggang / Siap Lelang" in both languages; corrected to `Grace Period / Ready for Auction` (EN) and `Períodu Toleránsia / Prontu ba Leilaun` (TET).
+
+### Verified numbers on current data
+- Total Loaned Out: **$544,700**
+- Projected 30d interest: **$29,430**
+- Potential Loss: **$188,900** (150 auction-ready contracts)
+- Cash Flow Forecast (next 30 days): **$324,110** expected inflow
+
 ## Iteration 49 — Backlog Cleanup Batch (2026-02-17) ✅
 Testing agent verified: **100% frontend flows (6/6), 5/5 new backend tests pass, 29/30 legacy pytest** (1 pre-existing unrelated 401 on locked public listing).
 

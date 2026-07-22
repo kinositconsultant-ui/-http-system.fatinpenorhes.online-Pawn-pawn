@@ -60,9 +60,9 @@ const dict = {
     business_proj_30d_sub: "Next month at current book",
     business_potential_loss: "Potential Loss",
     business_potential_loss_sub: "If auction items don't sell",
-    grace_period: "Grace Period · Masa Tenggang",
+    grace_period: "Grace Period",
     grace_period_hint: "1–10 days past due",
-    ready_for_auction: "Ready for Auction · Siap Lelang",
+    ready_for_auction: "Ready for Auction",
     ready_for_auction_hint: ">10 days past due",
     // Login / Auth extra
     login_subtitle: "Enter your credentials to access the admin console.",
@@ -416,9 +416,9 @@ const dict = {
     business_proj_30d_sub: "Fulan tuir mai iha kontratu atuál",
     business_potential_loss: "Perda Potensiál",
     business_potential_loss_sub: "Se sasán la fa'an iha leilaun",
-    grace_period: "Masa Tenggang",
+    grace_period: "Períodu Toleránsia",
     grace_period_hint: "Loron 1–10 depois due date",
-    ready_for_auction: "Siap Lelang",
+    ready_for_auction: "Prontu ba Leilaun",
     ready_for_auction_hint: "Liu loron 10 depois due date",
     // Login / Auth extra
     login_subtitle: "Insere ó nia kredensiál atu asesu painel administrasaun.",
