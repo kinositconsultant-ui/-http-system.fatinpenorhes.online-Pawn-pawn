@@ -1,24 +1,49 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Download, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 /**
  * Reusable PDF preview modal.
- * Opens the given `url` inside an iframe so the user can review the PDF
- * before deciding whether to download it. Includes a "Download" action
- * that forces a save-to-disk via the browser.
  *
  * Props:
  *   open, onOpenChange — dialog visibility
  *   url            — absolute (or same-origin) PDF URL
- *   title          — modal title (e.g. "Invoice INV-2026-0001")
+ *   title          — modal title
  *   downloadName   — suggested filename for the "Download" button
+ *   langToggle     — when true, shows an EN/TET pill toggle that appends
+ *                    (or replaces) `?lang=` on the URL. Use for receipts.
  */
-export default function PdfPreviewDialog({ open, onOpenChange, url, title = "PDF Preview", downloadName }) {
+export default function PdfPreviewDialog({
+  open,
+  onOpenChange,
+  url,
+  title = "PDF Preview",
+  downloadName,
+  langToggle = false,
+}) {
+  const [lang, setLang] = useState(() => {
+    try {
+      const u = new URL(url || "", window.location.origin);
+      return u.searchParams.get("lang") || "en";
+    } catch {
+      return "en";
+    }
+  });
+  const finalUrl = useMemo(() => {
+    if (!url || !langToggle) return url;
+    try {
+      const u = new URL(url, window.location.origin);
+      u.searchParams.set("lang", lang);
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }, [url, lang, langToggle]);
   const download = () => {
-    if (!url) return;
+    if (!finalUrl) return;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = finalUrl;
     if (downloadName) a.download = downloadName;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
@@ -33,6 +58,28 @@ export default function PdfPreviewDialog({ open, onOpenChange, url, title = "PDF
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="font-display text-lg truncate">{title}</DialogTitle>
             <div className="flex items-center gap-2">
+              {langToggle && (
+                <div
+                  className="inline-flex items-center rounded-md border border-stone-300 p-0.5 bg-white text-xs"
+                  data-testid="pdf-preview-lang-toggle"
+                >
+                  {["en", "tet"].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setLang(opt)}
+                      data-testid={`pdf-preview-lang-${opt}`}
+                      className={`px-2 py-1 rounded font-semibold uppercase ${
+                        lang === opt
+                          ? "bg-[#1B2D5C] text-white"
+                          : "text-stone-600 hover:bg-stone-100"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
               <Button
                 onClick={download}
                 className="bg-[#DC2626] hover:bg-[#B91C1C] text-white gap-2 h-8"
@@ -57,10 +104,10 @@ export default function PdfPreviewDialog({ open, onOpenChange, url, title = "PDF
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 bg-stone-100 overflow-hidden">
-          {open && url && (
+          {open && finalUrl && (
             <iframe
-              key={url}
-              src={url}
+              key={finalUrl}
+              src={finalUrl}
               title={title}
               className="w-full h-full border-0"
               data-testid="pdf-preview-iframe"

@@ -498,9 +498,32 @@ async def _generate_contract_number() -> str:
 @api.get("/contracts")
 async def list_contracts(_: dict = Depends(require_module("contracts"))):
     contracts = await db.contracts.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    # Bulk pre-fetch item photo_url per collection so we can enrich each row
+    # with `has_item_photo` (used by the Contracts UI to nudge staff to upload
+    # a photo — the QR labels now embed it and empty photos look bad in the
+    # warehouse). One indexed query per collection.
+    by_kind: dict[str, set[str]] = {}
+    for c in contracts:
+        kind, iid = c.get("item_type"), c.get("item_id")
+        if kind and iid:
+            by_kind.setdefault(kind, set()).add(iid)
+    photo_map: dict[tuple[str, str], bool] = {}
+    for kind, ids in by_kind.items():
+        coll = COLLECTION_MAP.get(kind)
+        if not coll:
+            continue
+        docs = await db[coll].find(
+            {"id": {"$in": list(ids)}},
+            {"_id": 0, "id": 1, "photo_url": 1},
+        ).to_list(len(ids))
+        for d in docs:
+            photo_map[(kind, d["id"])] = bool((d.get("photo_url") or "").strip())
     out = []
     for c in contracts:
         c = await _recompute_contract_status(c)
+        c["has_item_photo"] = photo_map.get(
+            (c.get("item_type"), c.get("item_id")), False
+        )
         out.append(c)
     return out
 
@@ -1006,7 +1029,7 @@ async def contract_payments_summary_pdf(cid: str, _: dict = Depends(get_current_
 
 
 @api.get("/payments/{pid}/pdf")
-async def payment_pdf(pid: str, _: dict = Depends(get_current_user)):
+async def payment_pdf(pid: str, lang: str = "en", _: dict = Depends(get_current_user)):
     p = await db.payments.find_one({"id": pid}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -1017,7 +1040,10 @@ async def payment_pdf(pid: str, _: dict = Depends(get_current_user)):
     item_doc = {}
     if c.get("item_type") and c.get("item_id"):
         item_doc = await _fetch_item(c["item_type"], c["item_id"]) or {}
-    pdf_bytes = build_receipt_pdf(p, c, client_doc, c.get("remaining_balance", 0), item=item_doc)
+    pdf_bytes = build_receipt_pdf(
+        p, c, client_doc, c.get("remaining_balance", 0), item=item_doc,
+        language=(lang or "en").lower(),
+    )
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",

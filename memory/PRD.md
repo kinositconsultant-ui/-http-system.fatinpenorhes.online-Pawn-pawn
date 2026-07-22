@@ -668,6 +668,30 @@ User requested 5 adjustments — all implemented and validated by testing_agent 
 - No backend changes; no schema changes; no dependency changes.
 
 
+## Iteration 63 — Photo Prompt + Bulk WhatsApp + Receipt Language Toggle (2026-02-22) ✅
+
+### 1. Photo Upload Prompt on Contracts
+- Backend `GET /api/contracts` now enriches each row with `has_item_photo: bool`. Bulk-fetches item photo_url per collection (single indexed `{"$in":…}` per kind) so no N+1 queries.
+- Frontend Contracts.js: amber "📷 no photo" pill (`data-testid="contract-nophoto-{cid}"`) rendered next to the item cell when `has_item_photo === false`. Clickable link to `/items`; tooltip explains "Photo prints on the QR label". Removed the truncate that hid it.
+- Verified: 541 pills rendered on the current dataset, `visible: True`.
+
+### 2. Bulk WhatsApp Nudge
+- Frontend-only feature — reuses the existing `POST /whatsapp/reminders/run` endpoint (no new backend work).
+- New emerald-green "Bulk WhatsApp" button on the Payments **Overdue tab** (`data-testid="bulk-whatsapp-btn"`) sits next to "Email All Overdue Clients". `confirm()` prompt guards it; toast reports the count of contracts nudged. Mocked gracefully when Meta credentials aren't configured.
+
+### 3. Receipt Language Toggle
+- Backend: `GET /api/payments/{pid}/pdf?lang=en|tet` — the endpoint passes `language` to `build_receipt_pdf`, which now swaps the header title based on the lang param (`"Payment Receipt"` vs `"Resibu Pagamentu"`, `"Loan Disbursement Receipt"` vs `"Resibu Entrega Empréstimu"`). The rest of the receipt remains bilingual (both audiences can read it).
+- Frontend: `PdfPreviewDialog` gained a `langToggle` prop. When set, renders an EN / TET pill toggle in the header that live-swaps the iframe URL via `URL.searchParams.set("lang", …)`. Enabled automatically for payment-receipt URLs.
+- Payments.js: `openPaymentPdf` and Save & Print both send `?lang=<current-app-language>` initially, so the receipt matches the app language by default; the toggle overrides it.
+- Verified: `?lang=en` → "Loan Disbursement Receipt"; `?lang=tet` → "Resibu Entrega Empréstimu".
+
+### Live verification
+- `/api/contracts` returned 541 rows all with `has_item_photo: false` (dataset has no photos yet).
+- Playwright: 541 no-photo pills present, first pill `visible: True`.
+- Receipt PDF text extraction confirms language swap.
+- Bulk WhatsApp button visible on Overdue tab.
+- No lint issues.
+
 ## Iteration 62 — Bulk Email + Save & Print + Item Photo on Label (2026-02-22) ✅
 
 ### 1. Save & Print

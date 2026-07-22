@@ -505,7 +505,7 @@ def build_payment_history_pdf(
     return buf.getvalue()
 
 
-def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None) -> bytes:
+def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None, language: str = "en") -> bytes:
     s = _styles()
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -515,12 +515,14 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
     )
     is_disbursement = payment.get("type") == "disbursement"
     item = item or {}
+    is_tet = str(language or "en").lower() == "tet"
     story = []
     story.append(_branded_header(s))
     if is_disbursement:
-        story.append(Paragraph("Resibu Entrega Empréstimu · Loan Disbursement Receipt", s["Sub"]))
+        title = "Resibu Entrega Empréstimu" if is_tet else "Loan Disbursement Receipt"
     else:
-        story.append(Paragraph("Resibu Pagamentu · Payment Receipt", s["Sub"]))
+        title = "Resibu Pagamentu" if is_tet else "Payment Receipt"
+    story.append(Paragraph(title, s["Sub"]))
     story.append(Spacer(1, 0.3 * cm))
 
     money = _money

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, API_BASE, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
 
@@ -686,13 +686,24 @@ export default function Contracts() {
               >
                 <Td className="font-medium whitespace-nowrap" title={r.contract_number}>{shortContract(r.contract_number)}</Td>
                 <Td className="max-w-[140px] truncate" title={clientName(r.client_id)}>{clientName(r.client_id)}</Td>
-                <Td className="max-w-[160px] truncate">
+                <Td className="whitespace-nowrap">
                   <span className="inline-block text-[10px] uppercase tracking-wider text-stone-500 bg-stone-100 border border-stone-200 rounded px-1.5 py-0.5 mr-1.5">
                     {r.item_type}
                   </span>
                   <span className="align-middle text-xs" title={itemLabel(r.item_type, r.item_id)}>
                     {itemLabel(r.item_type, r.item_id)}
                   </span>
+                  {r.has_item_photo === false && (
+                    <Link
+                      to="/items"
+                      title="No photo on file — click to add one. Photo prints on the QR label."
+                      data-testid={`contract-nophoto-${r.id}`}
+                      className="ml-1.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100"
+                    >
+                      <Camera className="w-3 h-3" />
+                      no photo
+                    </Link>
+                  )}
                 </Td>
                 <Td right className="whitespace-nowrap">
                   {r.original_loan_amount && Math.abs(Number(r.original_loan_amount) - Number(r.principal_remaining ?? r.loan_amount)) > 0.01 ? (

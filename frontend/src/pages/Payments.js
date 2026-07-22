@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye, ScrollText, Mail } from "lucide-react";
+import { Plus, FileDown, AlertTriangle, Coins, Banknote, Trash2, ChevronDown, ChevronRight, Eye, ScrollText, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
@@ -42,7 +42,7 @@ const blank = {
 };
 
 export default function Payments() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,7 +73,7 @@ export default function Payments() {
     }
     setPdfPreview({
       open: true,
-      url: `${API_BASE}/payments/${r.id}/pdf`,
+      url: `${API_BASE}/payments/${r.id}/pdf?lang=${lang || "en"}`,
       title: `${t("payment_receipt") || "Receipt"} ${shortReceipt(r.receipt_number) || r.receipt_number}`,
       filename: `${r.receipt_number || "receipt"}.pdf`,
     });
@@ -128,7 +128,7 @@ export default function Payments() {
         setTimeout(() => {
           setPdfPreview({
             open: true,
-            url: `${API_BASE}/payments/${res.data.id}/pdf`,
+            url: `${API_BASE}/payments/${res.data.id}/pdf?lang=${lang || "en"}`,
             title: `Receipt · ${res.data.receipt_number}`,
             filename: `${res.data.receipt_number}.pdf`,
           });
@@ -518,7 +518,25 @@ export default function Payments() {
           <PaymentsTable rows={regularPayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="overdue">
-          <div className="flex justify-end mb-2">
+          <div className="flex justify-end mb-2 gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm("Send WhatsApp reminder to every overdue contract? (uses configured Meta credentials, mocked if not set)")) return;
+                try {
+                  const r = await api.post("/whatsapp/reminders/run", null, { params: { language: "en" } });
+                  toast.success(`WhatsApp: ${r.data.count} contract${r.data.count === 1 ? "" : "s"} nudged`);
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Bulk WhatsApp failed");
+                }
+              }}
+              data-testid="bulk-whatsapp-btn"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white transition text-xs font-medium"
+              title="Trigger the standard WhatsApp reminder run for every active/overdue contract"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              Bulk WhatsApp
+            </button>
             <button
               type="button"
               onClick={async () => {
@@ -665,6 +683,7 @@ export default function Payments() {
         url={pdfPreview.url}
         title={pdfPreview.title}
         downloadName={pdfPreview.filename}
+        langToggle={pdfPreview.url?.includes("/payments/") && pdfPreview.url?.includes("/pdf")}
       />
     </div>
   );
