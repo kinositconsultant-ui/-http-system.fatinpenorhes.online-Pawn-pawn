@@ -291,7 +291,15 @@ async def finance_summary(
     # a clean split:
     #   sold_price   → Cash on Hand
     #   interest_fee → Net Profit
-    gross_profit = interest_received + total_penalty + auction_interest_profit
+    # Profit sources — three independent buckets as requested:
+    #  1. Interest received (all client interest payments)
+    #  2. Penalties received
+    #  3. Auction profit = interest earned via auction + any realized surplus
+    #                      (sale price over principal+interest) minus realized loss
+    auction_profit = (
+        auction_interest_profit + auction_realized_profit - auction_realized_loss
+    )
+    gross_profit = interest_received + total_penalty + auction_profit
     net_profit = gross_profit - expenses_total
 
     # Invoices
@@ -319,6 +327,7 @@ async def finance_summary(
         "expenses_period": round(expenses_period, 2),
         "interest_received": round(interest_received, 2),
         "total_penalty": round(total_penalty, 2),
+        "auction_profit": round(auction_profit, 2),
         "gross_profit": round(gross_profit, 2),
         "net_profit": round(net_profit, 2),
         "expenses_by_category": by_category_list,

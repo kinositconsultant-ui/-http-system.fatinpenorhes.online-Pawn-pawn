@@ -139,6 +139,73 @@ export default function Finance() {
         </div>
       </Card>
 
+      {/* Profit Sources — the three profit buckets requested by ownership */}
+      <Card className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="profit-sources">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div className="text-eyebrow">Profit Sources · Fonte Lukru</div>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#1B2D5C]/10 text-[#1B2D5C] border border-[#1B2D5C]/20">
+            Gross → Net breakdown
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <ProfitSourceCard
+            title="Interest Received"
+            subtitle="From active & redeemed contracts"
+            value={fmt(summary?.interest_received || 0)}
+            accent="from-sky-50 to-white border-sky-200"
+            iconTone="text-sky-700"
+            testid="profit-interest"
+          />
+          <ProfitSourceCard
+            title="Penalties Received"
+            subtitle="Article 8 penalty payments"
+            value={fmt(summary?.total_penalty || 0)}
+            accent="from-rose-50 to-white border-rose-200"
+            iconTone="text-rose-700"
+            testid="profit-penalty"
+          />
+          <ProfitSourceCard
+            title="Auction Profit"
+            subtitle="Interest via auction + realized surplus − losses"
+            value={fmt(summary?.auction_profit || 0)}
+            accent="from-amber-50 to-white border-amber-300"
+            iconTone="text-amber-800"
+            testid="profit-auction"
+            detail={[
+              { k: "Interest earned via auction", v: fmt(summary?.auction_interest_profit || 0) },
+              { k: "Realized profit (sale surplus)", v: fmt(summary?.auction_realized_profit || 0) },
+              { k: "Realized loss", v: `-${fmt(summary?.auction_realized_loss || 0)}` },
+            ]}
+          />
+        </div>
+        {/* Gross → expenses → net */}
+        <div className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 md:p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <ProfitLine label="Gross Profit"
+                       hint="Interest + Penalty + Auction"
+                       value={summary?.gross_profit}
+                       tone="text-[#1B2D5C]" bold />
+            <ProfitLine label="Operating Expenses"
+                       hint="Salaries, utilities, etc."
+                       value={summary?.expenses_total || 0}
+                       tone="text-rose-700" sign="−" />
+            <ProfitLine label="Net Profit"
+                       hint="Gross − Expenses"
+                       value={summary?.net_profit}
+                       tone={Number(summary?.net_profit || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}
+                       bold />
+            <ProfitLine label="Margin"
+                       hint="Net ÷ (Interest + Penalty + Auction)"
+                       raw={
+                         summary && summary.gross_profit
+                           ? `${((summary.net_profit / summary.gross_profit) * 100).toFixed(1)}%`
+                           : "—"
+                       }
+                       tone="text-stone-800" />
+          </div>
+        </div>
+      </Card>
+
       {/* Cash flow + Expenses charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
@@ -267,6 +334,47 @@ function CashLine({ label, value, tone = "text-stone-900", sign = "", bold = fal
       <span className={`${bold ? "font-bold text-lg" : "font-semibold"} ${tone}`}>
         {sign}{money}
       </span>
+    </div>
+  );
+}
+
+function ProfitSourceCard({ title, subtitle, value, accent, iconTone, detail, testid }) {
+  return (
+    <div
+      className={`rounded-lg border bg-gradient-to-br ${accent} p-4 space-y-2`}
+      data-testid={testid}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className={`text-xs font-medium uppercase tracking-wide ${iconTone}`}>{title}</span>
+      </div>
+      <div className="font-display text-2xl md:text-3xl font-semibold text-stone-900">{value}</div>
+      <div className="text-[11px] text-stone-500">{subtitle}</div>
+      {detail && detail.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-stone-200/70 space-y-0.5">
+          {detail.map((d) => (
+            <div key={d.k} className="flex items-center justify-between text-[11px] text-stone-600">
+              <span>{d.k}</span>
+              <span className="font-medium tabular-nums">{d.v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfitLine({ label, hint, value, raw, tone = "text-stone-900", sign = "", bold = false }) {
+  const isRaw = raw !== undefined && raw !== null;
+  const money = isRaw
+    ? raw
+    : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(value || 0));
+  return (
+    <div className="flex flex-col">
+      <span className="text-[11px] uppercase tracking-wide text-stone-500">{label}</span>
+      <span className={`${bold ? "font-bold text-lg" : "font-semibold"} ${tone}`}>
+        {isRaw ? money : `${sign}${money}`}
+      </span>
+      <span className="text-[10px] text-stone-500 leading-tight">{hint}</span>
     </div>
   );
 }

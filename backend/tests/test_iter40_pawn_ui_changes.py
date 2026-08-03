@@ -74,14 +74,20 @@ class TestFinanceSummaryFormula:
         assert "net_profit" in data
         assert "expenses_total" in data
         aip = float(data["auction_interest_profit"])
+        arp = float(data.get("auction_realized_profit", 0))
+        arl = float(data.get("auction_realized_loss", 0))
         ir = float(data["interest_received"])
         tp = float(data["total_penalty"])
         gp = float(data["gross_profit"])
         exp = float(data["expenses_total"])
         np_ = float(data["net_profit"])
-        # gross_profit = interest_received + total_penalty + auction_interest_profit
-        assert round(gp, 2) == round(ir + tp + aip, 2), (
-            f"gross_profit mismatch: got {gp} expected {ir + tp + aip}"
+        # gross_profit = interest + penalty + auction_profit
+        #              where auction_profit = auction_interest_profit
+        #                                    + auction_realized_profit
+        #                                    - auction_realized_loss
+        auction_profit = aip + arp - arl
+        assert round(gp, 2) == round(ir + tp + auction_profit, 2), (
+            f"gross_profit mismatch: got {gp} expected {ir + tp + auction_profit}"
         )
         # net_profit = gross_profit - expenses_total
         assert round(np_, 2) == round(gp - exp, 2)

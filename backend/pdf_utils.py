@@ -1694,6 +1694,7 @@ def build_finance_summary_pdf(summary: dict, month: int | None = None, year: int
         _row("Auction Sales", "auction_sales"),
         _row("Interest Received", "interest_received"),
         _row("Total Penalty", "total_penalty"),
+        _row("Auction Profit", "auction_profit"),
         _row("Expenses (Period)", "expenses_period"),
         _row("Expenses (Lifetime)", "expenses_total"),
         _row("Gross Profit", "gross_profit"),
