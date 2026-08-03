@@ -245,6 +245,32 @@ export default function Payments() {
   );
   const disbursements = filteredForContract.filter((r) => r.type === "disbursement");
 
+  // Payment breakdown KPIs by type (disbursements excluded — they are cash-out)
+  const kpi = useMemo(() => {
+    const inflows = rows.filter((r) => r.type !== "disbursement");
+    const bucket = (types) => {
+      const set = new Set(types);
+      const items = inflows.filter((r) => set.has(r.type));
+      return {
+        count: items.length,
+        total: items.reduce((s, r) => s + Number(r.amount || 0), 0),
+      };
+    };
+    return {
+      one_month_interest: bucket(["interest_only"]),
+      full_interest: bucket(["partial"]),
+      penalty: bucket(["overdue_penalty_only", "overdue_interest_pen"]),
+      full_payment: bucket(["full", "overdue_full"]),
+      total_received: {
+        count: inflows.length,
+        total: inflows.reduce((s, r) => s + Number(r.amount || 0), 0),
+      },
+    };
+  }, [rows]);
+  const fmtUSD = (n) => new Intl.NumberFormat("en-US", {
+    style: "currency", currency: "USD", maximumFractionDigits: 0,
+  }).format(Number(n || 0));
+
   return (
     <div className="space-y-6" data-testid="payments-root">
       <header className="flex items-end justify-between flex-wrap gap-4">
@@ -471,6 +497,55 @@ export default function Payments() {
           </Dialog>
         </div>
       </header>
+
+      {/* Payment breakdown KPIs — money in only, disbursements excluded */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="payment-kpis">
+        <PaymentKpi
+          label="One-month Interest"
+          hint="type: interest_only"
+          count={kpi.one_month_interest.count}
+          value={fmtUSD(kpi.one_month_interest.total)}
+          tone="text-sky-800"
+          bg="bg-sky-50 border-sky-200"
+          testid="kpi-one-month-interest"
+        />
+        <PaymentKpi
+          label="Full Interest"
+          hint="type: partial"
+          count={kpi.full_interest.count}
+          value={fmtUSD(kpi.full_interest.total)}
+          tone="text-indigo-800"
+          bg="bg-indigo-50 border-indigo-200"
+          testid="kpi-full-interest"
+        />
+        <PaymentKpi
+          label="Penalty"
+          hint="overdue_penalty_only + overdue_interest_pen"
+          count={kpi.penalty.count}
+          value={fmtUSD(kpi.penalty.total)}
+          tone="text-rose-800"
+          bg="bg-rose-50 border-rose-200"
+          testid="kpi-penalty"
+        />
+        <PaymentKpi
+          label="Full Payment"
+          hint="type: full + overdue_full"
+          count={kpi.full_payment.count}
+          value={fmtUSD(kpi.full_payment.total)}
+          tone="text-emerald-800"
+          bg="bg-emerald-50 border-emerald-200"
+          testid="kpi-full-payment"
+        />
+        <PaymentKpi
+          label="Total Received"
+          hint="all inflows (disbursements excluded)"
+          count={kpi.total_received.count}
+          value={fmtUSD(kpi.total_received.total)}
+          tone="text-stone-900"
+          bg="bg-stone-50 border-stone-300"
+          testid="kpi-total-received"
+        />
+      </div>
 
       {contractFilter && (
         <div
@@ -975,4 +1050,23 @@ function SubTh({ children, right }) {
 }
 function SubTd({ children, right, className = "", ...rest }) {
   return <td className={`px-3 py-2 whitespace-nowrap ${right ? "text-right" : ""} ${className}`} {...rest}>{children}</td>;
+}
+
+
+function PaymentKpi({ label, hint, count, value, tone, bg, testid }) {
+  return (
+    <div
+      className={`rounded-lg border ${bg} p-3 md:p-4 flex flex-col gap-1`}
+      data-testid={testid}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-stone-500">{label}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/70 border border-stone-200 text-stone-600">
+          {count}
+        </span>
+      </div>
+      <div className={`font-display text-xl md:text-2xl font-semibold ${tone}`}>{value}</div>
+      <div className="text-[10px] text-stone-500 leading-tight">{hint}</div>
+    </div>
+  );
 }

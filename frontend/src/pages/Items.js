@@ -62,7 +62,18 @@ function vehicleFields(t) {
     { k: "plate", label: t("plate") },
     { k: "machine_number", label: t("machine_number") },
     { k: "chassis", label: t("chassis"), tableHide: true },
+    {
+      k: "fuel_type",
+      label: t("fuel_type") || "Fuel Type",
+      select: true,
+      tableHide: true,
+      options: [
+        { value: "petrol", label: t("petrol") || "Petrol" },
+        { value: "diesel", label: t("diesel") || "Diesel" },
+      ],
+    },
     { k: "fuel_percent", label: t("fuel_percent"), type: "number", tableHide: true },
+    { k: "mileage_km", label: t("mileage_km") || "Mileage (km)", type: "number", tableHide: true, placeholder: "e.g. 82500" },
     { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
@@ -106,7 +117,18 @@ function pezaduFields(t) {
     { k: "chassis", label: t("chassis"), tableHide: true },
     { k: "serial", label: t("serial"), tableHide: true },
     { k: "operating_hours", label: t("operating_hours"), type: "number", tableHide: true },
+    {
+      k: "fuel_type",
+      label: t("fuel_type") || "Fuel Type",
+      select: true,
+      tableHide: true,
+      options: [
+        { value: "petrol", label: t("petrol") || "Petrol" },
+        { value: "diesel", label: t("diesel") || "Diesel" },
+      ],
+    },
     { k: "fuel_percent", label: t("fuel_percent"), type: "number", tableHide: true },
+    { k: "mileage_km", label: t("mileage_km") || "Mileage (km)", type: "number", tableHide: true, placeholder: "e.g. 82500" },
     { k: "location", label: t("location"), placeholder: "Warehouse A / Shop / Off-site" },
     { k: "photo_url", label: t("upload_photo"), full: true, upload: true, accept: "image/*" },
     { k: "document_url", label: t("upload_document"), full: true, upload: true, accept: ".pdf,image/*" },
@@ -158,6 +180,8 @@ function emptyFor(kind) {
       chassis: "",
       serial: "",
       fuel_percent: 0,
+      fuel_type: "",
+      mileage_km: "",
       color: "",
       operating_hours: "",
       manufacture_year: "",
@@ -175,6 +199,8 @@ function emptyFor(kind) {
     plate: "",
     chassis: "",
     fuel_percent: 0,
+    fuel_type: "",
+    mileage_km: "",
     color: "",
     manufacture_year: "",
     engine_cc: "",
@@ -295,6 +321,10 @@ function ItemTable({ kind }) {
       payload.manufacture_year = payload.manufacture_year ? Number(payload.manufacture_year) : null;
     if ("engine_cc" in payload)
       payload.engine_cc = payload.engine_cc ? Number(payload.engine_cc) : null;
+    if ("mileage_km" in payload)
+      payload.mileage_km = payload.mileage_km ? Number(payload.mileage_km) : null;
+    if ("operating_hours" in payload)
+      payload.operating_hours = payload.operating_hours ? Number(payload.operating_hours) : null;
     if ("market_value" in payload && payload.market_value !== "")
       payload.market_value = Number(payload.market_value);
     try {

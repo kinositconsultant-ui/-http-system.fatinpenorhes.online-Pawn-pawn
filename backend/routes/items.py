@@ -42,6 +42,8 @@ class CarIn(BaseModel):
     machine_number: str = ""  # engine/motor number
     chassis: str = ""         # VIN / frame number
     fuel_percent: int = 0
+    fuel_type: str = ""       # "petrol" | "diesel" | ""
+    mileage_km: Optional[int] = None  # odometer reading in km at pawn time
     color: str = ""
     manufacture_year: Optional[int] = None
     engine_cc: Optional[int] = None  # engine capacity in CC
@@ -62,6 +64,8 @@ class MotorcycleIn(BaseModel):
     machine_number: str = ""
     chassis: str = ""
     fuel_percent: int = 0
+    fuel_type: str = ""
+    mileage_km: Optional[int] = None
     color: str = ""
     manufacture_year: Optional[int] = None
     engine_cc: Optional[int] = None
@@ -99,6 +103,8 @@ class PezaduIn(BaseModel):
     chassis: str = ""
     serial: str = ""
     fuel_percent: int = 0
+    fuel_type: str = ""
+    mileage_km: Optional[int] = None
     color: str = ""
     operating_hours: Optional[int] = None
     manufacture_year: Optional[int] = None
