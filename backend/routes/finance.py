@@ -270,11 +270,16 @@ async def finance_summary(
     by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_category.items()]
 
     # Profit & cash on hand (lifetime)
-    # Cash on Hand includes the auction tax collected from buyers.
-    cash_on_hand = (
+    # Cash on Hand includes the auction tax collected from buyers, and starts
+    # from a configurable `opening_cash_balance` (settings) that represents
+    # capital the shop already had before the system began tracking cash.
+    settings_doc = await db.settings.find_one({}, {"_id": 0}) or {}
+    opening_cash = float(settings_doc.get("opening_cash_balance", 0) or 0)
+    total_inflows = (
         capital_received + client_payments + auction_sales + auction_tax_collected
-        - loans_disbursed - expenses_total - capital_repaid
     )
+    total_outflows = loans_disbursed + expenses_total + capital_repaid
+    cash_on_hand = opening_cash + total_inflows - total_outflows
     # Gross profit (interest + penalties earned) — approximate
     for c in contracts:
         await _recompute_contract_status(c)
@@ -296,6 +301,9 @@ async def finance_summary(
 
     return {
         "cash_on_hand": round(cash_on_hand, 2),
+        "opening_cash_balance": round(opening_cash, 2),
+        "total_inflows": round(total_inflows, 2),
+        "total_outflows": round(total_outflows, 2),
         "capital_received": round(capital_received, 2),
         "capital_repaid": round(capital_repaid, 2),
         "capital_outstanding": round(capital_outstanding, 2),

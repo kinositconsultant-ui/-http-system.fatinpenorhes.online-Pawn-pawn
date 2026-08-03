@@ -296,6 +296,40 @@ export default function Settings() {
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="font-display text-xl">Cash Balance · Saldu Osan iha Liman</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Finance foundation
+          </span>
+        </div>
+        <p className="text-sm text-stone-600">
+          Set the <b>Opening Cash Balance</b> to the amount of cash the shop already held
+          before the system started tracking transactions. This value is added to every
+          Cash-on-Hand calculation across the Finance report and Business Dashboard.
+          Set once and only edit if you&apos;re correcting a historical error.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Opening Cash Balance ($)">
+            <Input
+              type="number"
+              step="0.01"
+              value={s.opening_cash_balance ?? 0}
+              onChange={(e) => onChange("opening_cash_balance", e.target.value)}
+              data-testid="settings-opening-cash"
+              placeholder="e.g. 600000"
+            />
+          </Field>
+          <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+            <div className="font-medium text-stone-800 mb-1">Formula</div>
+            <code className="block">
+              cash_on_hand = opening + capital_in + client_pay + auction_sales + tax
+              − loans_out − expenses − capital_repaid
+            </code>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <h2 className="font-display text-xl">{t("whatsapp_config")}</h2>
             {s.whatsapp_connected ? (

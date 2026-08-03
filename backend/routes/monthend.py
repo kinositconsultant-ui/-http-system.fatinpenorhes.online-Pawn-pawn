@@ -92,8 +92,11 @@ async def _compute_finance_summary(year: int, month: int) -> dict:
         by_cat[cat] = by_cat.get(cat, 0.0) + float(e.get("amount", 0) or 0)
     by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_cat.items()]
 
+    settings_doc = await db.settings.find_one({}, {"_id": 0}) or {}
+    opening_cash = float(settings_doc.get("opening_cash_balance", 0) or 0)
     cash_on_hand = (
-        capital_received + client_payments + auction_sales + auction_tax_collected
+        opening_cash
+        + capital_received + client_payments + auction_sales + auction_tax_collected
         - loans_disbursed - expenses_total - capital_repaid
     )
     for c in contracts:

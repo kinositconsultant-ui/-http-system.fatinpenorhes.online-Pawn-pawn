@@ -107,6 +107,38 @@ export default function Finance() {
              testid="kpi-net-profit" />
       </div>
 
+      {/* Cash on Hand breakdown — shows how the balance is built up */}
+      <Card className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="cash-breakdown">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div className="text-eyebrow">Cash on Hand · breakdown</div>
+          {summary && !summary.opening_cash_balance && Number(summary.cash_on_hand || 0) < 0 && (
+            <a
+              href="/settings"
+              className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200"
+              data-testid="opening-cash-hint"
+            >
+              Balance is negative — set an Opening Cash Balance in Settings
+            </a>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <CashLine label="Opening cash" value={summary?.opening_cash_balance} tone="text-stone-800" />
+          <CashLine label="Total inflows" value={summary?.total_inflows} tone="text-emerald-700" sign="+" />
+          <CashLine label="Total outflows" value={summary?.total_outflows} tone="text-rose-700" sign="−" />
+          <CashLine label="Cash on Hand" value={summary?.cash_on_hand}
+                    tone={Number(summary?.cash_on_hand || 0) >= 0 ? "text-emerald-700" : "text-rose-700"} bold />
+        </div>
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-stone-500">
+          <span>+ capital in: {fmt(summary?.capital_received || 0)}</span>
+          <span>+ client pay: {fmt(summary?.client_payments || 0)}</span>
+          <span>+ auction: {fmt(summary?.auction_sales || 0)}</span>
+          <span>+ tax: {fmt(summary?.auction_tax_collected || 0)}</span>
+          <span>− loans out: {fmt(summary?.loans_disbursed || 0)}</span>
+          <span>− expenses: {fmt(summary?.expenses_total || 0)}</span>
+          <span>− cap. repaid: {fmt(summary?.capital_repaid || 0)}</span>
+        </div>
+      </Card>
+
       {/* Cash flow + Expenses charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <Card className="p-4 md:p-6 border border-stone-200 shadow-none rounded-lg bg-white">
@@ -114,6 +146,7 @@ export default function Finance() {
           <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
+                { k: "Opening", v: summary?.opening_cash_balance || 0 },
                 { k: "Capital In", v: summary?.capital_received || 0 },
                 { k: "Client Pay", v: summary?.client_payments || 0 },
                 { k: "Auction", v: summary?.auction_sales || 0 },
@@ -222,6 +255,19 @@ function Kpi({ label, value, Icon, tone = "text-stone-900", testid }) {
         <Icon className={`w-5 h-5 md:w-6 md:h-6 shrink-0 ${tone}`} />
       </div>
     </Card>
+  );
+}
+
+function CashLine({ label, value, tone = "text-stone-900", sign = "", bold = false }) {
+  const v = Number(value || 0);
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
+  return (
+    <div className="flex flex-col">
+      <span className="text-[11px] uppercase tracking-wide text-stone-500">{label}</span>
+      <span className={`${bold ? "font-bold text-lg" : "font-semibold"} ${tone}`}>
+        {sign}{money}
+      </span>
+    </div>
   );
 }
 

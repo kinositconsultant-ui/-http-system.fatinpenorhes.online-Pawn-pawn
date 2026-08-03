@@ -49,6 +49,7 @@ DEFAULT_SETTINGS = {
     "whatsapp_app_secret": "",
     "reminder_days_before": 3,
     "reminders_enabled": True,
+    "opening_cash_balance": 0.0,
 }
 
 

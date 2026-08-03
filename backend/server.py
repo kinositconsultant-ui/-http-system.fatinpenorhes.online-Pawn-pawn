@@ -264,6 +264,7 @@ class SettingsIn(BaseModel):
     reminder_days_before: int = 3
     reminders_enabled: bool = True  # Master switch for daily overdue reminders (iter17)
     next_auction_date: str = ""  # ISO date shown on public catalogue and PDF; empty = "TBA"
+    opening_cash_balance: float = 0.0  # Cash the shop already had before the system began tracking; added to Cash on Hand.
 
 
 @api.get("/settings")
