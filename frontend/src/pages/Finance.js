@@ -133,8 +133,10 @@ export default function Finance() {
           <span>+ client pay: {fmt(summary?.client_payments || 0)}</span>
           <span>+ auction: {fmt(summary?.auction_sales || 0)}</span>
           <span>+ tax: {fmt(summary?.auction_tax_collected || 0)}</span>
+          <span>+ inspect. reimb: {fmt(summary?.inspections_reimbursed || 0)}</span>
           <span>− loans out: {fmt(summary?.loans_disbursed || 0)}</span>
           <span>− expenses: {fmt(summary?.expenses_total || 0)}</span>
+          <span>− inspections: {fmt(summary?.inspections_incurred || 0)}</span>
           <span>− cap. repaid: {fmt(summary?.capital_repaid || 0)}</span>
         </div>
       </Card>

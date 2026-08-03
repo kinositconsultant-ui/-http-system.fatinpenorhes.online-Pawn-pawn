@@ -269,7 +269,15 @@ async def finance_summary(
         by_category[cat] = by_category.get(cat, 0.0) + float(e.get("amount", 0) or 0)
     by_category_list = [{"category": k, "amount": round(v, 2)} for k, v in by_category.items()]
 
-    # Profit & cash on hand (lifetime)
+    # Inspection expenses (Phase D). Incurred amounts are cash-out; client
+    # reimbursements are cash-in. Only affects Cash on Hand — not profit.
+    inspections_incurred = 0.0
+    inspections_reimbursed = 0.0
+    async for ins in db.inspections.find({}, {"_id": 0}):
+        inspections_incurred += float(ins.get("amount", 0) or 0)
+        inspections_reimbursed += float(ins.get("reimbursed_amount", 0) or 0)
+
+    # Profit & cash on hand (lifetime).
     # Cash on Hand includes the auction tax collected from buyers, and starts
     # from a configurable `opening_cash_balance` (settings) that represents
     # capital the shop already had before the system began tracking cash.
@@ -277,8 +285,11 @@ async def finance_summary(
     opening_cash = float(settings_doc.get("opening_cash_balance", 0) or 0)
     total_inflows = (
         capital_received + client_payments + auction_sales + auction_tax_collected
+        + inspections_reimbursed
     )
-    total_outflows = loans_disbursed + expenses_total + capital_repaid
+    total_outflows = (
+        loans_disbursed + expenses_total + capital_repaid + inspections_incurred
+    )
     cash_on_hand = opening_cash + total_inflows - total_outflows
     # Gross profit (interest + penalties earned) — approximate
     for c in contracts:
@@ -325,6 +336,9 @@ async def finance_summary(
         "auction_tax_collected": round(auction_tax_collected, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
+        "inspections_incurred": round(inspections_incurred, 2),
+        "inspections_reimbursed": round(inspections_reimbursed, 2),
+        "inspections_net_cost": round(inspections_incurred - inspections_reimbursed, 2),
         "interest_received": round(interest_received, 2),
         "total_penalty": round(total_penalty, 2),
         "auction_profit": round(auction_profit, 2),

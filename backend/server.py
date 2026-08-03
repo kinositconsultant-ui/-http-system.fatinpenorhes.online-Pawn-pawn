@@ -1884,6 +1884,7 @@ from routes.alerts import router as alerts_router  # noqa: E402
 from routes.migration_audit import router as migration_audit_router  # noqa: E402
 from routes.clients import router as clients_router  # noqa: E402
 from routes.items import router as items_router  # noqa: E402
+from routes.inspections import router as inspections_router  # noqa: E402
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
@@ -1896,6 +1897,7 @@ app.include_router(alerts_router, prefix="/api")
 app.include_router(migration_audit_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
 app.include_router(items_router, prefix="/api")
+app.include_router(inspections_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

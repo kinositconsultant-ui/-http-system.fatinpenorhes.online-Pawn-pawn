@@ -36,6 +36,7 @@ import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
 import AuditLog from "@/pages/AuditLog";
 import Finance from "@/pages/Finance";
+import Inspections from "@/pages/Inspections";
 
 function App() {
   return (
@@ -82,6 +83,7 @@ function App() {
                 <Route path="/auctions" element={<ModuleGuard module="auctions" label="Auctions"><Auctions /></ModuleGuard>} />
                 <Route path="/reports" element={<ModuleGuard module="reports" label="Reports"><Reports /></ModuleGuard>} />
                 <Route path="/finance" element={<ModuleGuard module="finance" label="Finance"><Finance /></ModuleGuard>} />
+                <Route path="/inspections" element={<ModuleGuard module="finance" label="Inspections"><Inspections /></ModuleGuard>} />
                 <Route path="/users" element={<ModuleGuard module="users" label="Users"><Users /></ModuleGuard>} />
                 <Route path="/settings" element={<ModuleGuard module="settings" label="Settings"><Settings /></ModuleGuard>} />
                 <Route path="/audit-log" element={<ModuleGuard module="audit_log" label="Audit Log"><AuditLog /></ModuleGuard>} />
