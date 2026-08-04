@@ -670,6 +670,9 @@ function CapitalSection({ sources, reload, t }) {
                             className="text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]">Repay</button>
                     <button onClick={() => openHistory(s)} data-testid={`capital-history-${s.id}`}
                             className="text-xs px-2 py-1 rounded-md bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200">History</button>
+                    <a href={pdfUrl(`/funding-sources/${s.id}/amortization-pdf`)} target="_blank" rel="noreferrer"
+                       data-testid={`capital-schedule-${s.id}`}
+                       className="text-xs px-2 py-1 rounded-md bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100">Schedule</a>
                     <button onClick={() => edit(s)} className="p-1 hover:text-[#1B2D5C]" data-testid={`capital-edit-${s.id}`}>
                       <Pencil className="w-4 h-4" />
                     </button>

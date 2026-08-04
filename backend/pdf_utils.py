@@ -1561,6 +1561,113 @@ def build_audit_log_pdf(rows: list[dict], filters: dict | None = None) -> bytes:
     return buf.getvalue()
 
 
+def build_capital_amortization_pdf(source: dict, repayments: list[dict] | None = None) -> bytes:
+    """Amortization schedule for a single capital source (bank loan).
+
+    Uses **equal principal** amortization:
+        principal_per_installment = principal / N_installments
+        interest_per_installment  = opening_balance × rate% × step_months
+
+    where N is derived from term_months + payment_frequency (monthly/quarterly/lump_sum).
+    """
+    from datetime import date as _date
+    from dateutil.relativedelta import relativedelta
+
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+
+    name = source.get("name", "")
+    principal = float(source.get("principal_amount", 0) or 0)
+    rate_pct = float(source.get("interest_rate", 0) or 0)
+    period = source.get("interest_period", "monthly")
+    term_months = int(source.get("term_months") or 12)
+    freq = (source.get("payment_frequency") or "monthly").lower()
+
+    if freq == "quarterly":
+        step_months = 3
+    elif freq == "lump_sum":
+        step_months = term_months
+    else:
+        step_months = 1
+
+    n_installments = max(1, term_months // step_months) if step_months else 1
+    principal_per = round(principal / n_installments, 2)
+
+    try:
+        start = _date.fromisoformat(source.get("start_date") or "")
+    except Exception:
+        start = _date.today()
+
+    # Actual payments made — used to flag "PAID" rows if the sum of principal
+    # so far exceeds the row's cumulative principal.
+    repayments = repayments or []
+    total_principal_paid = sum(
+        float(r.get("principal_amount", r.get("amount", 0)) or 0) for r in repayments
+    )
+
+    rows = []
+    balance = principal
+    total_interest = 0.0
+    cumulative_principal_scheduled = 0.0
+    for i in range(1, n_installments + 1):
+        due = start + relativedelta(months=step_months * i)
+        # Interest for this period: balance × rate% × step_months (or 1 for yearly)
+        if period == "yearly":
+            interest = round(balance * (rate_pct / 100.0) * (step_months / 12.0), 2)
+        elif period == "none":
+            interest = 0.0
+        else:  # monthly
+            interest = round(balance * (rate_pct / 100.0) * step_months, 2)
+        principal_row = principal_per if i < n_installments else round(balance, 2)
+        end_balance = round(balance - principal_row, 2)
+        cumulative_principal_scheduled += principal_row
+        status = "Paid" if total_principal_paid >= cumulative_principal_scheduled - 0.01 else \
+                 ("Overdue" if due < _date.today() else "Scheduled")
+        rows.append([
+            str(i), due.isoformat(),
+            _money(balance),
+            _money(principal_row),
+            _money(interest),
+            _money(principal_row + interest),
+            _money(end_balance),
+            status,
+        ])
+        total_interest += interest
+        balance = end_balance
+
+    total_pay = principal + total_interest
+    story = [
+        _branded_header(s),
+        Paragraph(f"Loan Amortization — {name}", s["DocTitle"]),
+        Paragraph(
+            f"Principal: <b>{_money(principal)}</b> · Rate: <b>{rate_pct:.2f}% / {period}</b> · "
+            f"Term: <b>{term_months} months</b> · Frequency: <b>{freq}</b> · "
+            f"Installments: <b>{n_installments}</b> · "
+            f"Total Interest: <b>{_money(total_interest)}</b> · "
+            f"Total Payable: <b>{_money(total_pay)}</b>",
+            s["Body"],
+        ),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    footer = ["", "TOTAL", "", _money(principal), _money(total_interest), _money(total_pay), "", ""]
+    story.append(_data_table(
+        ["#", "Due Date", "Opening Balance", "Principal", "Interest", "Payment", "Ending Balance", "Status"],
+        rows,
+        col_widths=[1.4 * cm, 2.6 * cm, 3.4 * cm, 3 * cm, 3 * cm, 3 * cm, 3.4 * cm, 2.4 * cm],
+        footer_row=footer,
+    ))
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(
+        "<i>Note · Nota: This schedule uses equal principal amortization "
+        "(principal / N installments) with interest computed on the opening balance. "
+        "Status = Paid when cumulative principal paid ≥ cumulative principal scheduled.</i>",
+        s["Body"],
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_capital_sources_pdf(sources: list[dict]) -> bytes:
     """List of capital sources with the full split principal/interest audit view."""
     s = _styles()

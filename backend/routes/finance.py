@@ -26,6 +26,7 @@ from services import _recompute_contract_status
 from pdf_utils import (
     build_finance_summary_pdf,
     build_capital_sources_pdf,
+    build_capital_amortization_pdf,
     build_expenses_pdf,
 )
 from services import _apply_date_filter
@@ -806,6 +807,22 @@ async def capital_sources_pdf(_: dict = Depends(get_current_user)):
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": 'inline; filename="capital-sources.pdf"'},
+    )
+
+
+@router.get("/funding-sources/{sid}/amortization-pdf")
+async def capital_amortization_pdf(sid: str, _: dict = Depends(get_current_user)):
+    """On-demand amortization schedule PDF for one capital source (bank loan)."""
+    src = await db.funding_sources.find_one({"id": sid}, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Funding source not found")
+    repayments = await db.funding_repayments.find({"source_id": sid}, {"_id": 0}).to_list(500)
+    pdf_bytes = build_capital_amortization_pdf(src, repayments)
+    safe = "".join(c for c in (src.get("name") or "loan") if c.isalnum() or c in "-_")[:40] or "loan"
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="amortization-{safe}.pdf"'},
     )
 
 
