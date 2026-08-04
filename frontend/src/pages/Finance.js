@@ -425,13 +425,18 @@ function CapitalSection({ sources, reload, t }) {
   const [historyFor, setHistoryFor] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTab, setHistoryTab] = useState("payments"); // "payments" | "schedule"
+  const [scheduleRows, setScheduleRows] = useState([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
   const openHistory = async (source) => {
     setHistoryFor(source);
     setHistoryOpen(true);
+    setHistoryTab("payments");
     setHistoryLoading(true);
+    setScheduleRows([]);
     try {
       const r = await api.get(`/funding-sources/${source.id}/repayments`);
       setHistoryRows(r.data || []);
@@ -439,6 +444,18 @@ function CapitalSection({ sources, reload, t }) {
       toast.error("Failed to load history");
     } finally {
       setHistoryLoading(false);
+    }
+  };
+  const loadSchedule = async () => {
+    if (!historyFor || scheduleRows.length > 0) return;
+    setScheduleLoading(true);
+    try {
+      const r = await api.get(`/funding-sources/${historyFor.id}/schedule`);
+      setScheduleRows(r.data?.rows || []);
+    } catch (e) {
+      toast.error("Failed to load schedule");
+    } finally {
+      setScheduleLoading(false);
     }
   };
   const deleteRepayment = async (rid) => {
@@ -705,6 +722,30 @@ function CapitalSection({ sources, reload, t }) {
               <div><span className="text-stone-500">Interest Left</span><br /><b>{fmt(historyFor.interest_remaining)}</b></div>
             </div>
           )}
+          {/* Tab switcher */}
+          <div className="flex gap-1 mb-3 border-b border-stone-200">
+            {[
+              { k: "payments", label: "Payments" },
+              { k: "schedule", label: "Schedule" },
+            ].map((t) => (
+              <button
+                key={t.k}
+                onClick={() => {
+                  setHistoryTab(t.k);
+                  if (t.k === "schedule") loadSchedule();
+                }}
+                data-testid={`history-tab-${t.k}`}
+                className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px ${
+                  historyTab === t.k
+                    ? "border-[#1B2D5C] text-[#1B2D5C]"
+                    : "border-transparent text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {historyTab === "payments" && (
           <div className="overflow-x-auto max-h-[50vh]">
             <table className="min-w-full text-sm" data-testid="history-table">
               <thead className="bg-stone-50 sticky top-0">
@@ -743,6 +784,51 @@ function CapitalSection({ sources, reload, t }) {
               </tbody>
             </table>
           </div>
+          )}
+          {historyTab === "schedule" && (
+          <div className="overflow-x-auto max-h-[50vh]">
+            <table className="min-w-full text-sm" data-testid="schedule-table">
+              <thead className="bg-stone-50 sticky top-0">
+                <tr>{["#", "Due Date", "Opening", "Principal", "Interest", "Payment", "Ending", "Status"].map((h) => (
+                  <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold text-left">{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {scheduleLoading && (
+                  <tr><td colSpan="8" className="text-center py-6 text-stone-400">Loading…</td></tr>
+                )}
+                {!scheduleLoading && scheduleRows.length === 0 && (
+                  <tr><td colSpan="8" className="text-center py-6 text-stone-400">No schedule available.</td></tr>
+                )}
+                {!scheduleLoading && scheduleRows.map((r) => {
+                  const styles = {
+                    paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    due_soon: "bg-amber-50 text-amber-800 border-amber-300",
+                    overdue: "bg-rose-50 text-rose-700 border-rose-300",
+                    scheduled: "bg-stone-100 text-stone-600 border-stone-200",
+                  };
+                  const labels = { paid: "Paid", due_soon: "Due Soon", overdue: "Overdue", scheduled: "Scheduled" };
+                  return (
+                    <tr key={r.installment} className="border-t border-stone-100" data-testid={`schedule-row-${r.installment}`}>
+                      <td className="px-3 py-2 tabular-nums text-stone-500">{r.installment}</td>
+                      <td className="px-3 py-2 tabular-nums">{r.due_date}</td>
+                      <td className="px-3 py-2 tabular-nums text-stone-500">{fmt(r.opening_balance)}</td>
+                      <td className="px-3 py-2 tabular-nums text-emerald-700">{fmt(r.principal)}</td>
+                      <td className="px-3 py-2 tabular-nums text-amber-800">{fmt(r.interest)}</td>
+                      <td className="px-3 py-2 tabular-nums font-medium">{fmt(r.payment)}</td>
+                      <td className="px-3 py-2 tabular-nums text-stone-600">{fmt(r.ending_balance)}</td>
+                      <td className="px-3 py-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[r.status]}`}>
+                          {labels[r.status]}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setHistoryOpen(false)}>Close</Button>
           </DialogFooter>

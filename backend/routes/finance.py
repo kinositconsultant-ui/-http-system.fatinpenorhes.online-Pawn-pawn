@@ -355,6 +355,86 @@ async def delete_repayment(sid: str, rid: str, user: dict = Depends(require_admi
     return {"ok": True}
 
 
+def _amortization_schedule(src: dict, repayments: list[dict]) -> list[dict]:
+    """Compute the flat amortization schedule for a capital source. Shared by
+    the JSON `/schedule` endpoint and the amortization PDF builder."""
+    from datetime import date as _date
+    from dateutil.relativedelta import relativedelta
+
+    principal = float(src.get("principal_amount", 0) or 0)
+    rate_pct = float(src.get("interest_rate", 0) or 0)
+    period = src.get("interest_period", "monthly")
+    term_months = int(src.get("term_months") or 12)
+    freq = (src.get("payment_frequency") or "monthly").lower()
+    if freq == "quarterly":
+        step_months = 3
+    elif freq == "lump_sum":
+        step_months = term_months
+    else:
+        step_months = 1
+
+    n_installments = max(1, term_months // step_months) if step_months else 1
+    principal_per = round(principal / n_installments, 2)
+    try:
+        start = _date.fromisoformat(src.get("start_date") or "")
+    except Exception:
+        start = _date.today()
+    today = _date.today()
+
+    total_paid = sum(float(r.get("principal_amount", r.get("amount", 0)) or 0) for r in (repayments or []))
+
+    rows: list[dict] = []
+    balance = principal
+    cumulative_scheduled = 0.0
+    for i in range(1, n_installments + 1):
+        due = start + relativedelta(months=step_months * i)
+        if period == "yearly":
+            interest = round(balance * (rate_pct / 100.0) * (step_months / 12.0), 2)
+        elif period == "none":
+            interest = 0.0
+        else:
+            interest = round(balance * (rate_pct / 100.0) * step_months, 2)
+        principal_row = principal_per if i < n_installments else round(balance, 2)
+        end_balance = round(max(0.0, balance - principal_row), 2)
+        cumulative_scheduled += principal_row
+        if total_paid >= cumulative_scheduled - 0.01:
+            status = "paid"
+        elif due < today:
+            status = "overdue"
+        elif (due - today).days <= 7:
+            status = "due_soon"
+        else:
+            status = "scheduled"
+        rows.append({
+            "installment": i,
+            "due_date": due.isoformat(),
+            "opening_balance": round(balance, 2),
+            "principal": principal_row,
+            "interest": interest,
+            "payment": round(principal_row + interest, 2),
+            "ending_balance": end_balance,
+            "status": status,
+        })
+        balance = end_balance
+    return rows
+
+
+@router.get("/funding-sources/{sid}/schedule")
+async def funding_schedule(sid: str, _: dict = Depends(get_current_user)):
+    """JSON amortization schedule for the UI installment ledger drawer."""
+    src = await db.funding_sources.find_one({"id": sid}, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Funding source not found")
+    repayments = await db.funding_repayments.find({"source_id": sid}, {"_id": 0}).to_list(500)
+    schedule = _amortization_schedule(src, repayments)
+    return {
+        "source_id": sid,
+        "payment_frequency": src.get("payment_frequency", "monthly"),
+        "installments_total": len(schedule),
+        "rows": schedule,
+    }
+
+
 class ExpenseIn(BaseModel):
     category: str  # one of EXPENSE_CATEGORIES or custom
     amount: float
