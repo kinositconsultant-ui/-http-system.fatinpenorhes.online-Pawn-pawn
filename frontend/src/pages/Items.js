@@ -30,6 +30,7 @@ import { Plus, Trash2, Pencil, Car, Bike, Cpu, Truck, Image as ImageIcon, Images
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 import BulkPhotoDialog from "../components/BulkPhotoDialog";
+import InventoryBanner from "../components/InventoryBanner";
 
 const PEZADU_CATEGORIES = ["forklift", "tractor", "loader", "heavy_duty_truck"];
 
@@ -226,6 +227,8 @@ export default function Items() {
           Separate tables for {t("car")} · {t("motorcycle")} · {t("electronic")}.
         </p>
       </header>
+
+      <InventoryBanner />
 
       <Tabs value={kind} onValueChange={setKind}>
         <TabsList
