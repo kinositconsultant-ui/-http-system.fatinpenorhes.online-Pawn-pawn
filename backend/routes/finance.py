@@ -66,6 +66,9 @@ EXPENSE_CATEGORY_GROUPS = [
         "Meals",
         "Gastus Jerál",
     ]),
+    ("Financial Costs", [
+        "Interest Expense (Capital)",
+    ]),
     ("Other", [
         "Other",
     ]),
@@ -86,15 +89,106 @@ class FundingSourceIn(BaseModel):
     notes: str = ""
 
 
+def _repayment_split(r: dict) -> tuple[float, float]:
+    """Return (principal, interest) for a repayment doc, treating legacy
+    docs (where only `amount` is set) as pure principal."""
+    if r.get("principal_amount") is not None or r.get("interest_amount") is not None:
+        return (
+            float(r.get("principal_amount", 0) or 0),
+            float(r.get("interest_amount", 0) or 0),
+        )
+    return (float(r.get("amount", 0) or 0), 0.0)
+
+
+def _funding_schedule(src: dict, principal_paid: float, interest_paid: float, today: Optional[date] = None) -> dict:
+    """Compute next_due_date, status, and interest_scheduled from a funding
+    source doc. Uses monthly cadence based on start_date + term_months.
+
+    Status:
+      - overdue  → next_due < today
+      - due_soon → next_due − today ≤ 7 days
+      - on_time  → otherwise
+      - closed   → principal fully repaid (or term elapsed)
+    """
+    from datetime import date as _date
+    today = today or _date.today()
+    try:
+        start = _date.fromisoformat(src.get("start_date") or "")
+    except Exception:
+        start = today
+    term_months = int(src.get("term_months") or 0) or 12
+    principal = float(src.get("principal_amount", 0) or 0)
+    rate_pct = float(src.get("interest_rate", 0) or 0)
+    period = src.get("interest_period") or "monthly"
+
+    # Total interest scheduled over the term.
+    if period == "monthly":
+        interest_scheduled = principal * (rate_pct / 100.0) * term_months
+    elif period == "yearly":
+        interest_scheduled = principal * (rate_pct / 100.0) * (term_months / 12.0)
+    else:
+        interest_scheduled = 0.0
+
+    # Monthly installment cadence — next due = first month-anniversary
+    # >= today (or after last paid installment). Approximation for MVP —
+    # doesn't track individual installments yet, just monthly cadence.
+    from dateutil.relativedelta import relativedelta
+    principal_remaining = max(0.0, principal - principal_paid)
+    fully_paid = principal_remaining <= 0.01
+
+    # Find the next monthly anchor from start_date that is >= today.
+    if fully_paid:
+        next_due = None
+        status = "closed"
+    else:
+        end = start + relativedelta(months=term_months)
+        # Walk forward month-by-month until we pass today (max term_months+1 iterations).
+        anchor = start
+        while anchor < today and anchor < end:
+            anchor = anchor + relativedelta(months=1)
+        # If the term has ended and principal still outstanding → overdue.
+        if anchor > end:
+            anchor = end
+        next_due = anchor
+        days_until = (next_due - today).days
+        if days_until < 0:
+            status = "overdue"
+        elif days_until <= 7:
+            status = "due_soon"
+        else:
+            status = "on_time"
+
+    return {
+        "interest_scheduled": round(interest_scheduled, 2),
+        "interest_remaining": round(max(0.0, interest_scheduled - interest_paid), 2),
+        "next_due_date": next_due.isoformat() if next_due else None,
+        "days_until_due": (next_due - today).days if next_due else None,
+        "status": status,
+    }
+
+
 @router.get("/funding-sources")
 async def list_funding_sources(_: dict = Depends(get_current_user)):
     rows = await db.funding_sources.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    # Compute outstanding from repayments
     for r in rows:
         repaid = await db.funding_repayments.find({"source_id": r["id"]}, {"_id": 0}).to_list(500)
-        total_repaid = sum(float(x.get("amount", 0) or 0) for x in repaid)
+        principal_paid = 0.0
+        interest_paid = 0.0
+        for x in repaid:
+            p, i = _repayment_split(x)
+            principal_paid += p
+            interest_paid += i
+        total_repaid = principal_paid + interest_paid
+        principal = float(r.get("principal_amount", 0) or 0)
+        principal_remaining = max(0.0, principal - principal_paid)
+        r["principal_paid"] = round(principal_paid, 2)
+        r["interest_paid"] = round(interest_paid, 2)
         r["total_repaid"] = round(total_repaid, 2)
-        r["outstanding"] = round(max(0.0, float(r["principal_amount"]) - total_repaid), 2)
+        # Outstanding = principal remaining (interest paid is a P&L expense,
+        # not a debt reduction). Legacy naming kept for backward compat.
+        r["outstanding"] = round(principal_remaining, 2)
+        r["principal_remaining"] = round(principal_remaining, 2)
+        r.update(_funding_schedule(r, principal_paid, interest_paid))
     return rows
 
 
@@ -106,7 +200,16 @@ async def create_funding_source(payload: FundingSourceIn, user: dict = Depends(r
     await db.funding_sources.insert_one(doc)
     await write_audit(user, "create", "funding_source", doc["id"], {"name": payload.name, "amount": payload.principal_amount})
     doc.pop("_id", None)
-    return {**doc, "total_repaid": 0.0, "outstanding": doc["principal_amount"]}
+    schedule = _funding_schedule(doc, 0.0, 0.0)
+    return {
+        **doc,
+        "principal_paid": 0.0,
+        "interest_paid": 0.0,
+        "total_repaid": 0.0,
+        "outstanding": doc["principal_amount"],
+        "principal_remaining": doc["principal_amount"],
+        **schedule,
+    }
 
 
 @router.put("/funding-sources/{sid}")
@@ -129,7 +232,11 @@ async def delete_funding_source(sid: str, _: dict = Depends(require_admin)):
 
 class FundingRepaymentIn(BaseModel):
     source_id: str
-    amount: float
+    # amount kept for backward compat. When principal_amount / interest_amount
+    # are both omitted, `amount` is treated as pure principal (legacy).
+    amount: Optional[float] = None
+    principal_amount: Optional[float] = None
+    interest_amount: Optional[float] = None
     date: str
     notes: str = ""
 
@@ -139,12 +246,60 @@ async def add_repayment(sid: str, payload: FundingRepaymentIn, user: dict = Depe
     src = await db.funding_sources.find_one({"id": sid}, {"_id": 0})
     if not src:
         raise HTTPException(status_code=404, detail="Funding source not found")
-    doc = payload.model_dump()
-    doc["source_id"] = sid
-    doc["id"] = new_id()
-    doc["created_at"] = utcnow_iso()
+
+    # Resolve principal / interest split.
+    p = float(payload.principal_amount) if payload.principal_amount is not None else None
+    i = float(payload.interest_amount) if payload.interest_amount is not None else None
+    a = float(payload.amount) if payload.amount is not None else None
+    if p is None and i is None:
+        # Legacy shape — treat total `amount` as pure principal.
+        if a is None:
+            raise HTTPException(status_code=400, detail="Provide principal_amount, interest_amount, or amount")
+        p = a
+        i = 0.0
+    else:
+        p = p or 0.0
+        i = i or 0.0
+    if p < 0 or i < 0:
+        raise HTTPException(status_code=400, detail="Amounts must be non-negative")
+    total = round(p + i, 2)
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="Total repayment must be greater than zero")
+
+    doc = {
+        "id": new_id(),
+        "source_id": sid,
+        "amount": total,  # backward-compat aggregate (principal + interest)
+        "principal_amount": round(p, 2),
+        "interest_amount": round(i, 2),
+        "date": payload.date,
+        "notes": payload.notes,
+        "created_at": utcnow_iso(),
+    }
     await db.funding_repayments.insert_one(doc)
-    await write_audit(user, "create", "funding_repayment", doc["id"], {"source_id": sid, "amount": payload.amount})
+
+    # Auto-book Interest Expense (Capital) so it flows through P&L / net_profit.
+    expense_id = None
+    if i > 0:
+        expense_doc = {
+            "id": new_id(),
+            "category": "Interest Expense (Capital)",
+            "amount": round(i, 2),
+            "date": payload.date,
+            "paid_to": src.get("name", ""),
+            "description": f"Interest on capital · {src.get('name','')} · repayment {doc['id']}",
+            "payment_method": "cash",
+            "receipt_url": "",
+            "source_ref": {"kind": "funding_repayment", "id": doc["id"], "source_id": sid},
+            "created_at": utcnow_iso(),
+        }
+        await db.expenses.insert_one(expense_doc)
+        expense_id = expense_doc["id"]
+
+    await write_audit(
+        user, "create", "funding_repayment", doc["id"],
+        {"source_id": sid, "principal": p, "interest": i, "total": total, "expense_id": expense_id},
+    )
     doc.pop("_id", None)
     return doc
 
@@ -225,8 +380,16 @@ async def finance_summary(
     sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
     repayments = await db.funding_repayments.find({}, {"_id": 0}).to_list(5000)
     capital_received = sum(float(s.get("principal_amount", 0) or 0) for s in sources)
-    capital_repaid = sum(float(r.get("amount", 0) or 0) for r in repayments)
-    capital_outstanding = max(0.0, capital_received - capital_repaid)
+    # Split repayments into principal (debt reduction) vs interest (P&L expense).
+    # Legacy repayments (no split fields) are treated as pure principal.
+    capital_repaid_principal = 0.0
+    capital_interest_paid = 0.0
+    for r in repayments:
+        p, i = _repayment_split(r)
+        capital_repaid_principal += p
+        capital_interest_paid += i
+    capital_repaid = capital_repaid_principal + capital_interest_paid  # aggregate (legacy compat)
+    capital_outstanding = max(0.0, capital_received - capital_repaid_principal)
 
     # Pawn flows
     contracts = await db.contracts.find({}, {"_id": 0}).to_list(5000)
@@ -288,8 +451,11 @@ async def finance_summary(
         + inspections_reimbursed
     )
     total_outflows = (
-        loans_disbursed + expenses_total + capital_repaid + inspections_incurred
+        loans_disbursed + expenses_total + capital_repaid_principal + inspections_incurred
     )
+    # NOTE: interest paid on capital is inside `expenses_total` (auto-booked
+    # as "Interest Expense (Capital)" on every repayment). We add only the
+    # principal portion here to avoid double-counting.
     cash_on_hand = opening_cash + total_inflows - total_outflows
     # Gross profit (interest + penalties earned) — approximate
     for c in contracts:
@@ -325,6 +491,8 @@ async def finance_summary(
         "total_outflows": round(total_outflows, 2),
         "capital_received": round(capital_received, 2),
         "capital_repaid": round(capital_repaid, 2),
+        "capital_repaid_principal": round(capital_repaid_principal, 2),
+        "capital_interest_paid": round(capital_interest_paid, 2),
         "capital_outstanding": round(capital_outstanding, 2),
         "loans_disbursed": round(loans_disbursed, 2),
         "client_payments": round(client_payments, 2),
@@ -427,14 +595,19 @@ async def cash_ledger(
                 "notes": f"capital from {f.get('name','')}",
             })
     async for r in db.funding_repayments.find({"date": {"$gte": cutoff}}, {"_id": 0}):
-        entries.append({
-            "date": r.get("date"),
-            "kind": "capital_out",
-            "source": "funding_repayments",
-            "amount": -float(r.get("amount", 0) or 0),
-            "reference": r.get("id"),
-            "notes": f"repayment · {r.get('notes','')}",
-        })
+        p, i = _repayment_split(r)
+        # Only principal portion counts as capital_out in the ledger — the
+        # interest portion is separately booked as an expense row (Interest
+        # Expense (Capital)) and will appear via the expenses loop above.
+        if p > 0:
+            entries.append({
+                "date": r.get("date"),
+                "kind": "capital_out",
+                "source": "funding_repayments",
+                "amount": -p,
+                "reference": r.get("id"),
+                "notes": f"principal repayment · {r.get('notes','')}",
+            })
 
     # 5. Auctions (inflow when sold_price captured on `date_sold`)
     async for a in db.auctions.find({}, {"_id": 0}):

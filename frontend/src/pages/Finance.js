@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "../components/ui/dialog";
 import {
   Select,
@@ -408,7 +409,7 @@ function CapitalSection({ sources, reload, t }) {
   const [editingId, setEditingId] = useState(null);
   const [repOpen, setRepOpen] = useState(false);
   const [repFor, setRepFor] = useState(null);
-  const [repForm, setRepForm] = useState({ amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+  const [repForm, setRepForm] = useState({ principal_amount: "", interest_amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
 
   const submit = async () => {
     try {
@@ -429,11 +430,21 @@ function CapitalSection({ sources, reload, t }) {
   };
   const submitRep = async () => {
     try {
+      const principal = Number(repForm.principal_amount || 0);
+      const interest = Number(repForm.interest_amount || 0);
+      if (principal <= 0 && interest <= 0) {
+        toast.error("Enter a principal or interest amount");
+        return;
+      }
       await api.post(`/funding-sources/${repFor.id}/repayments`, {
-        source_id: repFor.id, amount: Number(repForm.amount), date: repForm.date, notes: repForm.notes,
+        source_id: repFor.id,
+        principal_amount: principal,
+        interest_amount: interest,
+        date: repForm.date,
+        notes: repForm.notes,
       });
-      toast.success("Repayment recorded");
-      setRepOpen(false); setRepForm({ amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+      toast.success("Repayment recorded — interest booked as expense");
+      setRepOpen(false); setRepForm({ principal_amount: "", interest_amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
       reload();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
@@ -551,24 +562,50 @@ function CapitalSection({ sources, reload, t }) {
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
         <table className="min-w-full text-sm" data-testid="capital-table">
           <thead className="bg-stone-50 text-left">
-            <tr>{["Name", "Type", "Principal", "Rate", "Repaid", "Outstanding", "Start", "Due", "Actions"].map((h) => (
-              <th key={h} className="px-4 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold">{h}</th>
+            <tr>{["Name", "Type", "Initial Loan", "Principal Paid", "Principal Left", "Interest Paid", "Interest Left", "Next Due", "Status", "Actions"].map((h) => (
+              <th key={h} className="px-3 py-3 text-xs uppercase tracking-wider text-stone-500 font-semibold">{h}</th>
             ))}</tr>
           </thead>
           <tbody>
-            {sources.map((s) => (
-              <tr key={s.id} className="border-t border-stone-100">
-                <td className="px-4 py-3 font-medium">{s.name}</td>
-                <td className="px-4 py-3">
+            {sources.map((s) => {
+              const statusStyles = {
+                on_time: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                due_soon: "bg-amber-50 text-amber-800 border-amber-300",
+                overdue: "bg-rose-50 text-rose-700 border-rose-300",
+                closed: "bg-stone-100 text-stone-500 border-stone-200",
+              };
+              const statusLabels = {
+                on_time: "On Time",
+                due_soon: "Due Soon",
+                overdue: "Overdue",
+                closed: "Closed",
+              };
+              const st = s.status || "on_time";
+              return (
+              <tr key={s.id} className="border-t border-stone-100" data-testid={`capital-row-${s.id}`}>
+                <td className="px-3 py-3 font-medium">
+                  {s.name}
+                  <div className="text-[10px] text-stone-500 mt-0.5">{s.interest_rate}% / {s.interest_period} · {s.term_months || "—"} mo</div>
+                </td>
+                <td className="px-3 py-3">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">{s.source_type}</span>
                 </td>
-                <td className="px-4 py-3">{fmt(s.principal_amount)}</td>
-                <td className="px-4 py-3">{s.interest_rate}% / {s.interest_period}</td>
-                <td className="px-4 py-3">{fmt(s.total_repaid)}</td>
-                <td className="px-4 py-3 font-medium text-[#C17767]">{fmt(s.outstanding)}</td>
-                <td className="px-4 py-3">{s.start_date}</td>
-                <td className="px-4 py-3">{s.due_date || "—"}</td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-3">{fmt(s.principal_amount)}</td>
+                <td className="px-3 py-3 text-emerald-700">{fmt(s.principal_paid)}</td>
+                <td className="px-3 py-3 font-medium text-[#C17767]" data-testid={`capital-principal-left-${s.id}`}>{fmt(s.principal_remaining)}</td>
+                <td className="px-3 py-3 text-emerald-700">{fmt(s.interest_paid)}</td>
+                <td className="px-3 py-3">{fmt(s.interest_remaining)}</td>
+                <td className="px-3 py-3">{s.next_due_date || "—"}</td>
+                <td className="px-3 py-3">
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusStyles[st]}`}
+                    data-testid={`capital-status-${s.id}`}
+                    title={s.days_until_due !== null ? `${s.days_until_due} days until next due` : ""}
+                  >
+                    {statusLabels[st]}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
                   <div className="flex gap-2">
                     <button onClick={() => { setRepFor(s); setRepOpen(true); }} data-testid={`capital-repay-${s.id}`}
                             className="text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]">Repay</button>
@@ -581,9 +618,10 @@ function CapitalSection({ sources, reload, t }) {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {sources.length === 0 && (
-              <tr><td colSpan="9" className="p-8 text-center text-stone-500">No capital sources yet</td></tr>
+              <tr><td colSpan="10" className="p-8 text-center text-stone-500">No capital sources yet</td></tr>
             )}
           </tbody>
         </table>
@@ -591,11 +629,42 @@ function CapitalSection({ sources, reload, t }) {
 
       <Dialog open={repOpen} onOpenChange={setRepOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Record Repayment — {repFor?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Record Repayment — {repFor?.name}</DialogTitle>
+            <DialogDescription className="sr-only">Record a capital repayment split into principal (reduces debt) and interest (booked as an expense).</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <FF label="Amount">
-              <Input type="number" step="0.01" value={repForm.amount} onChange={(e) => setRepForm({ ...repForm, amount: e.target.value })} data-testid="capital-rep-amount" />
-            </FF>
+            {repFor && (
+              <div className="rounded-md bg-stone-50 border border-stone-200 px-3 py-2 text-xs text-stone-600 grid grid-cols-2 gap-2">
+                <div><span className="text-stone-400">Principal Left</span><br /><span className="font-display text-[#C17767]" data-testid="rep-dialog-p-left">{fmt(repFor.principal_remaining)}</span></div>
+                <div><span className="text-stone-400">Interest Remaining</span><br /><span className="font-display text-stone-700">{fmt(repFor.interest_remaining)}</span></div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <FF label="Principal Payment">
+                <Input type="number" step="0.01" min="0"
+                       value={repForm.principal_amount}
+                       onChange={(e) => setRepForm({ ...repForm, principal_amount: e.target.value })}
+                       data-testid="capital-rep-principal"
+                       placeholder="Reduces debt" />
+              </FF>
+              <FF label="Interest Payment">
+                <Input type="number" step="0.01" min="0"
+                       value={repForm.interest_amount}
+                       onChange={(e) => setRepForm({ ...repForm, interest_amount: e.target.value })}
+                       data-testid="capital-rep-interest"
+                       placeholder="Booked as expense" />
+              </FF>
+            </div>
+            <div className="rounded-md bg-indigo-50 border border-indigo-200 px-3 py-2 text-xs text-indigo-900 flex items-center justify-between">
+              <span>Total Cash Out</span>
+              <span className="font-display text-base" data-testid="capital-rep-total">
+                {fmt(Number(repForm.principal_amount || 0) + Number(repForm.interest_amount || 0))}
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Interest paid is automatically booked as an expense under <b>Interest Expense (Capital)</b> and will reduce Net Profit. Principal reduces the outstanding balance and Cash on Hand.
+            </p>
             <FF label="Date">
               <Input type="date" value={repForm.date} onChange={(e) => setRepForm({ ...repForm, date: e.target.value })} data-testid="capital-rep-date" />
             </FF>
