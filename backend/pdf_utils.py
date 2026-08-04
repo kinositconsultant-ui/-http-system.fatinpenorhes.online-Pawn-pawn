@@ -1929,23 +1929,45 @@ def build_finance_summary_pdf(summary: dict, month: int | None = None, year: int
     kpis = [
         _row("Cash on Hand", "cash_on_hand"),
         _row("Capital Received", "capital_received"),
-        _row("Capital Repaid", "capital_repaid"),
+        _row("Capital Repaid (Principal)", "capital_repaid_principal"),
+        _row("Capital Interest Paid", "capital_interest_paid"),
         _row("Capital Outstanding", "capital_outstanding"),
         _row("Loans Disbursed", "loans_disbursed"),
         _row("Client Payments", "client_payments"),
         _row("Auction Sales", "auction_sales"),
         _row("Interest Received", "interest_received"),
         _row("Total Penalty", "total_penalty"),
-        _row("Auction Profit", "auction_profit"),
-        _row("Expenses (Period)", "expenses_period"),
-        _row("Expenses (Lifetime)", "expenses_total"),
-        _row("Gross Profit", "gross_profit"),
-        _row("Net Profit", "net_profit"),
+        _row("Auction Profit (net)", "auction_net_profit"),
+        _row("Operating Expenses", "operating_expenses"),
+        _row("Financial Expenses", "financial_expenses"),
         ["Total Invoices", str(summary.get("total_invoices", 0))],
         _row("Total Invoiced", "total_invoiced"),
     ]
     story.append(_section_title(s, "Key Indicators"))
     story.append(_kv_table(kpis, (8 * cm, 8 * cm)))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # Income Statement · Rezultadu Netu — mirrors the UI 5-row layout
+    story.append(_section_title(s, "Income Statement · Rezultadu Netu"))
+    gross = float(summary.get("gross_profit", 0) or 0)
+    op_exp = float(summary.get("operating_expenses", 0) or 0)
+    op_profit = float(summary.get("operating_profit", gross - op_exp) or 0)
+    fin_exp = float(summary.get("financial_expenses", 0) or 0)
+    net = float(summary.get("net_profit", 0) or 0)
+    margin_pct = (net / gross * 100.0) if gross else 0.0
+    income_rows = [
+        ["Gross Profit", _money(gross), "Interest + Penalty + Auction"],
+        ["− Operating Expenses", _money(-op_exp), "Salary, rent, utilities…"],
+        ["= Operating Profit", _money(op_profit), "Gross − Operating"],
+        ["− Financial Expenses", _money(-fin_exp), "Interest on capital"],
+        ["= Net Profit", _money(net), "Operating − Financial"],
+    ]
+    story.append(_data_table(
+        ["Line", "Amount", "Notes"],
+        income_rows,
+        col_widths=[5.5 * cm, 4 * cm, 6.5 * cm],
+        footer_row=["Margin (Net ÷ Gross)", f"{margin_pct:.1f}%", ""],
+    ))
     story.append(Spacer(1, 0.4 * cm))
 
     # Expenses by category
