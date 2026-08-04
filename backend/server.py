@@ -1876,6 +1876,7 @@ async def delete_file(file_id: str, _: dict = Depends(require_admin)):
 
 from routes.contracts_kpi import router as contracts_kpi_router  # noqa: E402
 from routes.inventory import router as inventory_router  # noqa: E402
+from routes.business_dashboard import router as business_dashboard_router  # noqa: E402
 from routes.reports import router as reports_router  # noqa: E402
 from routes.finance import router as finance_router  # noqa: E402
 from routes.public import router as public_router  # noqa: E402
@@ -1910,6 +1911,7 @@ app.include_router(clients_router, prefix="/api")
 app.include_router(items_router, prefix="/api")
 app.include_router(inspections_router, prefix="/api")
 app.include_router(inventory_router, prefix="/api")
+app.include_router(business_dashboard_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
