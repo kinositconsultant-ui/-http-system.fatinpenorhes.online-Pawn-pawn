@@ -188,11 +188,20 @@ def start_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
     # Daily WhatsApp overdue reminders — 09:00 Timor (UTC+9) → 00:00 UTC
-    from reminders import run_daily_reminders_sync
+    from reminders import run_daily_reminders_sync, run_capital_reminders_sync
     _scheduler.add_job(
         run_daily_reminders_sync,
         CronTrigger(hour=0, minute=0),
         id="daily_reminders",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    # Daily capital-installment reminders — 08:00 Timor → 23:00 UTC (1h before
+    # the client reminder so admin can react before customer messages fire)
+    _scheduler.add_job(
+        run_capital_reminders_sync,
+        CronTrigger(hour=23, minute=30),
+        id="capital_reminders",
         replace_existing=True,
         misfire_grace_time=3600,
     )

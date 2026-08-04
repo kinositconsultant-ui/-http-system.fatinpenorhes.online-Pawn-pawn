@@ -76,6 +76,13 @@ EXPENSE_CATEGORY_GROUPS = [
 
 EXPENSE_CATEGORIES = [item for _, items in EXPENSE_CATEGORY_GROUPS for item in items]
 
+# Categories that count as "Financial Expenses" on the Income Statement.
+# Everything else is "Operating Expenses". Used by /finance/summary to
+# produce the proper `Gross → Operating Profit → Net Profit` layout.
+FINANCIAL_EXPENSE_CATEGORIES = set(
+    dict(EXPENSE_CATEGORY_GROUPS).get("Financial Costs", [])
+)
+
 
 class FundingSourceIn(BaseModel):
     name: str
@@ -425,6 +432,17 @@ async def finance_summary(
     expenses_filtered = _apply_date_filter(expenses, "date", month, year)
     expenses_total = sum(float(e.get("amount", 0) or 0) for e in expenses)
     expenses_period = sum(float(e.get("amount", 0) or 0) for e in expenses_filtered)
+    # Income Statement split: Operating vs Financial expenses.
+    # Financial = "Interest Expense (Capital)" and any other category
+    # under the Financial Costs group. Operating = everything else.
+    operating_expenses = 0.0
+    financial_expenses = 0.0
+    for e in expenses:
+        amt = float(e.get("amount", 0) or 0)
+        if e.get("category") in FINANCIAL_EXPENSE_CATEGORIES:
+            financial_expenses += amt
+        else:
+            operating_expenses += amt
     # by category
     by_category: dict[str, float] = {}
     for e in expenses_filtered:
@@ -477,7 +495,14 @@ async def finance_summary(
         auction_interest_profit + auction_realized_profit - auction_realized_loss
     )
     gross_profit = interest_received + total_penalty + auction_profit
-    net_profit = gross_profit - expenses_total
+    # Proper Income Statement layout:
+    #   Gross Profit
+    # − Operating Expenses  (Salary, Rent, Utilities, etc.)
+    # = Operating Profit
+    # − Financial Expenses  (Interest Expense (Capital))
+    # = Net Profit
+    operating_profit = gross_profit - operating_expenses
+    net_profit = operating_profit - financial_expenses
 
     # Invoices
     invoices = await db.invoices.find({}, {"_id": 0}).to_list(5000)
@@ -504,6 +529,8 @@ async def finance_summary(
         "auction_tax_collected": round(auction_tax_collected, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
+        "operating_expenses": round(operating_expenses, 2),
+        "financial_expenses": round(financial_expenses, 2),
         "inspections_incurred": round(inspections_incurred, 2),
         "inspections_reimbursed": round(inspections_reimbursed, 2),
         "inspections_net_cost": round(inspections_incurred - inspections_reimbursed, 2),
@@ -511,6 +538,7 @@ async def finance_summary(
         "total_penalty": round(total_penalty, 2),
         "auction_profit": round(auction_profit, 2),
         "gross_profit": round(gross_profit, 2),
+        "operating_profit": round(operating_profit, 2),
         "net_profit": round(net_profit, 2),
         "expenses_by_category": by_category_list,
         "total_invoices": total_invoices,

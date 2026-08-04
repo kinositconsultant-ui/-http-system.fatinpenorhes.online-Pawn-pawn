@@ -223,6 +223,16 @@ async def reminders_run_now(admin: dict = Depends(require_admin)):
     return result
 
 
+@router.post("/reminders/run-capital")
+async def reminders_run_capital(force: bool = False, admin: dict = Depends(require_admin)):
+    """Manually trigger the capital-installment reminder job.
+    Set `force=true` to also fire for already-overdue sources and bypass dedup."""
+    from reminders import run_capital_reminders
+    result = await run_capital_reminders(force=force)
+    await write_audit(admin, "run_capital_reminders", "reminders", None, result)
+    return result
+
+
 @router.get("/reminders/logs")
 async def reminders_logs(_: dict = Depends(require_admin)):
     """Return the last 90 days of reminder attempts, capped at 500 rows."""

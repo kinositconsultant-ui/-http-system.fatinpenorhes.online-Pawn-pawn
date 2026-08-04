@@ -359,3 +359,181 @@ def run_daily_reminders_sync() -> None:
     except Exception as exc:
         logger.exception("[reminders] top-level failure")
         _record_job_run_sync("daily_reminders", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})
+
+
+
+# =====================================================================
+# Capital Installment Reminders (iter 61)
+# Fires 7 / 3 / 1 day BEFORE each capital installment (and on the day
+# itself). Notifies all admin users via email. Uses the same dedup log.
+# =====================================================================
+CAPITAL_REMINDER_DAYS = [7, 3, 1, 0]  # days *before* next_due
+
+
+async def run_capital_reminders(force: bool = False) -> dict:
+    """Scan funding sources for upcoming installments and email admins.
+
+    A funding source is nudged when the days_until_due is in
+    CAPITAL_REMINDER_DAYS (or when it's overdue and force=True).
+    """
+    from routes.finance import _repayment_split, _funding_schedule
+    summary: dict = {"scanned": 0, "sent": 0, "skipped": 0, "errors": 0, "attempted": []}
+
+    settings = await db.settings.find_one({}, {"_id": 0}) or {}
+    if not settings.get("reminders_enabled", True):
+        summary["disabled"] = True
+        return summary
+
+    today = datetime.now(timezone.utc).date()
+
+    # Recipients — every admin user with an email.
+    admin_users = await db.users.find(
+        {"role": "admin"}, {"_id": 0, "id": 1, "email": 1, "name": 1}
+    ).to_list(50)
+    admin_recipients = [u for u in admin_users if u.get("email")]
+    if not admin_recipients:
+        summary["skipped"] += 1
+        summary["reason"] = "no_admin_email"
+        return summary
+
+    sources = await db.funding_sources.find({}, {"_id": 0}).to_list(500)
+    for src in sources:
+        summary["scanned"] += 1
+        # Compute paid totals for this source
+        repaid = await db.funding_repayments.find({"source_id": src["id"]}, {"_id": 0}).to_list(500)
+        p_paid = sum(_repayment_split(r)[0] for r in repaid)
+        i_paid = sum(_repayment_split(r)[1] for r in repaid)
+        sched = _funding_schedule(src, p_paid, i_paid, today=today)
+        if sched["status"] == "closed":
+            continue
+        days_until = sched.get("days_until_due")
+        if days_until is None:
+            continue
+        # Trigger buckets: 7, 3, 1, 0 days ahead — plus overdue (< 0) if force.
+        if days_until in CAPITAL_REMINDER_DAYS:
+            bucket = days_until
+        elif force and days_until < 0:
+            bucket = -1
+        else:
+            continue
+
+        # Dedup — one email per source per bucket per day
+        dedup_key = {
+            "kind": "capital",
+            "source_id": src["id"],
+            "day_bucket": bucket,
+            "date": today.isoformat(),
+        }
+        if not force and await db.reminder_log.find_one(dedup_key):
+            summary["skipped"] += 1
+            continue
+
+        principal = float(src.get("principal_amount", 0) or 0)
+        p_remaining = max(0.0, principal - p_paid)
+        rate = float(src.get("interest_rate", 0) or 0)
+        per_month = round(principal * rate / 100.0, 2) if src.get("interest_period") == "monthly" else 0.0
+        subject_word = "Overdue" if bucket == -1 else ("Due today" if bucket == 0 else f"Due in {bucket} day(s)")
+        subject = f"[Fatin Penhores] Capital installment — {subject_word} — {src.get('name','')}"
+        html = _capital_reminder_html(
+            source=src,
+            principal_paid=p_paid,
+            principal_remaining=p_remaining,
+            interest_paid=i_paid,
+            interest_remaining=sched["interest_remaining"],
+            next_due_date=sched["next_due_date"],
+            days_until=days_until,
+            per_month_interest=per_month,
+        )
+
+        try:
+            any_ok = False
+            for user in admin_recipients:
+                result = await email_svc.send_email(user["email"], subject, html)
+                ok = result.get("status") == "sent"
+                any_ok = any_ok or ok
+                summary["attempted"].append({
+                    "source": src.get("name"),
+                    "bucket": bucket,
+                    "recipient": user["email"],
+                    "status": result.get("status"),
+                })
+            if any_ok:
+                summary["sent"] += 1
+            else:
+                summary["errors"] += 1
+            await db.reminder_log.insert_one({
+                "id": new_id(),
+                **dedup_key,
+                "source_name": src.get("name", ""),
+                "success": any_ok,
+                "recipients": [u["email"] for u in admin_recipients],
+                "created_at": utcnow_iso(),
+            })
+        except Exception as e:  # noqa: BLE001
+            logger.exception("[capital_reminders] failed for source %s", src.get("id"))
+            summary["errors"] += 1
+            await db.reminder_log.insert_one({
+                "id": new_id(),
+                **dedup_key,
+                "success": False,
+                "error": str(e),
+                "created_at": utcnow_iso(),
+            })
+
+    return summary
+
+
+def _capital_reminder_html(source: dict, principal_paid: float, principal_remaining: float,
+                            interest_paid: float, interest_remaining: float, next_due_date: str,
+                            days_until: int | None, per_month_interest: float) -> str:
+    """Build a simple HTML email for the admin. Bilingual EN/TET."""
+    name = source.get("name", "")
+    principal = float(source.get("principal_amount", 0) or 0)
+    urgency = "OVERDUE" if (days_until is not None and days_until < 0) else (
+        "DUE TODAY" if days_until == 0 else f"Due in {days_until} day(s)"
+    )
+    return f"""
+<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:560px;margin:auto;color:#1B2D5C;">
+  <div style="background:#1B2D5C;color:#fff;padding:14px 18px;border-radius:6px 6px 0 0">
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.8">Fatin Penhores · Capital Reminder</div>
+    <div style="font-size:22px;font-weight:600;margin-top:4px">{urgency}</div>
+  </div>
+  <div style="background:#fff;border:1px solid #e7e5e4;border-top:0;padding:18px;border-radius:0 0 6px 6px">
+    <p><b>{name}</b></p>
+    <p>Next installment due date: <b>{next_due_date}</b></p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
+      <tr><td style="padding:4px 0;color:#57534E">Initial Loan</td><td style="text-align:right"><b>${principal:,.2f}</b></td></tr>
+      <tr><td style="padding:4px 0;color:#57534E">Principal Paid</td><td style="text-align:right;color:#059669">${principal_paid:,.2f}</td></tr>
+      <tr><td style="padding:4px 0;color:#57534E">Principal Remaining</td><td style="text-align:right;color:#C17767"><b>${principal_remaining:,.2f}</b></td></tr>
+      <tr><td style="padding:4px 0;color:#57534E">Interest Paid</td><td style="text-align:right;color:#059669">${interest_paid:,.2f}</td></tr>
+      <tr><td style="padding:4px 0;color:#57534E">Interest Remaining</td><td style="text-align:right">${interest_remaining:,.2f}</td></tr>
+      <tr><td style="padding:4px 0;color:#57534E">Interest / month</td><td style="text-align:right">${per_month_interest:,.2f}</td></tr>
+    </table>
+    <p style="font-size:12px;color:#57534E;margin-top:16px;line-height:1.5">
+      Log in to the admin console to record the repayment. Principal reduces
+      Capital Outstanding + Cash on Hand. Interest is booked as an expense and
+      reduces Net Profit.
+    </p>
+  </div>
+  <p style="font-size:11px;color:#8b8680;text-align:center;margin-top:10px">
+    Fatin Penhores Unipessoal, Lda · Dili, Timor-Leste
+  </p>
+</div>
+"""
+
+
+def run_capital_reminders_sync() -> None:
+    """APScheduler hook — runs the async capital-reminder job.
+    Records outcome to db.job_runs for the Dashboard Scheduler card."""
+    import time
+    from scheduler import _record_job_run_sync
+    t0 = time.time()
+    try:
+        summary = asyncio.run(run_capital_reminders())
+        _record_job_run_sync("capital_reminders", "ok", int((time.time() - t0) * 1000), {
+            "sent": (summary or {}).get("sent"),
+            "scanned": (summary or {}).get("scanned"),
+        })
+    except Exception as exc:
+        logger.exception("[capital_reminders] top-level failure")
+        _record_job_run_sync("capital_reminders", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})

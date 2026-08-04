@@ -181,30 +181,40 @@ export default function Finance() {
             ]}
           />
         </div>
-        {/* Gross → expenses → net */}
+        {/* Gross → Operating → Financial → Net (proper Income Statement) */}
         <div className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 md:p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-2 font-semibold">Income Statement · Rezultadu Netu</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
             <ProfitLine label="Gross Profit"
                        hint="Interest + Penalty + Auction"
                        value={summary?.gross_profit}
                        tone="text-[#1B2D5C]" bold />
             <ProfitLine label="Operating Expenses"
-                       hint="Salaries, utilities, etc."
-                       value={summary?.expenses_total || 0}
+                       hint="Salary, rent, utilities…"
+                       value={summary?.operating_expenses || 0}
                        tone="text-rose-700" sign="−" />
+            <ProfitLine label="Operating Profit"
+                       hint="Gross − Operating"
+                       value={summary?.operating_profit}
+                       tone={Number(summary?.operating_profit || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}
+                       bold />
+            <ProfitLine label="Financial Expenses"
+                       hint="Interest on capital"
+                       value={summary?.financial_expenses || 0}
+                       tone="text-amber-800" sign="−" />
             <ProfitLine label="Net Profit"
-                       hint="Gross − Expenses"
+                       hint="Operating − Financial"
                        value={summary?.net_profit}
                        tone={Number(summary?.net_profit || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}
                        bold />
-            <ProfitLine label="Margin"
-                       hint="Net ÷ (Interest + Penalty + Auction)"
-                       raw={
-                         summary && summary.gross_profit
-                           ? `${((summary.net_profit / summary.gross_profit) * 100).toFixed(1)}%`
-                           : "—"
-                       }
-                       tone="text-stone-800" />
+          </div>
+          <div className="mt-3 pt-3 border-t border-stone-200 flex items-center justify-between text-[11px] text-stone-500">
+            <span>Margin (Net ÷ Gross)</span>
+            <span className="font-medium text-stone-700 tabular-nums" data-testid="net-margin">
+              {summary && summary.gross_profit
+                ? `${((summary.net_profit / summary.gross_profit) * 100).toFixed(1)}%`
+                : "—"}
+            </span>
           </div>
         </div>
       </Card>
