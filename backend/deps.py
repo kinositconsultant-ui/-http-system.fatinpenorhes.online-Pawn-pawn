@@ -72,6 +72,7 @@ ALL_MODULES = [
     "auctions",
     "reports",
     "finance",
+    "warehouse",
     "users",
     "settings",
     "audit_log",
@@ -80,7 +81,7 @@ ALL_MODULES = [
 # Default module sets per role (admin always gets everything).
 ROLE_DEFAULT_MODULES = {
     "admin": ALL_MODULES,
-    "staff": ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports"],
+    "staff": ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports", "warehouse"],
     "cashier": ["dashboard", "payments"],
 }
 
