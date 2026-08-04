@@ -1562,41 +1562,58 @@ def build_audit_log_pdf(rows: list[dict], filters: dict | None = None) -> bytes:
 
 
 def build_capital_sources_pdf(sources: list[dict]) -> bytes:
-    """List of capital sources with totals."""
+    """List of capital sources with the full split principal/interest audit view."""
     s = _styles()
     buf, doc = _new_doc(landscape_mode=True)
     total_principal = sum(float(x.get("principal_amount", 0) or 0) for x in sources)
-    total_repaid = sum(float(x.get("total_repaid", 0) or 0) for x in sources)
-    total_outstanding = sum(float(x.get("outstanding", 0) or 0) for x in sources)
+    total_p_paid = sum(float(x.get("principal_paid", 0) or 0) for x in sources)
+    total_p_left = sum(float(x.get("principal_remaining", 0) or 0) for x in sources)
+    total_i_paid = sum(float(x.get("interest_paid", 0) or 0) for x in sources)
+    total_i_left = sum(float(x.get("interest_remaining", 0) or 0) for x in sources)
     story = [
         _branded_header(s),
         Paragraph("Capital Sources · Fontes Kapitál", s["DocTitle"]),
         Paragraph(
             f"Sources: <b>{len(sources)}</b> · Principal: <b>{_money(total_principal)}</b> · "
-            f"Repaid: <b>{_money(total_repaid)}</b> · Outstanding: <b>{_money(total_outstanding)}</b>",
+            f"Principal Paid: <b>{_money(total_p_paid)}</b> · "
+            f"Principal Left: <b>{_money(total_p_left)}</b> · "
+            f"Interest Paid: <b>{_money(total_i_paid)}</b> · "
+            f"Interest Left: <b>{_money(total_i_left)}</b>",
             s["Body"]),
         Spacer(1, 0.3 * cm),
     ]
+    status_labels = {"on_time": "On Time", "due_soon": "Due Soon",
+                     "overdue": "Overdue", "closed": "Closed"}
     rows = []
     for x in sources:
         rows.append([
             x.get("name", ""),
-            str(x.get("source_type", "")).title(),
+            f"{float(x.get('interest_rate', 0) or 0):.1f}% / {x.get('interest_period', '')[:3]}",
             _money(x.get("principal_amount", 0)),
-            f"{float(x.get('interest_rate', 0) or 0):.2f}% / {x.get('interest_period', '')}",
-            _money(x.get("total_repaid", 0)),
-            _money(x.get("outstanding", 0)),
-            x.get("start_date", "") or "—",
-            x.get("due_date", "") or "—",
+            _money(x.get("principal_paid", 0)),
+            _money(x.get("principal_remaining", 0)),
+            _money(x.get("interest_paid", 0)),
+            _money(x.get("interest_remaining", 0)),
+            x.get("next_due_date", "") or "—",
+            status_labels.get(x.get("status", ""), "—"),
         ])
-    footer = ["", "TOTAL", _money(total_principal), "",
-              _money(total_repaid), _money(total_outstanding), "", ""]
+    footer = ["", "TOTAL",
+              _money(total_principal), _money(total_p_paid), _money(total_p_left),
+              _money(total_i_paid), _money(total_i_left), "", ""]
     story.append(_data_table(
-        ["Name", "Type", "Principal", "Rate / Period", "Repaid", "Outstanding", "Start", "Due"],
+        ["Name", "Rate/Period", "Initial Loan", "Principal Paid", "Principal Left",
+         "Interest Paid", "Interest Left", "Next Due", "Status"],
         rows,
-        col_widths=[5 * cm, 2.4 * cm, 3 * cm, 3.4 * cm, 3 * cm, 3.2 * cm, 2.4 * cm, 2.4 * cm],
+        col_widths=[4.2 * cm, 2.3 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm,
+                    2.5 * cm, 2.5 * cm, 2.2 * cm, 2 * cm],
         footer_row=footer,
     ))
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(
+        "<i>Rezumu · Note: Principal repayments reduce Capital Outstanding + Cash on Hand. "
+        "Interest repayments are booked as Financial Expenses (Interest Expense · Capital) "
+        "and reduce Net Profit on the Income Statement.</i>",
+        s["Body"]))
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
 

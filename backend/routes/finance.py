@@ -776,9 +776,19 @@ async def capital_sources_pdf(_: dict = Depends(get_current_user)):
     sources = await db.funding_sources.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for r in sources:
         repaid = await db.funding_repayments.find({"source_id": r["id"]}, {"_id": 0}).to_list(500)
-        total_repaid = sum(float(x.get("amount", 0) or 0) for x in repaid)
-        r["total_repaid"] = round(total_repaid, 2)
-        r["outstanding"] = round(max(0.0, float(r["principal_amount"]) - total_repaid), 2)
+        principal_paid = 0.0
+        interest_paid = 0.0
+        for x in repaid:
+            p, i = _repayment_split(x)
+            principal_paid += p
+            interest_paid += i
+        principal = float(r.get("principal_amount", 0) or 0)
+        r["principal_paid"] = round(principal_paid, 2)
+        r["interest_paid"] = round(interest_paid, 2)
+        r["total_repaid"] = round(principal_paid + interest_paid, 2)
+        r["principal_remaining"] = round(max(0.0, principal - principal_paid), 2)
+        r["outstanding"] = r["principal_remaining"]
+        r.update(_funding_schedule(r, principal_paid, interest_paid))
     pdf_bytes = build_capital_sources_pdf(sources)
     return StreamingResponse(
         BytesIO(pdf_bytes),
