@@ -155,12 +155,14 @@ class UserCreateIn(BaseModel):
     password: str
     name: str
     role: Literal["admin", "staff", "cashier"] = "staff"
+    staff_type: Literal["", "warehouse", "office"] = ""  # for pawn-item custody assignment
     allowed_modules: Optional[List[str]] = None  # if None, falls back to ROLE_DEFAULT_MODULES[role]
 
 
 class UserUpdateIn(BaseModel):
     name: Optional[str] = None
     role: Optional[Literal["admin", "staff", "cashier"]] = None
+    staff_type: Optional[Literal["", "warehouse", "office"]] = None
     allowed_modules: Optional[List[str]] = None
     password: Optional[str] = None
 
@@ -186,6 +188,7 @@ async def create_user(payload: UserCreateIn, _: dict = Depends(require_admin)):
         "email": email,
         "name": payload.name,
         "role": payload.role,
+        "staff_type": payload.staff_type,
         "allowed_modules": modules,
         "password_hash": hash_password(payload.password),
         "created_at": utcnow_iso(),
@@ -206,6 +209,8 @@ async def update_user(user_id: str, payload: UserUpdateIn, admin: dict = Depends
         updates["name"] = payload.name
     if payload.role is not None:
         updates["role"] = payload.role
+    if payload.staff_type is not None:
+        updates["staff_type"] = payload.staff_type
     if payload.allowed_modules is not None:
         modules = [m for m in payload.allowed_modules if m in ALL_MODULES]
         updates["allowed_modules"] = modules
@@ -1869,9 +1874,7 @@ async def delete_file(file_id: str, _: dict = Depends(require_admin)):
 
 
 
-app.include_router(api)
-
-# Domain routers extracted from server.py (Phase 2 refactor)
+from routes.contracts_kpi import router as contracts_kpi_router  # noqa: E402
 from routes.reports import router as reports_router  # noqa: E402
 from routes.finance import router as finance_router  # noqa: E402
 from routes.public import router as public_router  # noqa: E402
@@ -1885,6 +1888,13 @@ from routes.migration_audit import router as migration_audit_router  # noqa: E40
 from routes.clients import router as clients_router  # noqa: E402
 from routes.items import router as items_router  # noqa: E402
 from routes.inspections import router as inspections_router  # noqa: E402
+
+# Include contracts_kpi FIRST so /contracts/kpis + /contracts/expiring win
+# the route match against the dynamic /contracts/{cid} on `api`.
+app.include_router(contracts_kpi_router, prefix="/api")
+
+app.include_router(api)
+
 app.include_router(reports_router, prefix="/api")
 app.include_router(finance_router, prefix="/api")
 app.include_router(public_router, prefix="/api")

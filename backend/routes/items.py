@@ -50,6 +50,8 @@ class CarIn(BaseModel):
     transmission: str = ""  # "manual" | "automatic" (free-text; UI limits it)
     market_value: float = 0.0
     location: str = ""  # warehouse / shop / off-site
+    received_by: str = ""       # user_id of the staff who intook the item
+    responsible_staff: str = ""  # user_id currently responsible for it
     photo_url: str = ""
     thumbnail_url: str = ""
     document_url: str = ""
@@ -72,6 +74,8 @@ class MotorcycleIn(BaseModel):
     transmission: str = ""
     market_value: float = 0.0
     location: str = ""
+    received_by: str = ""
+    responsible_staff: str = ""
     photo_url: str = ""
     thumbnail_url: str = ""
     document_url: str = ""
@@ -87,6 +91,8 @@ class ElectronicIn(BaseModel):
     manufacture_year: Optional[int] = None
     market_value: float = 0.0
     location: str = ""
+    received_by: str = ""
+    responsible_staff: str = ""
     photo_url: str = ""
     thumbnail_url: str = ""
     document_url: str = ""
@@ -110,6 +116,8 @@ class PezaduIn(BaseModel):
     manufacture_year: Optional[int] = None
     market_value: float = 0.0
     location: str = ""
+    received_by: str = ""
+    responsible_staff: str = ""
     photo_url: str = ""
     thumbnail_url: str = ""
     document_url: str = ""
@@ -215,3 +223,146 @@ async def patch_item_photo(
     await write_audit(user, "attach_photo", f"item.{kind}", iid, {"photo_url": payload.photo_url})
     it = await db[COLLECTION_MAP[kind]].find_one({"id": iid}, {"_id": 0})
     return it
+
+
+# ---------------------------------------------------------------------
+# Staff assignment (Phase E). Attach `received_by` and/or `responsible_staff`
+# user IDs to an item so warehouse / office custody is traceable.
+# ---------------------------------------------------------------------
+class StaffPatchIn(BaseModel):
+    received_by: Optional[str] = None       # None = unchanged
+    responsible_staff: Optional[str] = None  # None = unchanged
+
+
+@router.patch("/items/{kind}/{iid}/staff")
+async def patch_item_staff(
+    kind: str,
+    iid: str,
+    payload: StaffPatchIn,
+    user: dict = Depends(require_not_cashier),
+):
+    _validate_kind(kind)
+    update: dict = {}
+    if payload.received_by is not None:
+        update["received_by"] = payload.received_by
+    if payload.responsible_staff is not None:
+        update["responsible_staff"] = payload.responsible_staff
+    if not update:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    res = await db[COLLECTION_MAP[kind]].update_one({"id": iid}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    await write_audit(user, "assign_staff", f"item.{kind}", iid, update)
+    it = await db[COLLECTION_MAP[kind]].find_one({"id": iid}, {"_id": 0})
+    return it
+
+
+@router.get("/staff/assignments")
+async def staff_assignments(_: dict = Depends(get_current_user)):
+    """Group active pawnable items by responsible staff, split by
+    warehouse (vehicles + pezadu) and office (electronics)."""
+    from motor.motor_asyncio import AsyncIOMotorDatabase  # noqa: F401  (typing only)
+
+    users = await db.users.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "email": 1, "staff_type": 1, "role": 1}
+    ).to_list(500)
+    user_map = {u["id"]: u for u in users if u.get("id")}
+
+    warehouse_kinds = ("car", "motorcycle", "pezadu")
+    office_kinds = ("electronic",)
+    buckets: dict[str, dict] = {}
+
+    async def _collect(kind: str, group: str):
+        coll = db[COLLECTION_MAP[kind]]
+        async for it in coll.find({}, {"_id": 0}):
+            uid = (it.get("responsible_staff") or "").strip()
+            # Unassigned rows go into per-group buckets so warehouse and
+            # office each show their own "Unassigned" pile.
+            key = uid or f"__unassigned__{group}"
+            bucket = buckets.setdefault(key, {
+                "user_id": uid or None,
+                "name": user_map.get(uid, {}).get("name") if uid else "Unassigned",
+                "email": user_map.get(uid, {}).get("email") if uid else "",
+                "staff_type": user_map.get(uid, {}).get("staff_type") if uid else "",
+                "group": group,
+                "items": [],
+                "total_market_value": 0.0,
+            })
+            # Trim item payload — we only need identity + summary fields
+            # the UI actually shows for the assignments card.
+            row = {
+                "id": it.get("id"),
+                "kind": kind,
+                "name": it.get("name") or f"{it.get('brand','')} {it.get('model','')}".strip(),
+                "brand": it.get("brand"),
+                "model": it.get("model"),
+                "plate": it.get("plate"),
+                "serial": it.get("serial"),
+                "fuel_type": it.get("fuel_type"),
+                "mileage_km": it.get("mileage_km"),
+                "market_value": float(it.get("market_value", 0) or 0),
+                "location": it.get("location"),
+                "status": it.get("status"),
+                "received_by": it.get("received_by"),
+            }
+            bucket["items"].append(row)
+            bucket["total_market_value"] += row["market_value"]
+
+    for k in warehouse_kinds:
+        await _collect(k, "warehouse")
+    for k in office_kinds:
+        await _collect(k, "office")
+
+    # Add any staff users who exist but currently have no items so the UI
+    # can show them as "0 items" (useful for onboarding a new custodian).
+    for u in users:
+        st = u.get("staff_type") or ""
+        if st in ("warehouse", "office") and u["id"] not in buckets:
+            buckets[u["id"]] = {
+                "user_id": u["id"],
+                "name": u.get("name"),
+                "email": u.get("email"),
+                "staff_type": st,
+                "group": st,
+                "items": [],
+                "total_market_value": 0.0,
+            }
+
+    def _key(b):
+        # Unassigned sinks to the bottom; then sort by count desc, then name.
+        is_unassigned = b["user_id"] is None
+        return (is_unassigned, -len(b["items"]), (b.get("name") or "").lower())
+
+    warehouse = sorted(
+        (b for b in buckets.values() if b["group"] == "warehouse" or (b["staff_type"] == "warehouse" and b["group"] != "office")),
+        key=_key,
+    )
+    office = sorted(
+        (b for b in buckets.values() if b["group"] == "office" or b["staff_type"] == "office"),
+        key=_key,
+    )
+    # De-dupe: an "Unassigned" bucket for each group is fine, but a warehouse
+    # user shouldn't also appear under office (or vice versa). If a staff has
+    # items in both groups, keep them in the group matching their staff_type.
+    def _dedupe(rows, group):
+        keep = []
+        seen = set()
+        for b in rows:
+            if b["user_id"] and b["staff_type"] and b["staff_type"] != group:
+                continue
+            k = (b["user_id"], group)
+            if k in seen:
+                continue
+            seen.add(k)
+            keep.append({**b, "total_market_value": round(b["total_market_value"], 2)})
+        return keep
+
+    return {
+        "warehouse": _dedupe(warehouse, "warehouse"),
+        "office": _dedupe(office, "office"),
+        "staff": [
+            {"id": u["id"], "name": u.get("name"), "email": u.get("email"),
+             "staff_type": u.get("staff_type", "")}
+            for u in users if u.get("id")
+        ],
+    }

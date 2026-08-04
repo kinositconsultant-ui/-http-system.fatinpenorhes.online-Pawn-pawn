@@ -50,6 +50,7 @@ import {
   ScrollText,
   ScanLine,
   Wrench,
+  Warehouse as WarehouseIcon,
   Menu,
   X,
 } from "lucide-react";
@@ -66,6 +67,7 @@ const links = [
   { to: "/reports", key: "reports", icon: BarChart3, testid: "nav-reports", module: "reports" },
   { to: "/finance", key: "finance", icon: Wallet, testid: "nav-finance", module: "finance", adminOnly: true },
   { to: "/inspections", key: "inspections", icon: Wrench, testid: "nav-inspections", module: "finance", adminOnly: true },
+  { to: "/staff", key: "staff", icon: WarehouseIcon, testid: "nav-staff", module: "items", adminOnly: true },
   { to: "/users", key: "users", icon: UserCog, testid: "nav-users", module: "users", adminOnly: true },
   { to: "/settings", key: "settings", icon: SettingsIcon, testid: "nav-settings", module: "settings", adminOnly: true },
   { to: "/audit-log", key: "audit_log", icon: ScrollText, testid: "nav-audit-log", module: "audit_log", adminOnly: true },

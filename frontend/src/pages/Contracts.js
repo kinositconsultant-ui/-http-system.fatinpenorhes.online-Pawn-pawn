@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera, AlertTriangle, Phone, Mail, Clock } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
 import WhatsAppStatusPill from "../components/WhatsAppStatusPill";
@@ -63,6 +63,8 @@ export default function Contracts() {
   const [form, setForm] = useState(blank);
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
   const [waStatuses, setWaStatuses] = useState({}); // {contract_id: {delivery_status, ...}}
+  const [kpis, setKpis] = useState(null);
+  const [expiringOpen, setExpiringOpen] = useState(false);
 
   // Fetch the latest WhatsApp reminder delivery status for every visible
   // contract that could have a reminder pending. Called after load() and
@@ -113,6 +115,8 @@ export default function Contracts() {
       pezadu: s.data.interest_rate_pezadu ?? 10,
     });
     refreshWaStatuses(c.data);
+    // Fetch KPIs in parallel-ish (non-blocking; page renders without it)
+    api.get("/contracts/kpis").then((k) => setKpis(k.data)).catch(() => {});
     // align default if dialog is closed (will be applied when opening)
   };
 
@@ -550,6 +554,54 @@ export default function Contracts() {
         </Dialog>
         </div>
       </header>
+
+      {/* Active-contracts KPI header + expiring-in-month-2 notification */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="contract-kpis">
+        <ContractKpi
+          label="Active Clients"
+          value={kpis ? kpis.active_clients : "…"}
+          hint={kpis ? `${kpis.active_contracts} active contracts` : ""}
+          tone="text-[#1B2D5C]"
+          bg="bg-[#1B2D5C]/[0.06] border-[#1B2D5C]/25"
+          testid="ck-clients"
+        />
+        <ContractKpi
+          label="Active Loans"
+          value={kpis ? fmtUSD0(kpis.total_principal_remaining) : "…"}
+          hint={kpis ? `original ${fmtUSD0(kpis.total_loan_amount)}` : ""}
+          tone="text-sky-800"
+          bg="bg-sky-50 border-sky-200"
+          testid="ck-loans"
+        />
+        <ContractKpi
+          label="Projected Month-2 Interest"
+          value={kpis ? fmtUSD0(kpis.projected_month2_interest) : "…"}
+          hint="if every active contract runs full 2 months"
+          tone="text-emerald-800"
+          bg="bg-emerald-50 border-emerald-200"
+          testid="ck-int"
+        />
+        <button
+          className="rounded-lg border bg-amber-50 border-amber-300 p-3 md:p-4 text-left hover:bg-amber-100 transition"
+          onClick={() => setExpiringOpen(true)}
+          data-testid="ck-expiring"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-wide text-stone-500">
+              Expiring in Month 2
+            </span>
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="font-display text-xl md:text-2xl font-semibold text-amber-800 mt-1">
+            {kpis ? kpis.month2_count : "…"}
+          </div>
+          <div className="text-[11px] text-stone-600 mt-0.5">
+            {kpis
+              ? `${kpis.expiring_next_7_count} due within 7 days · click to view list`
+              : "click to view list"}
+          </div>
+        </button>
+      </div>
 
       {/* Pre-Auction / Auction Ready summary card */}
       {(preAuction.length > 0 || auctionReady.length > 0) && (
@@ -1016,6 +1068,66 @@ export default function Contracts() {
         title={pdfPreview.title}
         downloadName={pdfPreview.filename}
       />
+
+      {/* Expiring-in-month-2 notification dialog */}
+      <Dialog open={expiringOpen} onOpenChange={setExpiringOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+              Contracts expiring in Month 2
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-stone-600 -mt-2">
+            Contracts whose start date was 30–60 days ago. These will hit the
+            2-month interest cap soon — reach out to the client before they
+            move to <b>auction_ready</b>.
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto rounded-md border border-stone-200 divide-y divide-stone-100" data-testid="expiring-list">
+            {(!kpis || kpis.expiring_month2.length === 0) && (
+              <div className="p-6 text-center text-stone-400 text-sm">
+                No contracts expiring in the next 30 days.
+              </div>
+            )}
+            {kpis?.expiring_month2.map((r) => (
+              <div key={r.id} className="p-3 flex items-center justify-between gap-3 text-sm hover:bg-stone-50" data-testid={`expiring-row-${r.id}`}>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {r.client_name || "—"}
+                    <span className="ml-2 font-mono text-xs text-stone-500">
+                      {r.contract_number}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-[11px] text-stone-500">
+                    {r.client_phone && (
+                      <span className="inline-flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> {r.client_phone}
+                      </span>
+                    )}
+                    {r.client_email && (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail className="w-3 h-3" /> {r.client_email}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> day {r.days_in_contract} · due {r.due_date}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-semibold tabular-nums">{fmtUSD0(r.principal_remaining)}</div>
+                  <div className="text-[10px] text-stone-500">{r.item_type} · {r.interest_rate}%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExpiringOpen(false)} data-testid="expiring-close">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1134,6 +1246,26 @@ function RuleRow({ label, value, sub, highlight = false }) {
         {value}
       </div>
       {sub && <div className="text-[10px] text-stone-500 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+
+const fmtUSD0 = (n) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0));
+
+function ContractKpi({ label, value, hint, tone, bg, testid }) {
+  return (
+    <div className={`rounded-lg border ${bg} p-3 md:p-4`} data-testid={testid}>
+      <div className="text-[11px] uppercase tracking-wide text-stone-500">{label}</div>
+      <div className={`font-display text-xl md:text-2xl font-semibold mt-1 ${tone}`}>
+        {value}
+      </div>
+      {hint && <div className="text-[11px] text-stone-500 mt-0.5">{hint}</div>}
     </div>
   );
 }

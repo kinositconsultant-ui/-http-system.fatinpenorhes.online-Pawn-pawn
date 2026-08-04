@@ -41,6 +41,7 @@ const blank = {
   name: "",
   password: "",
   role: "staff",
+  staff_type: "",
   allowed_modules: [],
 };
 
@@ -80,6 +81,7 @@ export default function Users() {
       name: u.name || "",
       password: "",
       role: u.role,
+      staff_type: u.staff_type || "",
       allowed_modules: u.allowed_modules || moduleCatalog.role_defaults?.[u.role] || [],
     });
     setOpen(true);
@@ -108,6 +110,7 @@ export default function Users() {
         const payload = {
           name: form.name,
           role: form.role,
+          staff_type: form.staff_type,
           allowed_modules: form.allowed_modules,
         };
         if (form.password) payload.password = form.password;
@@ -222,6 +225,21 @@ export default function Users() {
                     <SelectItem value="admin">admin (full access, locked)</SelectItem>
                     <SelectItem value="staff">staff</SelectItem>
                     <SelectItem value="cashier">cashier</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Staff Custody · for item assignments">
+                <Select
+                  value={form.staff_type || "none"}
+                  onValueChange={(v) => setForm({ ...form, staff_type: v === "none" ? "" : v })}
+                >
+                  <SelectTrigger data-testid="user-staff-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="warehouse">Warehouse · vehicles &amp; pezadu</SelectItem>
+                    <SelectItem value="office">Office · electronics</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
