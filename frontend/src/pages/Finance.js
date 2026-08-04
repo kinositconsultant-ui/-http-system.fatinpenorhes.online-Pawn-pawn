@@ -146,9 +146,21 @@ export default function Finance() {
       <Card className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="profit-sources">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <div className="text-eyebrow">Profit Sources · Fonte Lukru</div>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#1B2D5C]/10 text-[#1B2D5C] border border-[#1B2D5C]/20">
-            Gross → Net breakdown
-          </span>
+          <div className="flex items-center gap-2">
+            <a
+              href={pdfUrl("/finance/auction-report/pdf")}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="auction-report-btn"
+              className="text-[11px] px-2 py-1 rounded-md bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 flex items-center gap-1"
+              title="Auction P&L report (top gainers, top losers, monthly)"
+            >
+              <FileText className="w-3.5 h-3.5" /> Auction Report
+            </a>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#1B2D5C]/10 text-[#1B2D5C] border border-[#1B2D5C]/20">
+              Gross → Net breakdown
+            </span>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
           <ProfitSourceCard

@@ -28,6 +28,7 @@ from pdf_utils import (
     build_capital_sources_pdf,
     build_capital_amortization_pdf,
     build_expenses_pdf,
+    build_auction_report_pdf,
 )
 from services import _apply_date_filter
 
@@ -910,6 +911,143 @@ async def capital_amortization_pdf(sid: str, _: dict = Depends(get_current_user)
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="amortization-{safe}.pdf"'},
+    )
+
+
+# =====================================================================
+# Auction P&L Report — month-end owner review
+# =====================================================================
+def _auction_row_pl(a: dict) -> dict:
+    sold = float(a.get("sold_price", 0) or 0)
+    original = float(a.get("original_loan_amount") or 0)
+    # Legacy rows without `original_loan_amount` (pre-iter37) have no reliable
+    # cost basis, so we can't compute a gain/loss for them — skip P&L, keep
+    # them in the count/sales aggregate. Mirrors the /finance/summary logic.
+    if original <= 0:
+        return {
+            "id": a.get("id"),
+            "contract_number": a.get("contract_number", ""),
+            "sold_at": a.get("sold_at", "") or "",
+            "sold_price": sold,
+            "original_loan": 0.0,
+            "gain": 0.0,
+            "loss": 0.0,
+            "realized_profit": 0.0,
+            "realized_loss": 0.0,
+        }
+    return {
+        "id": a.get("id"),
+        "contract_number": a.get("contract_number", ""),
+        "sold_at": a.get("sold_at", "") or "",
+        "sold_price": sold,
+        "original_loan": original,
+        "gain": round(max(0.0, sold - original), 2),
+        "loss": round(max(0.0, original - sold), 2),
+        "realized_profit": float(a.get("auction_profit", max(0.0, sold - original)) or 0),
+        "realized_loss": float(a.get("realized_loss", max(0.0, original - sold)) or 0),
+    }
+
+
+async def _auction_report(month: Optional[int], year: Optional[int]) -> dict:
+    """Aggregate auction P&L across all sold auctions, optionally filtered
+    by month/year on sold_at."""
+    auctions = await db.auctions.find({"status": "sold"}, {"_id": 0}).to_list(5000)
+
+    def _in_period(a: dict) -> bool:
+        if not (month or year):
+            return True
+        sd = (a.get("sold_at") or "")[:10]
+        if not sd:
+            return False
+        try:
+            y, m = int(sd[:4]), int(sd[5:7])
+        except Exception:
+            return False
+        if year and y != year:
+            return False
+        if month and m != month:
+            return False
+        return True
+
+    filtered = [a for a in auctions if _in_period(a)]
+    rows = [_auction_row_pl(a) for a in filtered]
+
+    total_sales = sum(r["sold_price"] for r in rows)
+    total_capital = sum(min(r["sold_price"], r["original_loan"]) for r in rows if r["original_loan"])
+    total_capital += sum(r["sold_price"] for r in rows if not r["original_loan"])
+    total_profit = sum(r["realized_profit"] for r in rows)
+    total_loss = sum(r["realized_loss"] for r in rows)
+    total_original = sum(r["original_loan"] for r in rows)
+    recovery_pct = (total_capital / total_original * 100.0) if total_original else 0.0
+
+    top_gainers = sorted([r for r in rows if r["gain"] > 0], key=lambda x: x["gain"], reverse=True)[:5]
+    top_losers = sorted([r for r in rows if r["loss"] > 0], key=lambda x: x["loss"], reverse=True)[:5]
+
+    # Monthly breakdown across the filtered set
+    monthly: dict[str, dict] = {}
+    for r in rows:
+        ym = (r["sold_at"] or "")[:7]
+        if not ym:
+            continue
+        b = monthly.setdefault(ym, {"ym": ym, "count": 0, "sales": 0.0,
+                                     "realized_profit": 0.0, "realized_loss": 0.0, "net_pl": 0.0})
+        b["count"] += 1
+        b["sales"] += r["sold_price"]
+        b["realized_profit"] += r["realized_profit"]
+        b["realized_loss"] += r["realized_loss"]
+        b["net_pl"] += r["realized_profit"] - r["realized_loss"]
+    monthly_rows = sorted(monthly.values(), key=lambda x: x["ym"], reverse=True)
+    for m in monthly_rows:
+        for k in ("sales", "realized_profit", "realized_loss", "net_pl"):
+            m[k] = round(m[k], 2)
+
+    period_label = "All time"
+    if year and month:
+        period_label = f"{year:04d}-{month:02d}"
+    elif year:
+        period_label = str(year)
+    elif month:
+        period_label = f"Month {month:02d}"
+
+    return {
+        "period_label": period_label,
+        "totals": {
+            "count": len(rows),
+            "sales": round(total_sales, 2),
+            "capital_recovered": round(total_capital, 2),
+            "realized_profit": round(total_profit, 2),
+            "realized_loss": round(total_loss, 2),
+            "net_pl": round(total_profit - total_loss, 2),
+            "recovery_ratio_pct": round(recovery_pct, 1),
+        },
+        "top_gainers": top_gainers,
+        "top_losers": top_losers,
+        "monthly": monthly_rows,
+    }
+
+
+@router.get("/finance/auction-report")
+async def auction_report(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    _: dict = Depends(get_current_user),
+):
+    return await _auction_report(month, year)
+
+
+@router.get("/finance/auction-report/pdf")
+async def auction_report_pdf(
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    _: dict = Depends(get_current_user),
+):
+    report = await _auction_report(month, year)
+    pdf_bytes = build_auction_report_pdf(report)
+    label = report["period_label"].replace(" ", "-").lower()
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="auction-report-{label}.pdf"'},
     )
 
 

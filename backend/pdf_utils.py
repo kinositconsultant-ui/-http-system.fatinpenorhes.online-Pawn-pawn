@@ -1561,6 +1561,124 @@ def build_audit_log_pdf(rows: list[dict], filters: dict | None = None) -> bytes:
     return buf.getvalue()
 
 
+def build_auction_report_pdf(report: dict) -> bytes:
+    """One-page auction P&L report for month-end owner review.
+
+    Expects a `report` dict shaped by /api/finance/auction-report:
+        {
+          "period_label": "All time",
+          "totals": {sales, capital_recovered, realized_profit, realized_loss,
+                     net_pl, count, recovery_ratio_pct},
+          "top_gainers": [{contract_number, sold_price, original_loan, gain}...],
+          "top_losers":  [{contract_number, sold_price, original_loan, loss}...],
+          "monthly": [{ym, count, sales, net_pl}...]
+        }
+    """
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+    totals = report.get("totals", {})
+    story = [
+        _branded_header(s),
+        Paragraph(f"Auction P&L Report — {report.get('period_label', 'All time')}", s["DocTitle"]),
+        Paragraph(
+            f"Sold Auctions: <b>{int(totals.get('count', 0))}</b> · "
+            f"Total Sales: <b>{_money(totals.get('sales', 0))}</b> · "
+            f"Capital Recovered: <b>{_money(totals.get('capital_recovered', 0))}</b> · "
+            f"Recovery Ratio: <b>{float(totals.get('recovery_ratio_pct', 0)):.1f}%</b>",
+            s["Body"],
+        ),
+        Spacer(1, 0.3 * cm),
+    ]
+
+    # KPI strip
+    kpi_rows = [[
+        "Realized Profit", "Realized Loss", "NET P&L", "Sales", "Capital Recovered",
+    ], [
+        _money(totals.get("realized_profit", 0)),
+        _money(totals.get("realized_loss", 0)),
+        _money(totals.get("net_pl", 0)),
+        _money(totals.get("sales", 0)),
+        _money(totals.get("capital_recovered", 0)),
+    ]]
+    story.append(_data_table(
+        kpi_rows[0], [kpi_rows[1]],
+        col_widths=[3.5 * cm, 3.5 * cm, 3.5 * cm, 3.5 * cm, 4.2 * cm],
+    ))
+    story.append(Spacer(1, 0.5 * cm))
+
+    _h2 = ParagraphStyle("AuctH2", parent=s["Sub"], fontSize=11, textColor=NAVY, spaceAfter=4)
+
+    # Top gainers
+    story.append(Paragraph("Top Gainers · Auctions with the highest surplus over loan", _h2))
+    story.append(Spacer(1, 0.15 * cm))
+    if report.get("top_gainers"):
+        rows = [
+            [g.get("contract_number", "—"),
+             g.get("sold_at", "")[:10] or "—",
+             _money(g.get("original_loan", 0)),
+             _money(g.get("sold_price", 0)),
+             _money(g.get("gain", 0))]
+            for g in report["top_gainers"]
+        ]
+        story.append(_data_table(
+            ["Contract #", "Sold At", "Original Loan", "Sold Price", "Gain"],
+            rows,
+            col_widths=[3.6 * cm, 3.4 * cm, 3.6 * cm, 3.6 * cm, 3.6 * cm],
+        ))
+    else:
+        story.append(Paragraph("<i>No gainers yet.</i>", s["Body"]))
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Top losers
+    story.append(Paragraph("Top Losers · Auctions that fell short of the loan", _h2))
+    story.append(Spacer(1, 0.15 * cm))
+    if report.get("top_losers"):
+        rows = [
+            [l.get("contract_number", "—"),
+             l.get("sold_at", "")[:10] or "—",
+             _money(l.get("original_loan", 0)),
+             _money(l.get("sold_price", 0)),
+             _money(l.get("loss", 0))]
+            for l in report["top_losers"]
+        ]
+        story.append(_data_table(
+            ["Contract #", "Sold At", "Original Loan", "Sold Price", "Loss"],
+            rows,
+            col_widths=[3.6 * cm, 3.4 * cm, 3.6 * cm, 3.6 * cm, 3.6 * cm],
+        ))
+    else:
+        story.append(Paragraph("<i>No losses so far — nice work.</i>", s["Body"]))
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Monthly breakdown
+    if report.get("monthly"):
+        story.append(Paragraph("Monthly Breakdown · Kada Fulan", _h2))
+        story.append(Spacer(1, 0.15 * cm))
+        rows = [
+            [m.get("ym", ""),
+             str(m.get("count", 0)),
+             _money(m.get("sales", 0)),
+             _money(m.get("realized_profit", 0)),
+             _money(m.get("realized_loss", 0)),
+             _money(m.get("net_pl", 0))]
+            for m in report["monthly"]
+        ]
+        story.append(_data_table(
+            ["Month", "#", "Sales", "Profit", "Loss", "Net P&L"],
+            rows,
+            col_widths=[2.6 * cm, 1.4 * cm, 3 * cm, 3 * cm, 3 * cm, 3 * cm],
+        ))
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(
+        "<i>Note · Nota: Net P&L uses realized_profit − realized_loss "
+        "(interest owed at time of sale is a subset of realized_profit, "
+        "not additional — see iter67).</i>",
+        s["Body"],
+    ))
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_capital_amortization_pdf(source: dict, repayments: list[dict] | None = None) -> bytes:
     """Amortization schedule for a single capital source (bank loan).
 
