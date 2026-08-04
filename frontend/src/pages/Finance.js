@@ -420,6 +420,39 @@ function CapitalSection({ sources, reload, t }) {
   const [repOpen, setRepOpen] = useState(false);
   const [repFor, setRepFor] = useState(null);
   const [repForm, setRepForm] = useState({ principal_amount: "", interest_amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyFor, setHistoryFor] = useState(null);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  const openHistory = async (source) => {
+    setHistoryFor(source);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const r = await api.get(`/funding-sources/${source.id}/repayments`);
+      setHistoryRows(r.data || []);
+    } catch (e) {
+      toast.error("Failed to load history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+  const deleteRepayment = async (rid) => {
+    if (!window.confirm("Delete this repayment? Capital Outstanding + Net Profit will be restored. This action is logged.")) return;
+    try {
+      await api.delete(`/funding-sources/${historyFor.id}/repayments/${rid}`);
+      toast.success("Repayment reversed");
+      // Refresh drawer + parent list
+      const r = await api.get(`/funding-sources/${historyFor.id}/repayments`);
+      setHistoryRows(r.data || []);
+      reload();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
 
   const submit = async () => {
     try {
@@ -619,6 +652,8 @@ function CapitalSection({ sources, reload, t }) {
                   <div className="flex gap-2">
                     <button onClick={() => { setRepFor(s); setRepOpen(true); }} data-testid={`capital-repay-${s.id}`}
                             className="text-xs px-2 py-1 rounded-md bg-[#1B2D5C] text-white hover:bg-[#0F1B3A]">Repay</button>
+                    <button onClick={() => openHistory(s)} data-testid={`capital-history-${s.id}`}
+                            className="text-xs px-2 py-1 rounded-md bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200">History</button>
                     <button onClick={() => edit(s)} className="p-1 hover:text-[#1B2D5C]" data-testid={`capital-edit-${s.id}`}>
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -636,6 +671,64 @@ function CapitalSection({ sources, reload, t }) {
           </tbody>
         </table>
       </div>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Repayment History — {historyFor?.name}</DialogTitle>
+            <DialogDescription className="sr-only">Full audit trail of every repayment made against this capital source.</DialogDescription>
+          </DialogHeader>
+          {historyFor && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3 rounded-md bg-stone-50 border border-stone-200 px-3 py-2">
+              <div><span className="text-stone-500">Principal Paid</span><br /><b className="text-emerald-700">{fmt(historyFor.principal_paid)}</b></div>
+              <div><span className="text-stone-500">Principal Left</span><br /><b className="text-[#C17767]">{fmt(historyFor.principal_remaining)}</b></div>
+              <div><span className="text-stone-500">Interest Paid</span><br /><b className="text-emerald-700">{fmt(historyFor.interest_paid)}</b></div>
+              <div><span className="text-stone-500">Interest Left</span><br /><b>{fmt(historyFor.interest_remaining)}</b></div>
+            </div>
+          )}
+          <div className="overflow-x-auto max-h-[50vh]">
+            <table className="min-w-full text-sm" data-testid="history-table">
+              <thead className="bg-stone-50 sticky top-0">
+                <tr>{["Date", "Principal", "Interest", "Total", "Notes", isAdmin ? "" : null].filter(Boolean).map((h) => (
+                  <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold text-left">{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {historyLoading && (
+                  <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-6 text-stone-400">Loading…</td></tr>
+                )}
+                {!historyLoading && historyRows.length === 0 && (
+                  <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-6 text-stone-400">No repayments recorded yet.</td></tr>
+                )}
+                {!historyLoading && historyRows.map((r) => (
+                  <tr key={r.id} className="border-t border-stone-100" data-testid={`history-row-${r.id}`}>
+                    <td className="px-3 py-2 whitespace-nowrap tabular-nums">{r.date}</td>
+                    <td className="px-3 py-2 tabular-nums text-emerald-700">{fmt(r.principal_amount)}</td>
+                    <td className="px-3 py-2 tabular-nums text-amber-800">{fmt(r.interest_amount)}</td>
+                    <td className="px-3 py-2 tabular-nums font-medium">{fmt(r.amount)}</td>
+                    <td className="px-3 py-2 text-stone-600 max-w-[240px] truncate" title={r.notes}>{r.notes || "—"}</td>
+                    {isAdmin && (
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => deleteRepayment(r.id)}
+                          data-testid={`history-delete-${r.id}`}
+                          className="text-rose-700 hover:text-rose-900 p-1"
+                          title="Reverse this repayment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={repOpen} onOpenChange={setRepOpen}>
         <DialogContent>

@@ -313,7 +313,33 @@ async def add_repayment(sid: str, payload: FundingRepaymentIn, user: dict = Depe
 
 @router.get("/funding-sources/{sid}/repayments")
 async def list_repayments(sid: str, _: dict = Depends(get_current_user)):
-    return await db.funding_repayments.find({"source_id": sid}, {"_id": 0}).sort("date", -1).to_list(500)
+    rows = await db.funding_repayments.find({"source_id": sid}, {"_id": 0}).sort("date", -1).to_list(500)
+    # Backfill split fields for legacy docs so the UI can render both columns.
+    for r in rows:
+        p, i = _repayment_split(r)
+        r["principal_amount"] = round(p, 2)
+        r["interest_amount"] = round(i, 2)
+        r["amount"] = round(p + i, 2)
+    return rows
+
+
+@router.delete("/funding-sources/{sid}/repayments/{rid}")
+async def delete_repayment(sid: str, rid: str, user: dict = Depends(require_admin)):
+    """Reverse a repayment. Deletes the row and the auto-booked interest
+    expense (if any). Cash on Hand + Capital Outstanding + Net Profit
+    all restore automatically because the summary recomputes on read."""
+    rep = await db.funding_repayments.find_one({"id": rid, "source_id": sid}, {"_id": 0})
+    if not rep:
+        raise HTTPException(status_code=404, detail="Repayment not found")
+    await db.funding_repayments.delete_one({"id": rid})
+    # Remove the linked interest expense row created by add_repayment().
+    await db.expenses.delete_many({"source_ref.kind": "funding_repayment", "source_ref.id": rid})
+    await write_audit(user, "delete", "funding_repayment", rid, {
+        "source_id": sid,
+        "principal": rep.get("principal_amount"),
+        "interest": rep.get("interest_amount"),
+    })
+    return {"ok": True}
 
 
 class ExpenseIn(BaseModel):
