@@ -635,6 +635,41 @@ async def contract_label_pdf(cid: str, _: dict = Depends(get_current_user)):
     )
 
 
+class SignedAgreementIn(BaseModel):
+    signed_auction_agreement_url: str
+    signed_auction_agreement_thumbnail: str = ""
+
+
+@api.post("/contracts/{cid}/signed-auction-agreement")
+async def contract_signed_auction_agreement(
+    cid: str,
+    payload: SignedAgreementIn,
+    user: dict = Depends(require_not_cashier),
+):
+    """Attach a scan/photo of the signed auction agreement to the contract.
+
+    The staff uploads the scan through the existing `/api/upload` route
+    (which produces both a storage_path and a thumbnail_storage_path for
+    images), then calls this endpoint with the returned paths.
+    """
+    res = await db.contracts.update_one(
+        {"id": cid},
+        {"$set": {
+            "signed_auction_agreement_url": payload.signed_auction_agreement_url,
+            "signed_auction_agreement_thumbnail": payload.signed_auction_agreement_thumbnail,
+            "signed_auction_agreement_at": utcnow_iso(),
+            "signed_auction_agreement_by": user.get("id"),
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    await write_audit(
+        user, "attach_signed_agreement", "contract", cid,
+        {"url": payload.signed_auction_agreement_url},
+    )
+    return await db.contracts.find_one({"id": cid}, {"_id": 0})
+
+
 @api.get("/contracts/{cid}/auction-agreement-pdf")
 async def contract_auction_agreement_pdf(cid: str, _: dict = Depends(get_current_user)):
     """Formal auction agreement between the client and the company.

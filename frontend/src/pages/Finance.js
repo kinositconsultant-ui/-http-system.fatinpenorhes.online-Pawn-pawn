@@ -32,7 +32,7 @@ import {
 } from "../components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Wallet, Landmark, Receipt, TrendingUp, ArrowDownCircle,
-  FileText, Eye,
+  FileText, Eye, BookOpen, ArrowUpCircle,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -295,6 +295,13 @@ export default function Finance() {
           >
             <TrendingUp className="w-4 h-4 mr-2" /> {t("loan_calculator")}
           </TabsTrigger>
+          <TabsTrigger
+            value="ledger"
+            data-testid="finance-tab-ledger"
+            className="data-[state=active]:bg-stone-700 data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-stone-800 px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            <BookOpen className="w-4 h-4 mr-2" /> Ledger
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="capital">
           <CapitalSection sources={sources} reload={load} t={t} />
@@ -307,6 +314,9 @@ export default function Finance() {
         </TabsContent>
         <TabsContent value="calculator">
           <LoanCalculatorSection t={t} />
+        </TabsContent>
+        <TabsContent value="ledger">
+          <LedgerSection />
         </TabsContent>
       </Tabs>
     </div>
@@ -1006,3 +1016,175 @@ function LoanCalculatorSection({ t }) {
     </div>
   );
 }
+
+// -------------------------------------------------------------
+// Ledger tab — filterable, sortable table of every cash movement
+// -------------------------------------------------------------
+function LedgerSection() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [days, setDays] = useState(90);
+  const [kindFilter, setKindFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState("date");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const load = async (d = days) => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/finance/cash-ledger?days=${d}`);
+      setData(r.data);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const rows = (data?.entries || []).filter((e) => {
+    if (kindFilter !== "all" && e.kind !== kindFilter) return false;
+    if (q.trim()) {
+      const s = `${e.reference} ${e.notes}`.toLowerCase();
+      if (!s.includes(q.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const sorted = [...rows].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (av === bv) return 0;
+    const cmp = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+  const toggleSort = (k) => {
+    if (sortKey === k) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortKey(k); setSortDir("desc"); }
+  };
+  const money = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n || 0));
+
+  const kinds = [
+    "all", "disbursement", "payment", "expense", "inspection_out", "inspection_reimb",
+    "capital_in", "capital_out", "auction_sale", "auction_tax",
+  ];
+  const kindColor = {
+    disbursement: "bg-rose-100 text-rose-800 border-rose-300",
+    payment: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    expense: "bg-rose-100 text-rose-800 border-rose-300",
+    inspection_out: "bg-amber-100 text-amber-800 border-amber-300",
+    inspection_reimb: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    capital_in: "bg-sky-100 text-sky-800 border-sky-300",
+    capital_out: "bg-rose-100 text-rose-800 border-rose-300",
+    auction_sale: "bg-amber-100 text-amber-800 border-amber-300",
+    auction_tax: "bg-stone-100 text-stone-700 border-stone-300",
+  };
+
+  return (
+    <div className="space-y-3" data-testid="ledger-section">
+      {/* Header + filters */}
+      <Card className="p-3 md:p-4 border border-stone-200 shadow-none rounded-lg bg-white flex flex-wrap items-end gap-3">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-stone-500 block">Period (days)</label>
+          <select
+            value={days}
+            onChange={(e) => { const d = Number(e.target.value); setDays(d); load(d); }}
+            className="mt-1 border border-stone-300 rounded-md px-2 py-1.5 text-sm"
+            data-testid="ledger-days"
+          >
+            {[7, 30, 60, 90, 180, 365].map((d) => (
+              <option key={d} value={d}>{d} days</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-stone-500 block">Kind</label>
+          <select
+            value={kindFilter}
+            onChange={(e) => setKindFilter(e.target.value)}
+            className="mt-1 border border-stone-300 rounded-md px-2 py-1.5 text-sm"
+            data-testid="ledger-kind"
+          >
+            {kinds.map((k) => (<option key={k} value={k}>{k}</option>))}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-xs uppercase tracking-wider text-stone-500 block">Search reference / notes</label>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="mt-1 w-full border border-stone-300 rounded-md px-2 py-1.5 text-sm"
+            placeholder="receipt no · contract no · description…"
+            data-testid="ledger-search"
+          />
+        </div>
+        {data && (
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wide text-stone-500">Balance</div>
+            <div className={`font-display text-xl font-semibold ${Number(data.closing_balance) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              {money(data.closing_balance)}
+            </div>
+            <div className="text-[10px] text-stone-500">
+              Opening {money(data.opening_cash)} · +{money(data.total_in)} · −{money(data.total_out)}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Table */}
+      <Card className="p-0 border border-stone-200 shadow-none rounded-lg bg-white overflow-x-auto">
+        <table className="min-w-full text-sm" data-testid="ledger-table">
+          <thead className="bg-stone-50 text-left">
+            <tr>
+              <LedTh sortKey="date" cur={sortKey} dir={sortDir} onClick={toggleSort}>Date</LedTh>
+              <LedTh sortKey="kind" cur={sortKey} dir={sortDir} onClick={toggleSort}>Kind</LedTh>
+              <LedTh>Reference</LedTh>
+              <LedTh>Notes</LedTh>
+              <LedTh sortKey="amount" cur={sortKey} dir={sortDir} onClick={toggleSort} right>Amount</LedTh>
+              <LedTh right>Running Balance</LedTh>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td colSpan={6} className="text-center py-6 text-stone-400">Loading…</td></tr>
+            )}
+            {!loading && sorted.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-6 text-stone-400">No entries in this window.</td></tr>
+            )}
+            {!loading && sorted.map((e, i) => (
+              <tr key={i} className="border-t border-stone-100 hover:bg-stone-50/60" data-testid={`ledger-row-${i}`}>
+                <td className="px-3 py-1.5 whitespace-nowrap tabular-nums">{e.date}</td>
+                <td className="px-3 py-1.5">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] ${kindColor[e.kind] || "bg-stone-100 text-stone-700 border-stone-200"}`}>
+                    {e.amount >= 0
+                      ? <ArrowUpCircle className="w-3 h-3" />
+                      : <ArrowDownCircle className="w-3 h-3" />}
+                    {e.kind}
+                  </span>
+                </td>
+                <td className="px-3 py-1.5 font-mono text-xs text-stone-600">{e.reference || "—"}</td>
+                <td className="px-3 py-1.5 max-w-[360px] truncate" title={e.notes}>{e.notes}</td>
+                <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${e.amount >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {e.amount >= 0 ? "+" : ""}{money(e.amount)}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{money(e.running_balance)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function LedTh({ children, sortKey: sk, cur, dir, onClick, right }) {
+  const active = sk && cur === sk;
+  return (
+    <th
+      onClick={() => sk && onClick && onClick(sk)}
+      className={`px-3 py-2 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap select-none ${
+        sk ? "cursor-pointer hover:text-[#1B2D5C]" : ""
+      } ${active ? "text-[#1B2D5C]" : "text-stone-500"} ${right ? "text-right" : ""}`}
+    >
+      {children}
+      {active && <span className="ml-1">{dir === "asc" ? "▲" : "▼"}</span>}
+    </th>
+  );
+}
+

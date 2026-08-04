@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera, AlertTriangle, Phone, Mail, Clock } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera, AlertTriangle, Phone, Mail, Clock, Upload, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
 import WhatsAppStatusPill from "../components/WhatsAppStatusPill";
@@ -880,6 +880,9 @@ export default function Contracts() {
                         <ScrollText className="w-3 h-3" />
                       </button>
                     )}
+                    {["auction_ready", "auction"].includes(r.status) && (
+                      <SignedAgreementButton contract={r} onDone={load} />
+                    )}
                     <button
                       type="button"
                       onClick={() => setPdfPreview({
@@ -1283,6 +1286,76 @@ function ContractKpi({ label, value, hint, tone, bg, testid }) {
       </div>
       {hint && <div className="text-[11px] text-stone-500 mt-0.5">{hint}</div>}
     </div>
+  );
+}
+
+
+function SignedAgreementButton({ contract, onDone }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const hasSigned = !!contract.signed_auction_agreement_url;
+
+  const upload = async (file) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await api.post("/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await api.post(`/contracts/${contract.id}/signed-auction-agreement`, {
+        signed_auction_agreement_url: up.data.storage_path,
+        signed_auction_agreement_thumbnail: up.data.thumbnail_storage_path || "",
+      });
+      toast.success("Signed agreement attached");
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (hasSigned) {
+    return (
+      <a
+        href={`${API_BASE}/files/${contract.signed_auction_agreement_url}`}
+        target="_blank"
+        rel="noreferrer"
+        title="View signed agreement scan"
+        data-testid={`contract-signed-view-${contract.id}`}
+        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+      >
+        <CheckCircle2 className="w-3 h-3" />
+      </a>
+    );
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) upload(f);
+          e.target.value = "";
+        }}
+        data-testid={`contract-signed-input-${contract.id}`}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        title="Upload signed auction agreement (scan/photo)"
+        data-testid={`contract-signed-upload-${contract.id}`}
+        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-stone-500 text-white hover:bg-stone-600 transition-colors disabled:opacity-50"
+      >
+        <Upload className="w-3 h-3" />
+      </button>
+    </>
   );
 }
 
