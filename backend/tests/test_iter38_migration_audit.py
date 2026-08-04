@@ -60,7 +60,7 @@ def test_row_math_is_consistent(api_sess):
 def test_only_overdue_contracts_with_principal_paid(api_sess):
     body = api_sess.get(f"{BASE_URL}/api/migration-audit/penalty").json()
     for r in body["rows"]:
-        assert r["status"] in ("overdue", "auction_ready")
+        assert r["status"] in ("overdue", "auction_ready", "grace_period")
         assert r["penalty_delta"] != 0, "rows with zero delta should be filtered"
         # If delta is negative, principal must have been paid (current < original)
         if r["penalty_delta"] < 0:

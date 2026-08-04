@@ -205,8 +205,10 @@ class TestFinanceSummary:
         # capital_received >= 50000, capital_repaid >= 5000
         assert j["capital_received"] >= 50000
         assert j["capital_repaid"] >= 5000
-        # capital_outstanding = capital_received - capital_repaid
-        assert abs(j["capital_outstanding"] - (j["capital_received"] - j["capital_repaid"])) < 0.01
+        # capital_outstanding = capital_received - capital_repaid_principal
+        # (interest portion of repayments is booked as a Financial Expense,
+        # not a debt reduction — see iter60 Option A rollout)
+        assert abs(j["capital_outstanding"] - (j["capital_received"] - j["capital_repaid_principal"])) < 0.01
         # expenses_total should be > 0
         assert j["expenses_total"] >= 1300
 

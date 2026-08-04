@@ -270,6 +270,7 @@ class SettingsIn(BaseModel):
     reminders_enabled: bool = True  # Master switch for daily overdue reminders (iter17)
     next_auction_date: str = ""  # ISO date shown on public catalogue and PDF; empty = "TBA"
     opening_cash_balance: float = 0.0  # Cash the shop already had before the system began tracking; added to Cash on Hand.
+    admin_alerts_phone: str = ""  # Optional WhatsApp number (E.164, e.g. +67078372678) to receive capital-installment reminders alongside email.
 
 
 @api.get("/settings")
@@ -2074,6 +2075,12 @@ async def on_startup():
             {"$set": {"password_hash": hash_password(admin_password), "allowed_modules": list(ALL_MODULES)}},
         )
         logger.info(f"Updated admin password for: {admin_email}")
+    # Backfill: every admin (including this one) must have the full module set —
+    # keeps existing admins in sync when new modules like `warehouse` are added.
+    await db.users.update_many(
+        {"role": "admin"},
+        {"$set": {"allowed_modules": list(ALL_MODULES)}},
+    )
 
     # Daily scheduled tasks (backup + prune)
     try:

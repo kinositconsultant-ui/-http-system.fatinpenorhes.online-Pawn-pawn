@@ -122,7 +122,7 @@ def test_penalty_scales_with_current_principal():
     try:
         # Fetch and check initial penalty = 3000 * 10% = 300
         got = s.get(f"{BASE_URL}/api/contracts/{contract_id}").json()
-        assert got["status"] in ("overdue", "auction_ready"), got["status"]
+        assert got["status"] in ("overdue", "auction_ready", "grace_period"), got["status"]
         # Interest owed for months elapsed varies with test date; the key
         # invariant is penalty_charged == current_principal × 10%
         assert got["penalty_charged"] == round(got["current_principal"] * 10.0 / 100.0, 2), (

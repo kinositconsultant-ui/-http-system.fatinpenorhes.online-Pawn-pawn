@@ -444,19 +444,34 @@ async def run_capital_reminders(force: bool = False) -> dict:
             days_until=days_until,
             per_month_interest=per_month,
         )
+        # Short WA/SMS-style body (~250 chars) for owner phone alerts.
+        wa_body = (
+            f"Fatin Penhores — Capital Reminder\n"
+            f"{subject_word.upper()}: {src.get('name','')}\n"
+            f"Next due: {sched['next_due_date']}\n"
+            f"Principal left: ${p_remaining:,.2f}\n"
+            f"Interest left: ${sched['interest_remaining']:,.2f}"
+        )
 
         try:
             any_ok = False
+            channels = []
             for user in admin_recipients:
                 result = await email_svc.send_email(user["email"], subject, html)
                 ok = result.get("status") == "sent"
                 any_ok = any_ok or ok
-                summary["attempted"].append({
-                    "source": src.get("name"),
-                    "bucket": bucket,
-                    "recipient": user["email"],
-                    "status": result.get("status"),
-                })
+                channels.append({"channel": "email", "recipient": user["email"], "status": result.get("status")})
+            # Owner WhatsApp alert — optional, fires when both a phone is
+            # configured in Settings AND the WhatsApp integration is set up.
+            admin_phone = (settings.get("admin_alerts_phone") or "").strip()
+            if admin_phone and wapp.is_configured(settings):
+                wa_result = await wapp.send_text(admin_phone, wa_body, settings)
+                wa_ok = wa_result.get("status") == "sent"
+                any_ok = any_ok or wa_ok
+                channels.append({"channel": "whatsapp", "recipient": admin_phone, "status": wa_result.get("status")})
+            summary["attempted"].extend([
+                {"source": src.get("name"), "bucket": bucket, **c} for c in channels
+            ])
             if any_ok:
                 summary["sent"] += 1
             else:
@@ -466,7 +481,8 @@ async def run_capital_reminders(force: bool = False) -> dict:
                 **dedup_key,
                 "source_name": src.get("name", ""),
                 "success": any_ok,
-                "recipients": [u["email"] for u in admin_recipients],
+                "channels": channels,
+                "recipients": [u["email"] for u in admin_recipients] + ([admin_phone] if admin_phone else []),
                 "created_at": utcnow_iso(),
             })
         except Exception as e:  # noqa: BLE001

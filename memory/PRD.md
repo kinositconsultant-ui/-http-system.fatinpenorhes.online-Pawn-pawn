@@ -1,8 +1,54 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 59 — Phase A–H E2E Validation)
+**Last updated:** 2026-02 (Iteration 64 — Payment Frequency + Admin WhatsApp Alerts + Legacy Test Cleanup)
+
+## Iteration 60 – 64 (2026-02) — Capital Outstanding Overhaul ✅
+
+Ships the full **Option A + Option B + Enhancements** plan for company loans (funding sources):
+
+### iter60 · Split Repayments + Interest as P&L
+- `FundingRepaymentIn` now takes `principal_amount` + `interest_amount` (legacy `amount`-only shape treated as pure principal).
+- Interest paid on capital is **auto-booked as `Interest Expense (Capital)`** in `db.expenses`, flowing through `expenses_total` → `net_profit`.
+- `capital_outstanding` = `principal_amount − Σ principal_amount` (not total repayment).
+- New KPIs on `list_funding_sources`: `principal_paid`, `principal_remaining`, `interest_paid`, `interest_scheduled`, `interest_remaining`, `next_due_date`, `days_until_due`, `status` (on_time / due_soon / overdue / closed).
+
+### iter61 · Income Statement layout
+- `/finance/summary` adds `operating_expenses`, `financial_expenses`, `operating_profit`, `capital_repaid_principal`, `capital_interest_paid`.
+- Cash-outflow formula now uses `capital_repaid_principal` (interest already in `expenses_total`) — fixes double-count.
+- Finance UI shows 5-row Income Statement: **Gross Profit − Operating Expenses = Operating Profit − Financial Expenses = Net Profit**.
+- Capital installment reminder job (`run_capital_reminders`) — scans 7 / 3 / 1 / 0 day buckets, emails all admin users via `email_svc`, dedup via `db.reminder_log`. Registered in scheduler at 23:30 UTC (08:30 Timor).
+
+### iter62 · Repayment History Drawer + Reversal
+- `GET /funding-sources/{sid}/repayments` backfills split fields for legacy docs.
+- **New** `DELETE /funding-sources/{sid}/repayments/{rid}` (admin-only) removes both the repayment row and the linked interest expense — Capital Outstanding + Financial Expenses + Net Profit all restore in one call.
+- Frontend: **History** button per row opens drawer with 4-KPI summary + repayment table with per-row Reverse action (admins only).
+
+### iter63 · Branded PDF export refresh
+- `build_capital_sources_pdf` rewritten to landscape A4 with 9 columns: Name · Rate/Period · Initial Loan · Principal Paid · Principal Left · Interest Paid · Interest Left · Next Due · Status. TOTAL footer. Bilingual "Rezumu" note explaining accounting treatment.
+- Endpoint enriches sources with the full 7 KPIs before rendering.
+
+### iter64 · Payment Frequency + Admin WhatsApp Alerts
+- `FundingSourceIn.payment_frequency`: `monthly` (default) · `quarterly` · `lump_sum`.
+- `_funding_schedule` steps by 1/3/`term_months` months accordingly.
+- Frontend: dropdown in create/edit dialog + freq label on row caption.
+- **`admin_alerts_phone`** setting (E.164 phone). When set AND WhatsApp Cloud API configured, `run_capital_reminders` fires a short WhatsApp text to the owner alongside email. Channels reported in the return summary.
+
+### Legacy Test Batch — Fixed
+Updated 6 stale test assertions to reflect intentional domain changes (not regressions):
+- `test_iter7_finance.py` — Uses `capital_repaid_principal` for outstanding math.
+- `test_iter17_reminders.py` — Reminder days = `[1, 7, 9]`.
+- `test_iter2.py` — Motorcycle default rate = 10 (was 15). T&C fields no longer required at seed.
+- `test_iter13_module_access.py` — 12 modules (was 11), staff defaults include `warehouse`.
+- `test_iter37/38.py` — Contract status enum accepts `grace_period` alongside `overdue`/`auction_ready`.
+- `test_iter10_regression.py` — Overdue-5-days status may be `grace_period` per new rules.
+- **Data migration**: admin users are backfilled with `list(ALL_MODULES)` on startup so existing admins get `warehouse` (and any future modules) automatically.
+
+### Test scoreboard
+- New suites this session: `test_iter60_capital_split.py` (7), `test_iter61_income_statement.py` (6), `test_iter62_repayment_history.py` (3), `test_iter63_capital_pdf.py` (2), `test_iter64_frequency_wa_alerts.py` (5) → **23/23 PASS**.
+- Fixed 6 legacy assertion sets → 6/6 targeted stale tests now green.
 
 ## Iteration 59 (2026-02) — Phase A–H Comprehensive Regression ✅
+
 The testing agent executed the first full E2E validation of the massive Phase A–H rollup (Cash-on-Hand formula, Fuel/Mileage fields, Inspection Expenses, Staff Responsibility, Contract KPI panel, Inventory Analytics, Business Dashboard v2, Auction Agreement PDFs, Warehouse Receipt workflow) that had been shipped without prior testing subagent coverage.
 
 - New test suite `/app/backend/tests/test_iter59_phase_a_h.py` — 26 tests, **25 PASS / 1 SKIP** (skip = legacy admin doc missing `staff_type`).

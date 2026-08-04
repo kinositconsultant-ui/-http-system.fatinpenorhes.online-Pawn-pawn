@@ -406,6 +406,7 @@ function ProfitLine({ label, hint, value, raw, tone = "text-stone-900", sign = "
 const blankSource = {
   name: "", source_type: "bank", principal_amount: "", interest_rate: 5,
   interest_period: "monthly", term_months: 12,
+  payment_frequency: "monthly",
   start_date: new Date().toISOString().slice(0, 10),
   due_date: "", notes: "",
 };
@@ -566,6 +567,16 @@ function CapitalSection({ sources, reload, t }) {
                   </SelectContent>
                 </Select>
               </FF>
+              <FF label="Payment Frequency">
+                <Select value={form.payment_frequency} onValueChange={(v) => setForm({ ...form, payment_frequency: v })}>
+                  <SelectTrigger data-testid="capital-frequency"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly · fulan-fulan</SelectItem>
+                    <SelectItem value="quarterly">Quarterly · trimestrál</SelectItem>
+                    <SelectItem value="lump_sum">Lump sum · pagamentu ida deit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FF>
               {/* Interest calculation preview */}
               <FF label="Total Interest (preview)" full>
                 <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm flex items-center justify-between" data-testid="capital-interest-preview">
@@ -628,7 +639,12 @@ function CapitalSection({ sources, reload, t }) {
               <tr key={s.id} className="border-t border-stone-100" data-testid={`capital-row-${s.id}`}>
                 <td className="px-3 py-3 font-medium">
                   {s.name}
-                  <div className="text-[10px] text-stone-500 mt-0.5">{s.interest_rate}% / {s.interest_period} · {s.term_months || "—"} mo</div>
+                  <div className="text-[10px] text-stone-500 mt-0.5">
+                    {s.interest_rate}% / {s.interest_period} · {s.term_months || "—"} mo
+                    {s.payment_frequency && s.payment_frequency !== "monthly" && (
+                      <> · {s.payment_frequency === "quarterly" ? "Quarterly" : "Lump sum"}</>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-3">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">{s.source_type}</span>

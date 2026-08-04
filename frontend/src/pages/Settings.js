@@ -318,7 +318,18 @@ export default function Settings() {
               placeholder="e.g. 600000"
             />
           </Field>
-          <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+          <Field label="Admin WhatsApp Alerts (E.164)">
+            <Input
+              value={s.admin_alerts_phone ?? ""}
+              onChange={(e) => onChange("admin_alerts_phone", e.target.value)}
+              data-testid="settings-admin-alerts-phone"
+              placeholder="+67078372678"
+            />
+            <p className="text-[11px] text-stone-500 mt-1">
+              Owner phone (with country code). Capital-installment reminders fire here via WhatsApp on top of the admin email. Requires the WhatsApp Cloud API to be configured below.
+            </p>
+          </Field>
+          <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600 md:col-span-2">
             <div className="font-medium text-stone-800 mb-1">Formula</div>
             <code className="block">
               cash_on_hand = opening + capital_in + client_pay + auction_sales + tax

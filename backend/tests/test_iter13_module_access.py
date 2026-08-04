@@ -22,9 +22,9 @@ ADMIN_PASSWORD = "admin123"
 
 ALL_MODULES = [
     "dashboard", "clients", "items", "contracts", "payments",
-    "auctions", "reports", "finance", "users", "settings", "audit_log",
+    "auctions", "reports", "finance", "warehouse", "users", "settings", "audit_log",
 ]
-STAFF_DEFAULTS = ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports"]
+STAFF_DEFAULTS = ["dashboard", "clients", "items", "contracts", "payments", "auctions", "reports", "warehouse"]
 CASHIER_DEFAULTS = ["dashboard", "payments"]
 
 
@@ -79,7 +79,7 @@ class TestModulesCatalog:
         data = r.json()
         assert "modules" in data and "role_defaults" in data
         assert set(data["modules"]) == set(ALL_MODULES)
-        assert len(data["modules"]) == 11
+        assert len(data["modules"]) == 12
         assert set(data["role_defaults"]["admin"]) == set(ALL_MODULES)
         assert set(data["role_defaults"]["staff"]) == set(STAFF_DEFAULTS)
         assert set(data["role_defaults"]["cashier"]) == set(CASHIER_DEFAULTS)

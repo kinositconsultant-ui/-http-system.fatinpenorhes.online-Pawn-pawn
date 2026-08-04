@@ -91,6 +91,7 @@ class FundingSourceIn(BaseModel):
     interest_rate: float = 0.0
     interest_period: Literal["monthly", "yearly", "none"] = "monthly"
     term_months: Optional[int] = None
+    payment_frequency: Literal["monthly", "quarterly", "lump_sum"] = "monthly"
     start_date: str
     due_date: str = ""
     notes: str = ""
@@ -136,24 +137,35 @@ def _funding_schedule(src: dict, principal_paid: float, interest_paid: float, to
     else:
         interest_scheduled = 0.0
 
-    # Monthly installment cadence — next due = first month-anniversary
-    # >= today (or after last paid installment). Approximation for MVP —
-    # doesn't track individual installments yet, just monthly cadence.
+    # Cadence between installments — driven by payment_frequency.
+    #   monthly   → next anchor +1 month
+    #   quarterly → next anchor +3 months
+    #   lump_sum  → single anchor at start + term_months (no intermediate installments)
     from dateutil.relativedelta import relativedelta
     principal_remaining = max(0.0, principal - principal_paid)
     fully_paid = principal_remaining <= 0.01
 
-    # Find the next monthly anchor from start_date that is >= today.
+    freq = (src.get("payment_frequency") or "monthly").lower()
+    if freq == "lump_sum":
+        step_months = term_months or 12
+    elif freq == "quarterly":
+        step_months = 3
+    else:
+        step_months = 1
+
+    # Find the next installment anchor from start_date that is >= today.
     if fully_paid:
         next_due = None
         status = "closed"
     else:
         end = start + relativedelta(months=term_months)
-        # Walk forward month-by-month until we pass today (max term_months+1 iterations).
-        anchor = start
-        while anchor < today and anchor < end:
-            anchor = anchor + relativedelta(months=1)
-        # If the term has ended and principal still outstanding → overdue.
+        anchor = start + relativedelta(months=step_months)
+        # Walk forward one cadence at a time until we pass today (bounded).
+        guard = 0
+        while anchor < today and anchor < end and guard < 200:
+            anchor = anchor + relativedelta(months=step_months)
+            guard += 1
+        # If the term has ended and principal still outstanding → point at end.
         if anchor > end:
             anchor = end
         next_due = anchor

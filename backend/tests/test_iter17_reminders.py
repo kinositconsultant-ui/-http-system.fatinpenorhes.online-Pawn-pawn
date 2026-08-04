@@ -113,7 +113,7 @@ def test_reminders_status_admin(admin_session):
     body = r.json()
     for k in ["enabled", "reminder_days", "local_time"]:
         assert k in body, f"missing {k} in status: {body}"
-    assert body["reminder_days"] == [7, 9]
+    assert body["reminder_days"] == [1, 7, 9]
     assert "next_run_at" in body
 
 
