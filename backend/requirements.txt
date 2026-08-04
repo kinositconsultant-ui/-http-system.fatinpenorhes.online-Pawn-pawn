@@ -22,6 +22,7 @@ ecdsa==0.19.2
 email-validator==2.3.0
 emergentintegrations==0.2.0
 et_xmlfile==2.0.0
+execnet==2.1.2
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.29.4
@@ -72,6 +73,7 @@ packaging==26.2
 pandas==3.0.3
 passlib==1.7.4
 pathspec==1.1.1
+pdfminer.six==20260107
 pillow==12.2.0
 platformdirs==4.10.0
 pluggy==1.6.0
@@ -91,12 +93,16 @@ pymongo==4.6.3
 pyparsing==3.3.2
 pypdf==6.14.0
 pytest==9.1.1
+pytest-rerunfailures==16.4
+pytest-timeout==2.4.0
+pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-jose==3.5.0
 python-multipart==0.0.32
 pytokens==0.4.1
 PyYAML==6.0.3
+pyzbar==0.1.9
 qrcode==8.2
 referencing==0.37.0
 regex==2026.5.9

@@ -801,6 +801,52 @@ function CapitalSection({ sources, reload, t }) {
           )}
           {historyTab === "schedule" && (
           <div className="overflow-x-auto max-h-[50vh]">
+            <div className="flex justify-end mb-2 gap-2">
+              <button
+                onClick={() => {
+                  const headers = ["#", "Due Date", "Opening Balance", "Principal", "Interest", "Payment", "Ending Balance", "Status"];
+                  const lines = [headers.join(",")].concat(
+                    scheduleRows.map((r) => [
+                      r.installment,
+                      r.due_date,
+                      r.opening_balance,
+                      r.principal,
+                      r.interest,
+                      r.payment,
+                      r.ending_balance,
+                      r.status,
+                    ].join(","))
+                  );
+                  const csv = lines.join("\n");
+                  try {
+                    if (navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(csv);
+                      toast.success(`Copied ${scheduleRows.length} rows to clipboard`);
+                    } else {
+                      throw new Error("Clipboard unavailable");
+                    }
+                  } catch (_) {
+                    // Fallback — download as file.
+                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `schedule-${historyFor?.name?.replace(/[^A-Za-z0-9-_]/g, "-") || "capital"}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    toast.success(`Downloaded ${scheduleRows.length} rows`);
+                  }
+                }}
+                disabled={scheduleLoading || scheduleRows.length === 0}
+                data-testid="schedule-copy-csv"
+                className="text-[11px] px-2 py-1 rounded-md bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200 disabled:opacity-50 flex items-center gap-1"
+                title="Copy schedule as CSV (falls back to download)"
+              >
+                <FileText className="w-3.5 h-3.5" /> Copy CSV
+              </button>
+            </div>
             <table className="min-w-full text-sm" data-testid="schedule-table">
               <thead className="bg-stone-50 sticky top-0">
                 <tr>{["#", "Due Date", "Opening", "Principal", "Interest", "Payment", "Ending", "Status"].map((h) => (
@@ -915,14 +961,40 @@ function ExpensesSection({ expenses, categories, reload, t }) {
   const [form, setForm] = useState(blankExpense);
   const [editingId, setEditingId] = useState(null);
   const [filterCat, setFilterCat] = useState("all");
+  const [filterGroup, setFilterGroup] = useState("all"); // "all" | "operating" | "financial"
 
-  const filtered = filterCat === "all"
-    ? expenses
-    : expenses.filter((e) => e.category === filterCat);
+  // Names of categories in the "Financial Costs" group (Interest Expense (Capital), etc.).
+  const financialCategoryNames = (() => {
+    const financialGroup = (categories.groups || []).find((g) => g.label === "Financial Costs");
+    return new Set(financialGroup?.items || []);
+  })();
+
+  const filtered = expenses.filter((e) => {
+    if (filterGroup === "financial" && !financialCategoryNames.has(e.category)) return false;
+    if (filterGroup === "operating" && financialCategoryNames.has(e.category)) return false;
+    if (filterCat !== "all" && e.category !== filterCat) return false;
+    return true;
+  });
+
+  // KPI split — computed on the full expense list (not the filtered view) so
+  // switching filters doesn't misrepresent the totals.
+  const totalOperating = expenses
+    .filter((e) => !financialCategoryNames.has(e.category))
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalFinancial = expenses
+    .filter((e) => financialCategoryNames.has(e.category))
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalAll = totalOperating + totalFinancial;
 
   const pdfHref = filterCat === "all"
     ? pdfUrl("/finance/expenses/export/pdf")
     : pdfUrl(`/finance/expenses/export/pdf?category=${encodeURIComponent(filterCat)}`);
+
+  const kpiTiles = [
+    { key: "all",       label: "All Expenses",       value: totalAll,       tone: "text-stone-800", testid: "expense-kpi-all" },
+    { key: "operating", label: "Operating Expenses", value: totalOperating, tone: "text-rose-700",  testid: "expense-kpi-operating" },
+    { key: "financial", label: "Financial Expenses", value: totalFinancial, tone: "text-amber-800", testid: "expense-kpi-financial" },
+  ];
 
   const submit = async () => {
     try {
@@ -942,6 +1014,25 @@ function ExpensesSection({ expenses, categories, reload, t }) {
 
   return (
     <div className="space-y-4 mt-4">
+      {/* KPI split — Operating vs Financial (clickable to filter) */}
+      <div className="grid grid-cols-3 gap-3">
+        {kpiTiles.map((k) => (
+          <button
+            key={k.key}
+            onClick={() => { setFilterGroup(k.key); setFilterCat("all"); }}
+            data-testid={`${k.testid}-btn`}
+            className={`text-left rounded-md border px-3 py-3 transition ${
+              filterGroup === k.key
+                ? "border-[#1B2D5C] bg-[#1B2D5C]/5 shadow-sm"
+                : "border-stone-200 bg-white hover:border-stone-400"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">{k.label}</div>
+            <div className={`font-display text-xl mt-1 ${k.tone}`} data-testid={k.testid}>{fmt(k.value)}</div>
+          </button>
+        ))}
+      </div>
+
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Label className="text-xs uppercase tracking-wider text-stone-500">
