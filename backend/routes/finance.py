@@ -350,6 +350,184 @@ async def finance_summary(
     }
 
 
+# =====================================================================
+# Cash-on-Hand ledger (Phase H · iter 64)
+# =====================================================================
+@router.get("/finance/cash-ledger")
+async def cash_ledger(
+    days: int = Query(90, ge=1, le=365, description="Last N days of history"),
+    _: dict = Depends(get_current_user),
+):
+    """Synthesize a per-line cash-movement ledger from every cash-affecting
+    collection. Nothing is persisted — this is a live projection over the
+    existing payments / expenses / inspections / funding data. Signed
+    amounts: inflows positive, outflows negative. Running balance is
+    computed forward from `opening_cash_balance`."""
+    from datetime import date as _date, timedelta as _td
+    cutoff = (_date.today() - _td(days=days)).isoformat()
+    settings_doc = await db.settings.find_one({}, {"_id": 0}) or {}
+    opening_cash = float(settings_doc.get("opening_cash_balance", 0) or 0)
+
+    entries: list[dict] = []
+
+    # 1. Payments: disbursement = outflow, others = inflow
+    async for p in db.payments.find({"date": {"$gte": cutoff}}, {"_id": 0}):
+        amt = float(p.get("amount", 0) or 0)
+        is_out = p.get("type") == "disbursement"
+        entries.append({
+            "date": p.get("date"),
+            "kind": "disbursement" if is_out else "payment",
+            "source": "payments",
+            "amount": -amt if is_out else amt,
+            "reference": p.get("receipt_number") or p.get("id"),
+            "notes": f"{p.get('type','')} · contract {p.get('contract_number','')}",
+        })
+
+    # 2. Expenses (outflow)
+    async for e in db.expenses.find({"date": {"$gte": cutoff}}, {"_id": 0}):
+        entries.append({
+            "date": e.get("date"),
+            "kind": "expense",
+            "source": "expenses",
+            "amount": -float(e.get("amount", 0) or 0),
+            "reference": e.get("id"),
+            "notes": f"{e.get('category','')} · {e.get('description','')}",
+        })
+
+    # 3. Inspections — incurred (outflow) + reimbursed (inflow, on reimbursed_date)
+    async for ins in db.inspections.find({}, {"_id": 0}):
+        if (ins.get("incurred_date") or "") >= cutoff:
+            entries.append({
+                "date": ins.get("incurred_date"),
+                "kind": "inspection_out",
+                "source": "inspections",
+                "amount": -float(ins.get("amount", 0) or 0),
+                "reference": ins.get("id"),
+                "notes": f"{ins.get('category','')} · {ins.get('description','')} · contract {ins.get('contract_number','')}",
+            })
+        if ins.get("reimbursed") and (ins.get("reimbursed_date") or "") >= cutoff:
+            entries.append({
+                "date": ins.get("reimbursed_date"),
+                "kind": "inspection_reimb",
+                "source": "inspections",
+                "amount": float(ins.get("reimbursed_amount", 0) or 0),
+                "reference": ins.get("id"),
+                "notes": f"reimburse · {ins.get('category','')} · contract {ins.get('contract_number','')}",
+            })
+
+    # 4. Funding sources (capital in) + repayments (capital out)
+    async for f in db.funding_sources.find({}, {"_id": 0}):
+        if (f.get("start_date") or "") >= cutoff:
+            entries.append({
+                "date": f.get("start_date"),
+                "kind": "capital_in",
+                "source": "funding_sources",
+                "amount": float(f.get("principal_amount", 0) or 0),
+                "reference": f.get("id"),
+                "notes": f"capital from {f.get('name','')}",
+            })
+    async for r in db.funding_repayments.find({"date": {"$gte": cutoff}}, {"_id": 0}):
+        entries.append({
+            "date": r.get("date"),
+            "kind": "capital_out",
+            "source": "funding_repayments",
+            "amount": -float(r.get("amount", 0) or 0),
+            "reference": r.get("id"),
+            "notes": f"repayment · {r.get('notes','')}",
+        })
+
+    # 5. Auctions (inflow when sold_price captured on `date_sold`)
+    async for a in db.auctions.find({}, {"_id": 0}):
+        if (a.get("date_sold") or "") >= cutoff and a.get("sold_price"):
+            entries.append({
+                "date": a.get("date_sold"),
+                "kind": "auction_sale",
+                "source": "auctions",
+                "amount": float(a.get("sold_price", 0) or 0),
+                "reference": a.get("id"),
+                "notes": f"auction · contract {a.get('contract_number','')}",
+            })
+            if a.get("tax_collected"):
+                entries.append({
+                    "date": a.get("date_sold"),
+                    "kind": "auction_tax",
+                    "source": "auctions",
+                    "amount": float(a.get("tax_collected", 0) or 0),
+                    "reference": a.get("id"),
+                    "notes": "buyer tax collected",
+                })
+
+    # Sort ascending by date so the running balance flows forward.
+    entries.sort(key=lambda e: (e.get("date") or "", e.get("kind") or ""))
+    balance = opening_cash
+    for e in entries:
+        balance += e["amount"]
+        e["running_balance"] = round(balance, 2)
+        e["amount"] = round(e["amount"], 2)
+
+    total_in = sum(e["amount"] for e in entries if e["amount"] > 0)
+    total_out = -sum(e["amount"] for e in entries if e["amount"] < 0)
+    # Present newest-first for the UI
+    entries.reverse()
+    return {
+        "opening_cash": round(opening_cash, 2),
+        "period_days": days,
+        "period_from": cutoff,
+        "total_in": round(total_in, 2),
+        "total_out": round(total_out, 2),
+        "closing_balance": round(balance, 2),
+        "entries": entries,
+    }
+
+
+# ---- Upcoming company loan repayments (Phase H · iter 64) ------------
+@router.get("/finance/upcoming-repayments")
+async def upcoming_repayments(
+    days_ahead: int = Query(30, ge=1, le=180),
+    _: dict = Depends(get_current_user),
+):
+    """Funding sources with a due_date within the next N days and unpaid balance.
+    Powers the Company Loan reminder panel on the Finance page."""
+    from datetime import date as _date, timedelta as _td
+    today = _date.today().isoformat()
+    horizon = (_date.today() + _td(days=days_ahead)).isoformat()
+
+    sources = await db.funding_sources.find({}, {"_id": 0}).to_list(200)
+    upcoming = []
+    for s in sources:
+        due = s.get("due_date") or ""
+        if not due or due > horizon:
+            continue
+        # Compute outstanding
+        repays = await db.funding_repayments.find(
+            {"funding_source_id": s.get("id")}, {"_id": 0}
+        ).to_list(500)
+        repaid = sum(float(r.get("amount", 0) or 0) for r in repays)
+        outstanding = max(0.0, float(s.get("principal_amount", 0) or 0) - repaid)
+        if outstanding <= 0:
+            continue
+        try:
+            from datetime import date as _d
+            days_until = (_d.fromisoformat(due) - _d.fromisoformat(today)).days
+        except Exception:
+            days_until = None
+        upcoming.append({
+            "id": s.get("id"),
+            "name": s.get("name"),
+            "source_type": s.get("source_type"),
+            "principal_amount": round(float(s.get("principal_amount", 0) or 0), 2),
+            "repaid": round(repaid, 2),
+            "outstanding": round(outstanding, 2),
+            "due_date": due,
+            "days_until_due": days_until,
+            "interest_rate": s.get("interest_rate"),
+            "interest_period": s.get("interest_period"),
+        })
+    upcoming.sort(key=lambda x: x["due_date"])
+    return {"days_ahead": days_ahead, "count": len(upcoming), "sources": upcoming}
+
+
+
 # ---- Finance PDF exports ----------------------------------------------
 @router.get("/finance/summary/export/pdf")
 async def finance_summary_pdf(

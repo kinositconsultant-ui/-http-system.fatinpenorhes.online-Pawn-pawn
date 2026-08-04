@@ -2526,3 +2526,129 @@ def build_bulk_labels_pdf(
 
     c.save()
     return buf.getvalue()
+
+
+
+def build_auction_agreement_pdf(
+    contract: dict,
+    client: dict,
+    item: dict | None,
+    settings: dict | None = None,
+) -> bytes:
+    """Formal auction agreement between the client and Fatin Penhores.
+
+    Generated once a contract reaches auction_ready / auction status. It
+    memorialises the client's authorisation for the shop to proceed with
+    public auction of the pawned item under Article 4/8 of the pawn law,
+    lists the outstanding balance, and provides signature blocks for the
+    client, the shop, and a witness. Bilingual EN/TET headers.
+    """
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+    NAVY = colors.HexColor("#1B2D5C")
+
+    loan = float(contract.get("loan_amount") or 0)
+    principal_remaining = float(contract.get("principal_remaining", loan) or 0)
+    interest_paid = float(contract.get("interest_paid") or 0)
+    penalty_paid = float(contract.get("penalty_paid") or 0)
+    interest_charged = float(contract.get("interest_charged") or 0)
+    penalty_charged = float(contract.get("penalty_charged") or 0)
+    outstanding = round(principal_remaining
+                        + max(0.0, interest_charged - interest_paid)
+                        + max(0.0, penalty_charged - penalty_paid), 2)
+
+    client_name = (client or {}).get("full_name", "—")
+    id_number = (client or {}).get("id_number", "—")
+    address = (client or {}).get("address", "")
+    contract_num = contract.get("contract_number") or "—"
+    contract_date = contract.get("contract_date") or "—"
+    due_date = contract.get("due_date") or "—"
+    itype = contract.get("item_type") or "—"
+    item_label = ""
+    if item:
+        item_label = (item.get("name") or f"{item.get('brand','')} {item.get('model','')}").strip()
+        if item.get("plate"):
+            item_label += f" · plate {item['plate']}"
+        elif item.get("serial"):
+            item_label += f" · s/n {item['serial']}"
+
+    story = []
+    story.append(Paragraph("<b>AUCTION AGREEMENT · KONTRATU LEILAUN</b>", s["DocTitle"]))
+    story.append(Paragraph(
+        f"Contract <b>{contract_num}</b> · Dated {contract_date} · Due {due_date}",
+        s["Small"],
+    ))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph(
+        "This agreement is entered into between <b>Fatin Penhores Unipessoal, Lda</b> "
+        f"(the &quot;Company&quot;) and <b>{client_name}</b>, holder of identity "
+        f"document <b>{id_number}</b>{f', residing at {address}' if address else ''} "
+        "(the &quot;Client&quot;). It authorises the Company to proceed with the public "
+        "auction of the pawned item listed below in accordance with Article 4 and "
+        "Article 8 of the applicable pawn regulation, after the contract has passed "
+        "its two-month interest cap without redemption.",
+        s["Body"],
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(Paragraph("<b>1. Pawned Item · Objetu ne&#8217;ebé Empenha</b>", s["Article"]))
+    story.append(_kv_table(
+        [
+            ["Category · Kategoria", itype],
+            ["Description · Deskrisaun", item_label or "—"],
+        ],
+        (6 * cm, 10 * cm),
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(Paragraph("<b>2. Financial Position · Pozisaun Finanseiru</b>", s["Article"]))
+    story.append(_kv_table(
+        [
+            ["Original loan · Empresta orijinál", _money(loan)],
+            ["Principal remaining · Prinsipál restante", _money(principal_remaining)],
+            ["Interest outstanding · Juru falta", _money(max(0.0, interest_charged - interest_paid))],
+            ["Penalty outstanding · Multa falta", _money(max(0.0, penalty_charged - penalty_paid))],
+            ["Total outstanding · Total falta", _money(outstanding)],
+        ],
+        (6 * cm, 10 * cm),
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(Paragraph(
+        "<b>3. Authorisation · Autorizasaun.</b> The Client acknowledges the "
+        "outstanding balance and authorises the Company to sell the pawned item "
+        "at the next public auction. Proceeds shall be applied in the following "
+        "order: (a) the Company&#8217;s costs of holding and preparing the sale, "
+        "(b) interest and penalties owed, (c) principal owed. Any surplus above "
+        "these amounts is retained by the Company as auction realized profit "
+        "unless otherwise agreed in writing.",
+        s["Body"],
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(Paragraph(
+        "<b>4. Termination of Redemption · Terminasaun Redensaun.</b> Once the "
+        "auction is executed the Client waives any further right to redeem the item.",
+        s["Body"],
+    ))
+    story.append(Spacer(1, 0.6 * cm))
+
+    # Signature block
+    sig_data = [
+        ["_________________________________", "", "_________________________________"],
+        [f"Client · Kliente ({client_name})", "", "For · Ba Fatin Penhores Unipessoal, Lda"],
+        ["", "", ""],
+        ["_________________________________", "", ""],
+        ["Witness · Testemuña", "", f"Date · Data ______________________"],
+    ]
+    tbl = Table(sig_data, colWidths=(7 * cm, 1 * cm, 7 * cm))
+    tbl.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 1), (-1, 1), NAVY),
+        ("TEXTCOLOR", (0, 4), (-1, 4), NAVY),
+    ]))
+    story.append(tbl)
+
+    doc.build(story)
+    return buf.getvalue()
