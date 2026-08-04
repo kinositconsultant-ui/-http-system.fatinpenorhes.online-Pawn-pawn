@@ -635,6 +635,30 @@ async def contract_label_pdf(cid: str, _: dict = Depends(get_current_user)):
     )
 
 
+@api.get("/contracts/{cid}/auction-agreement-pdf")
+async def contract_auction_agreement_pdf(cid: str, _: dict = Depends(get_current_user)):
+    """Formal auction agreement between the client and the company.
+
+    Available for any contract, but designed for `auction_ready` / `auction`
+    status where the client authorises the shop to proceed with public sale.
+    """
+    from pdf_utils import build_auction_agreement_pdf  # noqa: PLC0415
+
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    client_doc = await db.clients.find_one({"id": c.get("client_id")}, {"_id": 0}) or {}
+    item = await _fetch_item(c.get("item_type"), c.get("item_id")) or {}
+    settings = await get_settings_doc()
+    pdf_bytes = build_auction_agreement_pdf(c, client_doc, item, settings=settings)
+    safe_no = str(c.get("contract_number", "auction")).replace("/", "-")
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe_no}-auction-agreement.pdf"'},
+    )
+
+
 @api.get("/contracts/{cid}/terms-card")
 async def contract_terms_card(cid: str, _: dict = Depends(get_current_user)):
     """Personalized "Terms of your Loan" one-pager — printed alongside the

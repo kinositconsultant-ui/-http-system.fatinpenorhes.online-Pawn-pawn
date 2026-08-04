@@ -864,6 +864,22 @@ export default function Contracts() {
                     >
                       <Eye className="w-3 h-3" />
                     </button>
+                    {["auction_ready", "auction"].includes(r.status) && (
+                      <button
+                        type="button"
+                        onClick={() => setPdfPreview({
+                          open: true,
+                          url: pdfUrl(`/contracts/${r.id}/auction-agreement-pdf`),
+                          title: `Auction Agreement · ${r.contract_number}`,
+                          filename: `${r.contract_number}-auction-agreement.pdf`,
+                        })}
+                        data-testid={`contract-auction-agreement-${r.id}`}
+                        title="Auction agreement (client authorisation PDF)"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                      >
+                        <ScrollText className="w-3 h-3" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setPdfPreview({
