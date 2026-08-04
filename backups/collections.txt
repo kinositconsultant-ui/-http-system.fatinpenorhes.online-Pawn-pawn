@@ -1,27 +1,30 @@
-# Collections in test_database  (snapshot: 20260722-1433 UTC)
-# Total: 24 collections, 8675 documents
+# Collections in test_database  (snapshot: 20260804-0846 UTC)
+# Total: 27 collections, 10676 documents
 
-alert_digests                        13 documents
-auctions                             91 documents
-audit_log                          4755 documents
-cars                                647 documents
-clients                             664 documents
-contact_messages                     24 documents
-contracts                           542 documents
-electronics                          73 documents
-expenses                             39 documents
-files                               176 documents
+alert_digests                        21 documents
+auctions                            105 documents
+audit_log                          5789 documents
+cars                                770 documents
+clients                             811 documents
+contact_messages                     28 documents
+contracts                           649 documents
+electronics                          85 documents
+expenses                             50 documents
+files                               249 documents
 funding_repayments                    0 documents
 funding_sources                       2 documents
-invoices                             55 documents
+inspections                           0 documents
+invoices                             60 documents
 job_runs                              1 documents
 migrations                            1 documents
-motorcycles                          58 documents
-password_reset_tokens                12 documents
-payments                            587 documents
-pezadus                               2 documents
-reminder_log                         67 documents
+motorcycles                          69 documents
+password_reset_tokens                16 documents
+payments                            723 documents
+pezadus                               6 documents
+reminder_log                         91 documents
 report_views                          0 documents
 settings                              1 documents
-users                               124 documents
-whatsapp_log                        741 documents
+users                               151 documents
+whatsapp_log                        983 documents
+whatsapp_webhook_events              10 documents
+whatsapp_webhook_orphans              5 documents

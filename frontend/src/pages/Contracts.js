@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, API_BASE, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
