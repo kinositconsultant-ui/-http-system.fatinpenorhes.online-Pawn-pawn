@@ -169,15 +169,17 @@ export default function Finance() {
           />
           <ProfitSourceCard
             title="Auction Profit"
-            subtitle="Interest via auction + realized surplus − losses"
-            value={fmt(summary?.auction_profit || 0)}
+            subtitle="Sale surplus above original loan − losses"
+            value={fmt(summary?.auction_net_profit ?? summary?.auction_profit ?? 0)}
             accent="from-amber-50 to-white border-amber-300"
             iconTone="text-amber-800"
             testid="profit-auction"
             detail={[
-              { k: "Interest earned via auction", v: fmt(summary?.auction_interest_profit || 0) },
-              { k: "Realized profit (sale surplus)", v: fmt(summary?.auction_realized_profit || 0) },
-              { k: "Realized loss", v: `-${fmt(summary?.auction_realized_loss || 0)}` },
+              { k: "Auction sales (cash in)", v: fmt(summary?.auction_sales || 0) },
+              { k: "− Capital recovered", v: `-${fmt(summary?.auction_capital_recovered || 0)}` },
+              { k: "= Realized profit", v: fmt(summary?.auction_realized_profit || 0) },
+              { k: "− Realized loss", v: `-${fmt(summary?.auction_realized_loss || 0)}` },
+              { k: "Interest owed at sale (info)", v: fmt(summary?.auction_interest_profit || 0) },
             ]}
           />
         </div>

@@ -608,11 +608,15 @@ async def finance_summary(
     # Profit sources — three independent buckets as requested:
     #  1. Interest received (all client interest payments)
     #  2. Penalties received
-    #  3. Auction profit = interest earned via auction + any realized surplus
-    #                      (sale price over principal+interest) minus realized loss
-    auction_profit = (
-        auction_interest_profit + auction_realized_profit - auction_realized_loss
-    )
+    #  3. Auction profit = surplus above the original loan minus any realized
+    #     loss on shortfall sales.  auction_interest_profit (the "interest fee"
+    #     portion of the sale) is informational only — it is a SUBSET of the
+    #     realized_profit for sales that hit the strike price. Adding both
+    #     would double-count (see iter67 rollout).
+    #     Accounting identity (iter37):
+    #         capital_recovered + realized_profit == sold_price
+    #     So auction_profit == sold_price − original_loan − realized_loss.
+    auction_profit = auction_realized_profit - auction_realized_loss
     gross_profit = interest_received + total_penalty + auction_profit
     # Proper Income Statement layout:
     #   Gross Profit
@@ -646,6 +650,9 @@ async def finance_summary(
         "auction_realized_profit": round(auction_realized_profit, 2),
         "auction_realized_loss": round(auction_realized_loss, 2),
         "auction_tax_collected": round(auction_tax_collected, 2),
+        # Auction P&L breakdown for the Income Statement — profit only reflects
+        # the surplus above the original loan (not double-counted with interest fee).
+        "auction_net_profit": round(auction_profit, 2),
         "expenses_total": round(expenses_total, 2),
         "expenses_period": round(expenses_period, 2),
         "operating_expenses": round(operating_expenses, 2),

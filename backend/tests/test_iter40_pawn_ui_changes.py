@@ -82,15 +82,18 @@ class TestFinanceSummaryFormula:
         exp = float(data["expenses_total"])
         np_ = float(data["net_profit"])
         # gross_profit = interest + penalty + auction_profit
-        #              where auction_profit = auction_interest_profit
-        #                                    + auction_realized_profit
-        #                                    - auction_realized_loss
-        auction_profit = aip + arp - arl
+        # where auction_profit = auction_realized_profit − auction_realized_loss
+        # (auction_interest_profit is informational only — a subset of realized_profit;
+        # counting both would double-count the same dollars — see iter67).
+        auction_profit = arp - arl
         assert round(gp, 2) == round(ir + tp + auction_profit, 2), (
             f"gross_profit mismatch: got {gp} expected {ir + tp + auction_profit}"
         )
-        # net_profit = gross_profit - expenses_total
-        assert round(np_, 2) == round(gp - exp, 2)
+        # net_profit = gross_profit − operating_expenses − financial_expenses
+        # (Income Statement layout, see iter61)
+        op_exp = float(data.get("operating_expenses", exp))
+        fin_exp = float(data.get("financial_expenses", 0))
+        assert round(np_, 2) == round(gp - op_exp - fin_exp, 2)
 
 
 # ---------- Invoice delete flow ----------
