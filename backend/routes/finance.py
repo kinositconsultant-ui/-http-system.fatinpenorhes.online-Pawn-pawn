@@ -1051,6 +1051,92 @@ async def auction_report_pdf(
     )
 
 
+@router.post("/finance/maintenance/backfill-auction-loans")
+async def backfill_auction_loans(
+    dry_run: bool = Query(False),
+    user: dict = Depends(require_admin),
+):
+    """One-shot maintenance: populate `original_loan_amount` on legacy sold
+    auctions from their linked contract's `loan_amount`. Also recomputes
+    `auction_profit` and `realized_loss` on those rows so they surface in
+    the /finance/auction-report and /finance/summary aggregates.
+
+    Set `?dry_run=true` to preview which rows would be touched without writing.
+    """
+    # Scan sold auctions that are missing original_loan_amount but have a
+    # linked contract_id we can look up. Catches int 0, float 0.0, null,
+    # empty string, and truly missing key.
+    candidates = await db.auctions.find(
+        {"status": "sold",
+         "$or": [
+             {"original_loan_amount": {"$exists": False}},
+             {"original_loan_amount": {"$in": [None, 0, 0.0, ""]}},
+             {"original_loan_amount": {"$lte": 0}},
+         ]},
+        {"_id": 0},
+    ).to_list(5000)
+
+    touched = []
+    skipped = []
+    for a in candidates:
+        cid = a.get("contract_id")
+        contract = None
+        if cid:
+            contract = await db.contracts.find_one({"id": cid}, {"_id": 0})
+        # Fallback — look up by contract_number when contract_id is missing
+        # or the contract was deleted-and-recreated with a fresh id.
+        if not contract and a.get("contract_number"):
+            contract = await db.contracts.find_one(
+                {"contract_number": a["contract_number"]}, {"_id": 0}
+            )
+        if not contract:
+            skipped.append({
+                "auction_id": a.get("id"),
+                "reason": "contract_not_found" if cid else "no_contract_id",
+                "contract_id": cid,
+                "contract_number": a.get("contract_number"),
+            })
+            continue
+        loan = float(contract.get("loan_amount") or 0)
+        if loan <= 0:
+            skipped.append({"auction_id": a.get("id"), "reason": "contract_has_no_loan_amount"})
+            continue
+        sold = float(a.get("sold_price") or 0)
+        new_profit = round(max(0.0, sold - loan), 2)
+        new_loss = round(max(0.0, loan - sold), 2)
+        touched.append({
+            "auction_id": a.get("id"),
+            "contract_number": a.get("contract_number") or contract.get("contract_number"),
+            "sold_price": sold,
+            "original_loan": loan,
+            "new_profit": new_profit,
+            "new_loss": new_loss,
+        })
+        if not dry_run:
+            await db.auctions.update_one(
+                {"id": a["id"]},
+                {"$set": {
+                    "original_loan_amount": loan,
+                    "auction_profit": new_profit,
+                    "realized_loss": new_loss,
+                }},
+            )
+
+    if not dry_run:
+        await write_audit(user, "backfill", "auctions", None, {
+            "count_updated": len(touched),
+            "count_skipped": len(skipped),
+        })
+
+    return {
+        "dry_run": dry_run,
+        "count_updated": len(touched),
+        "count_skipped": len(skipped),
+        "updated": touched[:50],   # cap the response payload
+        "skipped_reasons": skipped[:50],
+    }
+
+
 @router.get("/finance/expenses/export/pdf")
 async def expenses_pdf(
     month: Optional[int] = Query(None, ge=1, le=12),

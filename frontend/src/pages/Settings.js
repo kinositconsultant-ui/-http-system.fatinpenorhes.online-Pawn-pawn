@@ -263,7 +263,7 @@ export default function Settings() {
         </div>
         <p className="text-sm text-stone-600">
           The <b>Next Auction Date</b> is shown on the public catalogue PDF and on the /auction page.
-          Leave empty to display "TBA · Sei informa".
+          Leave empty to display &ldquo;TBA · Sei informa&rdquo;.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Next Auction Date · Data Leilaun Tuir mai">
@@ -337,6 +337,16 @@ export default function Settings() {
             </code>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
+        <div>
+          <h2 className="font-display text-xl">Data Maintenance</h2>
+          <p className="text-[11px] text-stone-500 mt-1">
+            One-shot cleanup jobs. Each has a Preview mode that reports what would change without writing.
+          </p>
+        </div>
+        <BackfillAuctionCard />
       </Card>
 
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">
@@ -903,6 +913,80 @@ function StatTile({ label, value, testid, accent = "text-stone-800" }) {
     <div className="rounded-md border border-stone-200 bg-stone-50/50 px-3 py-2" data-testid={testid}>
       <div className="text-[10px] uppercase tracking-wider text-stone-500">{label}</div>
       <div className={`font-display text-sm mt-0.5 ${accent} truncate`}>{value}</div>
+    </div>
+  );
+}
+
+
+function BackfillAuctionCard() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const run = async (dryRun) => {
+    if (!dryRun && !window.confirm("Apply changes to legacy auctions? This is irreversible.")) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await api.post(`/finance/maintenance/backfill-auction-loans?dry_run=${dryRun ? "true" : "false"}`);
+      setResult(r.data);
+      toast.success(dryRun ? `Preview: ${r.data.count_updated} rows would update, ${r.data.count_skipped} skipped` : `Backfill complete: ${r.data.count_updated} rows updated, ${r.data.count_skipped} skipped`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Backfill failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50/60 p-4 space-y-3" data-testid="backfill-auction-card">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div className="font-medium text-stone-800">Backfill Legacy Auction Loans</div>
+          <p className="text-[11px] text-stone-500 mt-0.5 max-w-lg">
+            Copies <code>loan_amount</code> from each sold auction&apos;s linked contract into <code>original_loan_amount</code>. Fixes P&amp;L totals on the Auction Report for pre-iter37 sales.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => run(true)}
+            disabled={busy}
+            variant="outline"
+            data-testid="backfill-preview-btn"
+          >
+            Preview
+          </Button>
+          <Button
+            onClick={() => run(false)}
+            disabled={busy}
+            className="bg-[#1B2D5C] hover:bg-[#0F1B3A]"
+            data-testid="backfill-apply-btn"
+          >
+            Apply
+          </Button>
+        </div>
+      </div>
+      {result && (
+        <div className="text-xs rounded-md border border-stone-200 bg-white p-3 space-y-1" data-testid="backfill-result">
+          <div className="flex flex-wrap gap-4 text-stone-700">
+            <span>Mode: <b>{result.dry_run ? "Preview" : "Applied"}</b></span>
+            <span>Updated: <b className="text-emerald-700">{result.count_updated}</b></span>
+            <span>Skipped: <b className="text-amber-800">{result.count_skipped}</b></span>
+          </div>
+          {result.skipped_reasons?.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-stone-500 hover:text-stone-700">Skipped reasons</summary>
+              <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                {Object.entries(
+                  result.skipped_reasons.reduce((acc, x) => {
+                    acc[x.reason] = (acc[x.reason] || 0) + 1;
+                    return acc;
+                  }, {})
+                ).map(([r, c]) => (
+                  <li key={r}>· {r}: <b>{c}</b></li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }
