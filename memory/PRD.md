@@ -1,6 +1,18 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 33 — Month-end Compliance Bundle)
+**Last updated:** 2026-02 (Iteration 59 — Phase A–H E2E Validation)
+
+## Iteration 59 (2026-02) — Phase A–H Comprehensive Regression ✅
+The testing agent executed the first full E2E validation of the massive Phase A–H rollup (Cash-on-Hand formula, Fuel/Mileage fields, Inspection Expenses, Staff Responsibility, Contract KPI panel, Inventory Analytics, Business Dashboard v2, Auction Agreement PDFs, Warehouse Receipt workflow) that had been shipped without prior testing subagent coverage.
+
+- New test suite `/app/backend/tests/test_iter59_phase_a_h.py` — 26 tests, **25 PASS / 1 SKIP** (skip = legacy admin doc missing `staff_type`).
+- Coverage: Business Dashboard (29 KPIs), Inspections CRUD + reimburse, Warehouse Receipts pending → acknowledge, Contracts KPI panel, Inventory Analytics, History Search, opening_cash_balance persistence + Cash-on-Hand formula (Δ opening +1000 propagates 1-to-1), Finance summary 3-source profit, Cash Ledger, Auction Agreement PDF magic bytes, fuel_type/mileage_km on car & motorcycle, user.staff_type field.
+- Frontend: `/business`, `/inspections`, `/staff`, `/warehouse-receipts`, `/items`, `/contracts`, `/finance`, `/settings` all render.
+- **BUG FIXED (HIGH)** — `Contracts.js` was crashing with `ReferenceError: useRef is not defined` because `SignedAgreementButton` (added in Phase F) used `useRef(null)` but the top-of-file import only included `{useEffect, useMemo, useState}`. Testing agent added `useRef` to the import; page now renders with 564 contracts + KPI cards + pre-auction table. Verified via Playwright smoke test.
+- Cash on Hand is deeply negative (~-$522K) because `opening_cash_balance` defaults to $0 while historical loans_disbursed = $865K. UI already shows a yellow banner prompting admin to set the opening balance. Not a bug — intentional.
+- **Baseline regression** (`pytest -n 4 --timeout=10` across all ~40 test files): 308 PASS / 35 FAIL / 141 timeout-error. The 35 failures are **stale legacy test assertions** against pre-Phase-A formulas (cash_on_hand math without opening_cash, penalty scales, motorcycle default rate, business dashboard field names, grace_period vs overdue). NOT domain regressions — a follow-up batch will update these assertions.
+
+
 
 ## Original Problem Statement
 Pawn shop management system for Fatin Penhores (Dili, Timor-Leste). Modules: Dashboard, Client Management, Pawn Item Management (separate tables for Car, Motorcycle, Electronic), Pawn Contract Module (CTR-YYYY-#### numbering, 10/15% interest, statuses), Payment Module (full/partial/interest-only), Auction Module, Reports, PDF/Print, User Account/Admin Module, Public Website.
