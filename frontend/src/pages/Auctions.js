@@ -28,7 +28,7 @@ export default function Auctions() {
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(null);
-  const [form, setForm] = useState({ sold_price: "", interest_fee: "", tax_percent: "0", buyer_name: "", notes: "" });
+  const [form, setForm] = useState({ sold_price: "", interest_fee: "", tax_percent: "0", buyer_name: "", buyer_phone: "", buyer_email: "", buyer_address: "", buyer_id_number: "", notes: "" });
   const [expanded, setExpanded] = useState({}); // { clientKey: true }
   const [pdfPreview, setPdfPreview] = useState({ open: false, url: "", title: "", filename: "" });
 
@@ -39,7 +39,7 @@ export default function Auctions() {
 
   const openSold = (a) => {
     setCurrent(a);
-    setForm({ sold_price: a.starting_price || "", interest_fee: "", tax_percent: "0", buyer_name: "", notes: "" });
+    setForm({ sold_price: a.starting_price || "", interest_fee: "", tax_percent: "0", buyer_name: "", buyer_phone: "", buyer_email: "", buyer_address: "", buyer_id_number: "", notes: "" });
     setOpen(true);
   };
 
@@ -49,6 +49,10 @@ export default function Auctions() {
         sold_price: Number(form.sold_price),
         tax_percent: Number(form.tax_percent || 0),
         buyer_name: form.buyer_name,
+        buyer_phone: form.buyer_phone,
+        buyer_email: form.buyer_email,
+        buyer_address: form.buyer_address,
+        buyer_id_number: form.buyer_id_number,
         notes: form.notes,
       };
       if (form.interest_fee !== "" && !Number.isNaN(Number(form.interest_fee))) {
@@ -375,15 +379,68 @@ export default function Auctions() {
                 This is the profit portion of the sale. It is added to Net Profit in Finance and is NOT shown on the buyer&apos;s invoice.
               </p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-stone-500">
-                {t("buyer_name")}
-              </Label>
-              <Input
-                value={form.buyer_name}
-                onChange={(e) => setForm({ ...form, buyer_name: e.target.value })}
-                data-testid="auction-buyer-name"
-              />
+            <div className="space-y-3 rounded-md border border-stone-200 bg-stone-50/50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">
+                Buyer Details · Detallu Sosa-Na&apos;in
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs uppercase tracking-wider text-stone-500">
+                    {t("buyer_name")} <span className="text-rose-600">*</span>
+                  </Label>
+                  <Input
+                    value={form.buyer_name}
+                    onChange={(e) => setForm({ ...form, buyer_name: e.target.value })}
+                    data-testid="auction-buyer-name"
+                    placeholder="Full name for the invoice"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-stone-500">
+                    Phone · Telefone
+                  </Label>
+                  <Input
+                    value={form.buyer_phone}
+                    onChange={(e) => setForm({ ...form, buyer_phone: e.target.value })}
+                    data-testid="auction-buyer-phone"
+                    placeholder="+67078000000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-stone-500">
+                    Email
+                  </Label>
+                  <Input
+                    type="email"
+                    value={form.buyer_email}
+                    onChange={(e) => setForm({ ...form, buyer_email: e.target.value })}
+                    data-testid="auction-buyer-email"
+                    placeholder="buyer@example.com"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs uppercase tracking-wider text-stone-500">
+                    Address · Endereçu
+                  </Label>
+                  <Input
+                    value={form.buyer_address}
+                    onChange={(e) => setForm({ ...form, buyer_address: e.target.value })}
+                    data-testid="auction-buyer-address"
+                    placeholder="Bairo, Suku, Postu"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-xs uppercase tracking-wider text-stone-500">
+                    ID Number · Númeru BI/Kartaun
+                  </Label>
+                  <Input
+                    value={form.buyer_id_number}
+                    onChange={(e) => setForm({ ...form, buyer_id_number: e.target.value })}
+                    data-testid="auction-buyer-id-number"
+                    placeholder="Electoral / Passport / BI"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
