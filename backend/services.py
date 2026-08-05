@@ -179,12 +179,20 @@ async def _recompute_contract_status(contract: dict) -> dict:
 
     is_overdue = contract.get("due_date", today_iso) < today_iso
     # Provisional penalty cap for the payment walk — uses ORIGINAL loan × rate
-    # so a client can allocate up to the original max. After the walk we
-    # recompute the true `full_penalty` based on current principal (which may
-    # be lower after partial principal payments), and derive
-    # `penalty_outstanding` from that. `penalty_paid` is never clamped down
-    # because the client actually did pay that amount.
-    penalty_walk_cap = round(loan * penalty_rate / 100.0, 2) if (is_overdue and contract.get("status") != "auction") else 0.0
+    # so a client can allocate up to the original max, even for HISTORICAL
+    # penalty payments that were made while the contract was overdue but the
+    # contract has since been reactivated (due_date now in the future).
+    # Bug fix (iter72): the cap used to be gated on `is_overdue`, which meant
+    # that after reactivation the walk would silently reset every past
+    # penalty payment to $0 and drop it from the Financial Report. Penalty
+    # payments are historical facts — the walk must credit them regardless
+    # of the contract's current overdue state. See services.py line 311 below
+    # for the CURRENT-owed penalty, which correctly stays gated on is_overdue.
+    penalty_walk_cap = (
+        round(loan * penalty_rate / 100.0, 2)
+        if contract.get("status") != "auction"
+        else 0.0
+    )
     full_penalty = penalty_walk_cap
 
     # ---- Event-driven chronological walk ----
