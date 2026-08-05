@@ -142,6 +142,42 @@ export default function Finance() {
         </div>
       </Card>
 
+      {/* Auction Revenue Breakdown — separates recovered capital from real profit */}
+      <Card className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="auction-revenue-breakdown">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div className="text-eyebrow">Auction Revenue Breakdown · Rezumu Lelaun</div>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+            Capital + Profit − Loss = Revenue
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-md border border-stone-200 bg-stone-50/60 p-3" data-testid="auction-total-revenue">
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">Total Revenue from Auctions</div>
+            <div className="font-display text-2xl text-[#1B2D5C] mt-1">{fmt(summary?.auction_sales || 0)}</div>
+            <div className="text-[11px] text-stone-500 mt-1">Sasan hotu ne&apos;ebé fa&apos;an — cash in</div>
+          </div>
+          <div className="rounded-md border border-stone-200 bg-emerald-50/40 p-3" data-testid="auction-capital-recovered-card">
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">Loan Principal Recovered</div>
+            <div className="font-display text-2xl text-emerald-700 mt-1">{fmt(summary?.auction_capital_recovered || 0)}</div>
+            <div className="text-[11px] text-stone-500 mt-1">Kapital emprestimu ne&apos;ebé fila mai · not new income</div>
+          </div>
+          <div className="rounded-md border border-stone-200 bg-amber-50/40 p-3" data-testid="auction-net-profit-card">
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">NET Auction Profit</div>
+            <div className={`font-display text-2xl mt-1 ${(summary?.auction_net_profit || 0) >= 0 ? "text-amber-800" : "text-rose-700"}`}>
+              {fmt(summary?.auction_net_profit || 0)}
+            </div>
+            <div className="text-[11px] text-stone-500 mt-1">
+              Realized profit {fmt(summary?.auction_realized_profit || 0)} − Loss {fmt(summary?.auction_realized_loss || 0)}
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] text-stone-500 leading-relaxed mt-3">
+          <b>Identity · Igualdade:</b> Total Revenue = Principal Recovered + Realized Profit − Realized Loss.
+          Cash on Hand increases by <b>Total Revenue</b>. Net Profit increases by <b>NET Auction Profit</b> only —
+          the recovered capital is your money coming back, not new income.
+        </p>
+      </Card>
+
       {/* Profit Sources — the three profit buckets requested by ownership */}
       <Card className="p-4 md:p-5 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="profit-sources">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">

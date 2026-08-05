@@ -1,0 +1,30 @@
+{
+  "summary": "iter73 presentation-only fix verified end-to-end. Backend PDF export contains new 'Auction Revenue Breakdown' section with all required rows and identity footer. Frontend Finance page renders new card ABOVE 'Profit Sources' with 3 tiles, pill, and identity explainer. Money formatting is correct. GET /api/finance/summary exposes all pre-existing keys unchanged. Full iter60→iter72 regression suite: 59/59 passed. New iter73 tests: 2/2 passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter73_finance_pdf_auction_breakdown.py",
+    "/app/test_reports/pytest/iter60_72.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Finance.js is 1609 lines — consider splitting into subcomponents in a future iteration for maintainability, but not required for this presentation-only fix.",
+    "PDF section uses summary.get with defaults, safely handles missing fields — good."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter73_finance_pdf_auction_breakdown.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing seeded data. Observed values: auction_sales=$80,140, capital_recovered=$69,800, net_profit=$10,340.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter73 (presentation-only auction revenue breakdown) is fully verified. New test file added at /app/backend/tests/test_iter73_finance_pdf_auction_breakdown.py. Finance page UI card confirmed ABOVE Profit Sources (bounding rect top 507 < 765). PDF text extraction confirmed all required strings present including identity footer with 'Cash on Hand'.",
+  "verification_details": {
+    "card_position": "top=507.5 (breakdown) < top=765.25 (profit-sources) — ABOVE confirmed",
+    "tiles_present": ["auction-total-revenue", "auction-capital-recovered-card", "auction-net-profit-card"],
+    "monetary_values": ["$80,140.00", "$69,800.00", "$10,340.00"],
+    "pill_text": "Capital + Profit − Loss = Revenue — present",
+    "identity_explainer": "present with 'Cash on Hand' and 'recovered capital'",
+    "pdf_required_snippets_all_present": ["Auction Revenue Breakdown", "Total Revenue from Auctions", "Loan Principal Recovered", "Auction Profit", "Realized Loss", "NET Auction Profit", "Cash on Hand"],
+    "regression_iter60_iter72": "59/59 passed in 35.68s"
+  }
+}

@@ -1970,6 +1970,34 @@ def build_finance_summary_pdf(summary: dict, month: int | None = None, year: int
     ))
     story.append(Spacer(1, 0.4 * cm))
 
+    # Auction Revenue Breakdown · Rezumu Lelaun — separates recovered capital
+    # from real profit so month-end / year-end audits are transparent.
+    auction_sales = float(summary.get("auction_sales", 0) or 0)
+    auction_capital = float(summary.get("auction_capital_recovered", 0) or 0)
+    auction_realized = float(summary.get("auction_realized_profit", 0) or 0)
+    auction_loss = float(summary.get("auction_realized_loss", 0) or 0)
+    auction_net = float(summary.get("auction_net_profit", auction_realized - auction_loss) or 0)
+    story.append(_section_title(s, "Auction Revenue Breakdown · Rezumu Lelaun"))
+    auction_rows = [
+        ["Total Revenue from Auctions",     _money(auction_sales),   "Sasan hotu ne'ebé fa'an — cash in"],
+        ["− Loan Principal Recovered",       _money(-auction_capital),"Kapital emprestimu ne'ebé fila mai"],
+        ["= Auction Profit (Surplus)",       _money(auction_realized),"Diferensa positiva liu tan kapital"],
+        ["− Realized Loss (Shortfall)",      _money(-auction_loss),   "Sasan fa'an ki'ik liu husi emprestimu"],
+        ["= NET Auction Profit",             _money(auction_net),     "Lucro loos husi lelaun (goes to Net Profit)"],
+    ]
+    story.append(_data_table(
+        ["Line", "Amount", "Notes"],
+        auction_rows,
+        col_widths=[5.5 * cm, 4 * cm, 6.5 * cm],
+    ))
+    story.append(Paragraph(
+        "<i>Identity · Igualdade: Total Revenue = Loan Principal Recovered + Auction Profit − Realized Loss. "
+        "Cash on Hand increases by <b>Total Revenue</b>. Net Profit increases by <b>NET Auction Profit</b> only "
+        "(recovered capital is not new income — it is your money coming back).</i>",
+        s["Body"],
+    ))
+    story.append(Spacer(1, 0.4 * cm))
+
     # Expenses by category
     by_cat = summary.get("expenses_by_category") or []
     if by_cat:
