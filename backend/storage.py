@@ -1,91 +1,58 @@
-"""Emergent object storage client for Fatin Penhores."""
 import os
 import logging
-import requests
+from pathlib import Path
+import mimetypes
 
 logger = logging.getLogger(__name__)
 
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-
-_storage_key: str | None = None
-
-
-def _emergent_key() -> str:
-    return os.environ["EMERGENT_LLM_KEY"]
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/home/fp/private/pawn_django/upload/files"))
 
 
 def init_storage() -> str | None:
-    """Initialize storage session. Returns key or None on failure."""
-    global _storage_key
-    if _storage_key:
-        return _storage_key
-    try:
-        resp = requests.post(
-            f"{STORAGE_URL}/init",
-            json={"emergent_key": _emergent_key()},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        _storage_key = resp.json()["storage_key"]
-        logger.info("Object storage initialized")
-        return _storage_key
-    except Exception as e:
-        logger.error(f"Storage init failed: {e}")
-        _storage_key = None
-        return None
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    return str(UPLOAD_DIR)
 
 
-def _ensure_key() -> str:
-    key = init_storage()
-    if not key:
-        raise RuntimeError("Object storage not available")
-    return key
+def _safe_path(path: str) -> Path:
+    key = str(path or "").lstrip("/")
+    full = (UPLOAD_DIR / key).resolve()
+    root = UPLOAD_DIR.resolve()
+
+    if not str(full).startswith(str(root)):
+        raise RuntimeError("Invalid storage path")
+
+    return full
 
 
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    """Upload bytes. Returns {"path": ..., "size": ..., "etag": ...}."""
-    key = _ensure_key()
-    try:
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data,
-            timeout=120,
-        )
-        if resp.status_code == 403:
-            # try once more with fresh key
-            global _storage_key
-            _storage_key = None
-            key = _ensure_key()
-            resp = requests.put(
-                f"{STORAGE_URL}/objects/{path}",
-                headers={"X-Storage-Key": key, "Content-Type": content_type},
-                data=data,
-                timeout=120,
-            )
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        logger.error(f"put_object failed: {e}")
-        raise
+def put_object(path: str, data: bytes, content_type: str = "application/octet-stream") -> dict:
+    init_storage()
+    full = _safe_path(path)
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_bytes(data)
+
+    return {
+        "path": path,
+        "size": len(data),
+        "etag": "",
+        "content_type": content_type,
+    }
 
 
 def get_object(path: str) -> tuple[bytes, str]:
-    """Download bytes. Returns (content, content_type)."""
-    key = _ensure_key()
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key},
-        timeout=60,
-    )
-    if resp.status_code == 403:
-        global _storage_key
-        _storage_key = None
-        key = _ensure_key()
-        resp = requests.get(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key},
-            timeout=60,
-        )
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+    full = _safe_path(path)
+
+    if not full.exists():
+        raise FileNotFoundError(f"Object not found: {path}")
+
+    content_type = mimetypes.guess_type(str(full))[0] or "application/octet-stream"
+    return full.read_bytes(), content_type
+
+
+def delete_object(path: str) -> bool:
+    full = _safe_path(path)
+
+    if full.exists():
+        full.unlink()
+        return True
+
+    return False
