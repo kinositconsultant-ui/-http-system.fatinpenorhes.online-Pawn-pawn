@@ -8,7 +8,7 @@ import {
   Warehouse as WarehouseIcon, Building2, Wallet, Percent,
   AlertOctagon, CheckCircle2, Gavel, Wrench, TrendingUp,
   AlertTriangle, Bell, RefreshCcw, Phone, Mail, Clock,
-  Radio, Landmark, Activity, HandCoins,
+  Radio, Landmark, Activity, HandCoins, Star,
 } from "lucide-react";
 
 const fmt0 = (n) =>
@@ -351,11 +351,26 @@ function NotificationPanel({ Icon, title, rows, empty, testid }) {
       ) : (
         <div className="max-h-64 overflow-y-auto divide-y divide-stone-100">
           {rows.map((r) => (
-            <div key={r.id} className="py-2 flex items-center justify-between gap-2 text-xs">
+            <div
+              key={r.id}
+              className={`py-2 flex items-center justify-between gap-2 text-xs ${
+                r.is_vip ? "bg-amber-50/40 -mx-3 px-3 rounded" : ""
+              }`}
+              data-testid={r.is_vip ? `notif-vip-row-${r.id}` : undefined}
+            >
               <div className="min-w-0">
-                <div className="font-medium truncate">
-                  {r.client_name || "—"}
-                  <span className="ml-2 font-mono text-[10px] text-stone-500">
+                <div className="font-medium truncate flex items-center gap-1.5">
+                  {r.is_vip && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0 rounded-full bg-amber-500 text-white shrink-0"
+                      title="VIP client"
+                    >
+                      <Star className="w-2 h-2 fill-current" />
+                      VIP
+                    </span>
+                  )}
+                  <span className="truncate">{r.client_name || "—"}</span>
+                  <span className="font-mono text-[10px] text-stone-500 shrink-0">
                     {r.contract_number}
                   </span>
                 </div>

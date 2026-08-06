@@ -1,6 +1,29 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 78 — Live Activity Feed on Business Dashboard)
+**Last updated:** 2026-02 (Iteration 79 — Client VIP Tags)
+
+## Iteration 79 (2026-02) — Client VIP Tags ✅
+
+Directors can now flag important clients as VIP. Their contracts get a gold badge in the Clients table and float to the top of the Business Dashboard's "Expiring" panel so outreach is prioritised.
+
+### Backend
+- `ClientIn` gained a `tier: Literal["", "vip"] = ""` field so create/update round-trips preserve it.
+- New endpoint `PATCH /api/clients/{cid}/tier` (`require_not_cashier`, admin/staff only) — 200 with updated client on success, 422 for invalid tier values, 404 if client is missing. Writes an audit log entry.
+- `routes/business_dashboard.py` `_enrich()` now surfaces `is_vip` + `client_tier` on every row of `expiring_7` / `expiring_15` / `expiring_month2` and sorts VIPs first (secondary sort by `due_date`).
+
+### Frontend
+- **Clients page** (`pages/Clients.js`):
+  - Amber "★ VIP" pill next to the name for tier=="vip" clients.
+  - New star-shaped **toggle button** in the actions column: `bg-stone-200` when off, `bg-amber-500 fill-current` when on. Click → PATCH → toast + reload.
+  - Widened the name column to 280px + moved `truncate` from the `<Td>` (which was clipping the badge) to the inner name `<span>` only.
+- **Business Dashboard** `NotificationPanel`:
+  - VIP rows highlighted with `bg-amber-50/40` and a compact filled-star "VIP" pill before the client name.
+  - VIPs automatically appear at the top (backend sort).
+- data-testids: `client-vip-badge-<cid>`, `client-vip-toggle-<cid>`, `notif-vip-row-<contract_id>`.
+
+### Tests
+- `tests/test_iter79_client_vip.py` (4/4 passing): auth guard, set/unset lifecycle, invalid-tier rejection, dashboard VIP-first sort invariant.
+- Screenshot-verified: setting a client with an expiring contract as VIP floats them to the top of the "Expiring in 7 Days" panel with an amber background + badge.
 
 ## Iteration 78 (2026-02) — Live Activity Feed ✅
 

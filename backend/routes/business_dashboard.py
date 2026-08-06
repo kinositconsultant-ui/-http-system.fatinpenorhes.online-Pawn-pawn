@@ -86,7 +86,7 @@ async def business_dashboard(_: dict = Depends(require_module("dashboard"))):
 
     # Enrich expiring lists with client info (lightweight)
     clients = await db.clients.find(
-        {}, {"_id": 0, "id": 1, "full_name": 1, "phone": 1, "email": 1}
+        {}, {"_id": 0, "id": 1, "full_name": 1, "phone": 1, "email": 1, "tier": 1}
     ).to_list(5000)
     cmap = {c["id"]: c for c in clients}
 
@@ -105,8 +105,14 @@ async def business_dashboard(_: dict = Depends(require_module("dashboard"))):
                 "client_name": cl.get("full_name"),
                 "client_phone": cl.get("phone"),
                 "client_email": cl.get("email"),
+                "client_tier": cl.get("tier") or "",
+                "is_vip": (cl.get("tier") or "") == "vip",
             })
-        return sorted(out, key=lambda x: x.get("due_date") or "")
+        # VIPs first, then by due_date ascending
+        return sorted(
+            out,
+            key=lambda x: (0 if x["is_vip"] else 1, x.get("due_date") or ""),
+        )
 
     # ---- Items (active split warehouse/office) -------------------------
     active_items_count = 0

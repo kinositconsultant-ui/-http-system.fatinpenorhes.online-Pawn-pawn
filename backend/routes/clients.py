@@ -55,6 +55,11 @@ class ClientIn(BaseModel):
     photo_url: str = ""
     thumbnail_url: str = ""
     notes: str = ""
+    tier: Literal["", "vip"] = ""  # "vip" flags the client as a priority relationship
+
+
+class ClientTierIn(BaseModel):
+    tier: Literal["", "vip"]
 
 
 def _ensure_member_verify_token(doc: dict) -> None:
@@ -184,6 +189,25 @@ async def delete_client(cid: str, _: dict = Depends(require_admin)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
     return {"ok": True}
+
+
+@router.patch("/clients/{cid}/tier")
+async def set_client_tier(cid: str, payload: ClientTierIn, user: dict = Depends(require_not_cashier)):
+    """Toggle a client's relationship tier (currently supports only VIP flag).
+
+    VIP clients get a badge in the UI and float to the top of the Business
+    Dashboard's "Expiring in 7 Days" panel so directors can prioritise
+    outreach to important relationships.
+    """
+    existing = await db.clients.find_one({"id": cid}, {"_id": 0, "id": 1, "full_name": 1})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Client not found")
+    await db.clients.update_one({"id": cid}, {"$set": {"tier": payload.tier}})
+    await write_audit(
+        user, "update_tier", "client", cid,
+        {"tier": payload.tier, "full_name": existing.get("full_name")},
+    )
+    return await db.clients.find_one({"id": cid}, {"_id": 0})
 
 
 # =====================================================================

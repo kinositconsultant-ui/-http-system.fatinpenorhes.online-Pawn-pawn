@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Plus, Trash2, Pencil, Eye, FileText, IdCard, RefreshCw, Ban, Download, Copy } from "lucide-react";
+import { Plus, Trash2, Pencil, Eye, FileText, IdCard, RefreshCw, Ban, Download, Copy, Star } from "lucide-react";
 import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 import { shortContract, shortReceipt } from "../lib/docNumbers";
@@ -391,7 +391,21 @@ export default function Clients() {
                     );
                   })()}
                 </Td>
-                <Td className="font-medium whitespace-nowrap max-w-[200px] truncate" title={r.full_name}>{r.full_name}</Td>
+                <Td className="font-medium whitespace-nowrap max-w-[280px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate min-w-0" title={r.full_name}>{r.full_name}</span>
+                    {r.tier === "vip" && (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 shrink-0"
+                        data-testid={`client-vip-badge-${r.id}`}
+                        title="VIP client"
+                      >
+                        <Star className="w-2.5 h-2.5 fill-current" />
+                        VIP
+                      </span>
+                    )}
+                  </div>
+                </Td>
                 <Td className="whitespace-nowrap">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">
                     {r.id_type}
@@ -411,6 +425,27 @@ export default function Clients() {
                 </Td>
                 <Td right>
                   <div className="flex justify-end gap-1.5">
+                    <button
+                      onClick={async () => {
+                        const nextTier = r.tier === "vip" ? "" : "vip";
+                        try {
+                          await api.patch(`/clients/${r.id}/tier`, { tier: nextTier });
+                          toast.success(nextTier === "vip" ? "Marked as VIP" : "VIP removed");
+                          load();
+                        } catch (e) {
+                          toast.error("Could not update VIP status");
+                        }
+                      }}
+                      data-testid={`client-vip-toggle-${r.id}`}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                        r.tier === "vip"
+                          ? "bg-amber-500 text-white hover:bg-amber-600"
+                          : "bg-stone-200 text-stone-600 hover:bg-amber-100 hover:text-amber-700"
+                      }`}
+                      title={r.tier === "vip" ? "Remove VIP" : "Mark as VIP"}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${r.tier === "vip" ? "fill-current" : ""}`} />
+                    </button>
                     <button
                       onClick={() => openDetail(r)}
                       data-testid={`client-view-${r.id}`}
