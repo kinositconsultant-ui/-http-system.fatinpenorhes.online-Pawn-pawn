@@ -147,6 +147,12 @@ async def list_items(kind: str, _: dict = Depends(require_module("items"))):
     _validate_kind(kind)
     coll = db[COLLECTION_MAP[kind]]
     items = await coll.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    # Coerce category='' on legacy rows so JSON consumers can always read the
+    # field (iter74 backward-compat fix — legacy Mongo docs lacked the field
+    # entirely so the response would omit the key).
+    if kind in ("car", "motorcycle"):
+        for r in items:
+            r.setdefault("category", "")
     return items
 
 
