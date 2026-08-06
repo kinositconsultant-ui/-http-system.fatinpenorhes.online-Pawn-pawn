@@ -31,6 +31,7 @@ from deps import (
     require_not_cashier,
     write_audit,
 )
+from realtime import notify as rt_notify
 
 router = APIRouter(tags=["inspections"])
 
@@ -211,6 +212,7 @@ async def reimburse_inspection(
         user, "reimburse", "inspection", iid,
         {"reimbursed_amount": update["reimbursed_amount"]},
     )
+    rt_notify("inspection.reimbursed", {"id": iid, "amount": update["reimbursed_amount"]})
     return await db.inspections.find_one({"id": iid}, {"_id": 0})
 
 

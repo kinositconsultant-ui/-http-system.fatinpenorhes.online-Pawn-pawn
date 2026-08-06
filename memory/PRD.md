@@ -1,6 +1,34 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 64 — Payment Frequency + Admin WhatsApp Alerts + Legacy Test Cleanup)
+**Last updated:** 2026-02 (Iteration 75 — Real-Time WebSocket Push for Business Dashboard)
+
+## Iteration 75 (2026-02) — Real-Time WebSocket Push ✅
+
+Business Dashboard now updates within ~1 second of any state-changing action instead of waiting for the 60-second poll.
+
+### Backend
+- New `realtime.py` — in-memory `ConnectionManager` + `notify(kind, payload)` fire-and-forget broadcaster.
+- New `routes/ws.py` exposing `GET /api/ws/dashboard` (WebSocket).
+  - Auth via `access_token` cookie (browsers) OR `?token=` query fallback (test clients / cross-origin).
+  - Emits `{"kind": "connected"}` on handshake, then `{"kind": "<event>", "payload": {...}, "ts": "..."}` on every mutation.
+- Hooked `rt_notify(...)` calls in six write endpoints — no other business logic touched:
+  - `POST /payments` → `payment.created`
+  - `POST /contracts` → `contract.created`
+  - `POST /auctions/{aid}/sold` → `auction.sold`
+  - `POST /expenses` → `expense.created`
+  - `POST /funding-sources` → `funding_source.created`
+  - `POST /funding-sources/{sid}/repayments` → `funding_repayment.created`
+  - `POST /inspections/{iid}/reimburse` → `inspection.reimbursed`
+
+### Frontend (`pages/BusinessDashboard.js`)
+- Opens WS on mount, reconnects on drop with 3s backoff, closes cleanly on unmount.
+- On any push, debounced (400ms) refetch of `/business/dashboard` — no polling delay.
+- New `[data-testid="ws-status-pill"]` "Live" indicator (pulsing green when connected, gray "Polling" when not — polling fallback still runs every 60s).
+- Last-event caption for operator visibility.
+
+### Tests
+- `tests/test_iter75_ws_realtime.py` (2/2 passing): unauth rejection + expense.created push.
+- Full financial + business regression (iter60/61/67/72/75) all pass.
 
 ## Iteration 60 – 64 (2026-02) — Capital Outstanding Overhaul ✅
 

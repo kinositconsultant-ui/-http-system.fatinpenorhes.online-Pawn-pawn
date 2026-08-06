@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
@@ -7,6 +7,7 @@ import {
   Warehouse as WarehouseIcon, Building2, Wallet, Percent,
   AlertOctagon, CheckCircle2, Gavel, Wrench, TrendingUp,
   AlertTriangle, Bell, RefreshCcw, Phone, Mail, Clock,
+  Radio,
 } from "lucide-react";
 
 const fmt0 = (n) =>
@@ -16,11 +17,24 @@ const fmt0 = (n) =>
 
 const REFRESH_MS = 60000;
 
+// Build the WS URL from REACT_APP_BACKEND_URL (http[s] → ws[s]).
+function wsUrl() {
+  const base = process.env.REACT_APP_BACKEND_URL || "";
+  const proto = base.startsWith("https") ? "wss" : "ws";
+  const host = base.replace(/^https?:\/\//, "");
+  return `${proto}://${host}/api/ws/dashboard`;
+}
+
 export default function BusinessDashboard() {
   useLang();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [live, setLive] = useState(false);
+  const [lastEvent, setLastEvent] = useState(null);
+  const wsRef = useRef(null);
+  const reconnectTimer = useRef(null);
+  const refetchDebounce = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +46,53 @@ export default function BusinessDashboard() {
       setLoading(false);
     }
   }, []);
+
+  // Debounced refetch — many events in a short burst → single reload.
+  const scheduleRefetch = useCallback(() => {
+    if (refetchDebounce.current) clearTimeout(refetchDebounce.current);
+    refetchDebounce.current = setTimeout(() => load(), 400);
+  }, [load]);
+
+  // WebSocket lifecycle — reconnect with backoff on drop.
+  useEffect(() => {
+    let closed = false;
+
+    function open() {
+      try {
+        const ws = new WebSocket(wsUrl());
+        wsRef.current = ws;
+        ws.onopen = () => setLive(true);
+        ws.onmessage = (evt) => {
+          try {
+            const msg = JSON.parse(evt.data);
+            if (msg.kind && msg.kind !== "connected") {
+              setLastEvent(msg);
+              scheduleRefetch();
+            }
+          } catch { /* ignore non-JSON */ }
+        };
+        ws.onclose = () => {
+          setLive(false);
+          wsRef.current = null;
+          if (!closed) {
+            reconnectTimer.current = setTimeout(open, 3000);
+          }
+        };
+        ws.onerror = () => { try { ws.close(); } catch { /* noop */ } };
+      } catch {
+        setLive(false);
+        if (!closed) reconnectTimer.current = setTimeout(open, 5000);
+      }
+    }
+
+    open();
+    return () => {
+      closed = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (refetchDebounce.current) clearTimeout(refetchDebounce.current);
+      if (wsRef.current) { try { wsRef.current.close(); } catch { /* noop */ } }
+    };
+  }, [scheduleRefetch]);
 
   useEffect(() => {
     load();
@@ -51,11 +112,28 @@ export default function BusinessDashboard() {
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">
             Business Dashboard
           </h1>
-          <p className="text-sm text-stone-600 mt-1">
-            Real-time view · Auto-refreshes every 60 seconds
+          <p className="text-sm text-stone-600 mt-1 flex items-center gap-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                live
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-stone-100 text-stone-600 border-stone-200"
+              }`}
+              data-testid="ws-status-pill"
+              title={live ? "Live push connected" : "Push disconnected — falling back to 60s polling"}
+            >
+              <Radio className={`w-3 h-3 ${live ? "animate-pulse" : ""}`} />
+              {live ? "Live" : "Polling"}
+            </span>
+            <span>Auto-refreshes every 60 seconds</span>
             {lastRefresh && (
-              <span className="ml-2 text-stone-400">
+              <span className="text-stone-400">
                 · updated {lastRefresh.toLocaleTimeString()}
+              </span>
+            )}
+            {lastEvent && (
+              <span className="text-stone-400" data-testid="ws-last-event">
+                · last event: {lastEvent.kind}
               </span>
             )}
           </p>

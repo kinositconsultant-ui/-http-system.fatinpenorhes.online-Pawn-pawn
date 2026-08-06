@@ -44,6 +44,7 @@ from pdf_utils import (
 )
 import storage as objstore
 import whatsapp as wapp
+from realtime import notify as rt_notify
 
 # Shared dependencies + helpers (extracted iter17 refactor)
 from deps import (
@@ -446,6 +447,7 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
     await db.payments.insert_one(disbursement)
     await write_audit(user, "create", "contract", doc["id"], {"contract_number": contract_number, "loan_amount": doc["loan_amount"], "disbursement_receipt": disb_receipt})
     doc.pop("_id", None)
+    rt_notify("contract.created", {"contract_id": doc["id"], "contract_number": contract_number})
     return await _recompute_contract_status(doc)
 
 
@@ -782,6 +784,7 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
         "contract_id": doc["contract_id"],
     })
     doc.pop("_id", None)
+    rt_notify("payment.created", {"contract_id": doc["contract_id"], "amount": doc["amount"]})
     return {"payment": doc, "contract": updated}
 
 
@@ -1188,6 +1191,7 @@ async def mark_sold(aid: str, payload: AuctionSoldIn, user: dict = Depends(requi
     await db.auctions.update_one({"id": aid}, {"$set": {"invoice_id": invoice["id"], "invoice_number": inv_number}})
     await write_audit(user, "sold_auction", "auction", aid, {"sold_price": sold_price, "interest_fee": interest_fee, "invoice_number": inv_number})
     invoice.pop("_id", None)
+    rt_notify("auction.sold", {"auction_id": aid, "sold_price": sold_price})
     return {**a, **update, "invoice_id": invoice["id"], "invoice_number": inv_number, "invoice": invoice}
 
 
@@ -1951,6 +1955,7 @@ from routes.migration_audit import router as migration_audit_router  # noqa: E40
 from routes.clients import router as clients_router  # noqa: E402
 from routes.items import router as items_router  # noqa: E402
 from routes.inspections import router as inspections_router  # noqa: E402
+from routes.ws import router as ws_router  # noqa: E402
 
 # Include contracts_kpi FIRST so /contracts/kpis + /contracts/expiring win
 # the route match against the dynamic /contracts/{cid} on `api`.
@@ -1974,6 +1979,7 @@ app.include_router(inspections_router, prefix="/api")
 app.include_router(inventory_router, prefix="/api")
 app.include_router(business_dashboard_router, prefix="/api")
 app.include_router(warehouse_router, prefix="/api")
+app.include_router(ws_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

@@ -23,6 +23,7 @@ from deps import (
     write_audit,
 )
 from services import _recompute_contract_status
+from realtime import notify as rt_notify
 from pdf_utils import (
     build_finance_summary_pdf,
     build_capital_sources_pdf,
@@ -221,6 +222,7 @@ async def create_funding_source(payload: FundingSourceIn, user: dict = Depends(r
     await db.funding_sources.insert_one(doc)
     await write_audit(user, "create", "funding_source", doc["id"], {"name": payload.name, "amount": payload.principal_amount})
     doc.pop("_id", None)
+    rt_notify("funding_source.created", {"id": doc["id"], "amount": doc["principal_amount"]})
     schedule = _funding_schedule(doc, 0.0, 0.0)
     return {
         **doc,
@@ -322,6 +324,7 @@ async def add_repayment(sid: str, payload: FundingRepaymentIn, user: dict = Depe
         {"source_id": sid, "principal": p, "interest": i, "total": total, "expense_id": expense_id},
     )
     doc.pop("_id", None)
+    rt_notify("funding_repayment.created", {"source_id": sid, "total": total})
     return doc
 
 
@@ -477,6 +480,7 @@ async def create_expense(payload: ExpenseIn, user: dict = Depends(require_not_ca
     await db.expenses.insert_one(doc)
     await write_audit(user, "create", "expense", doc["id"], {"category": payload.category, "amount": payload.amount})
     doc.pop("_id", None)
+    rt_notify("expense.created", {"category": doc.get("category"), "amount": doc.get("amount")})
     return doc
 
 
