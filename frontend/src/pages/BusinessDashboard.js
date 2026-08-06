@@ -8,7 +8,7 @@ import {
   Warehouse as WarehouseIcon, Building2, Wallet, Percent,
   AlertOctagon, CheckCircle2, Gavel, Wrench, TrendingUp,
   AlertTriangle, Bell, RefreshCcw, Phone, Mail, Clock,
-  Radio,
+  Radio, Landmark, Activity, HandCoins,
 } from "lucide-react";
 
 const fmt0 = (n) =>
@@ -17,54 +17,75 @@ const fmt0 = (n) =>
   }).format(Number(n || 0));
 
 const REFRESH_MS = 60000;
+const FEED_MAX = 10;
 
-// Map WS event kinds to a friendly toast. Return null to skip.
-const EVENT_TOAST = {
-  "payment.created": (p) => ({
+// Central event → display metadata. Toasts and the Live Activity Feed both
+// pull from here so wording + icons stay in sync.
+const EVENT_META = {
+  "payment.created": {
+    Icon: HandCoins,
+    tone: "text-emerald-700",
+    bg: "bg-emerald-50",
     kind: "success",
     title: "Payment recorded",
-    desc: p.amount != null ? `${fmt0(p.amount)} received` : "New payment received",
-  }),
-  "contract.created": (p) => ({
+    desc: (p) => (p.amount != null ? `${fmt0(p.amount)} received` : "New payment received"),
+  },
+  "contract.created": {
+    Icon: FileText,
+    tone: "text-[#1B2D5C]",
+    bg: "bg-[#1B2D5C]/[0.06]",
     kind: "info",
     title: "New contract signed",
-    desc: p.contract_number ? `${p.contract_number}` : "A new pawn contract was created",
-  }),
-  "auction.sold": (p) => ({
+    desc: (p) => p.contract_number || "A new pawn contract was created",
+  },
+  "auction.sold": {
+    Icon: Gavel,
+    tone: "text-amber-800",
+    bg: "bg-amber-50",
     kind: "success",
     title: "Auction sold",
-    desc: p.sold_price != null ? `${fmt0(p.sold_price)} realised` : "An auction item was sold",
-  }),
-  "expense.created": (p) => ({
+    desc: (p) => (p.sold_price != null ? `${fmt0(p.sold_price)} realised` : "An auction item was sold"),
+  },
+  "expense.created": {
+    Icon: AlertOctagon,
+    tone: "text-rose-700",
+    bg: "bg-rose-50",
     kind: "info",
     title: "Expense logged",
-    desc: [p.category, p.amount != null ? fmt0(p.amount) : ""].filter(Boolean).join(" · "),
-  }),
-  "funding_source.created": () => ({
+    desc: (p) => [p.category, p.amount != null ? fmt0(p.amount) : ""].filter(Boolean).join(" · "),
+  },
+  "funding_source.created": {
+    Icon: Landmark,
+    tone: "text-sky-800",
+    bg: "bg-sky-50",
     kind: "info",
     title: "Capital source added",
-    desc: "New funding source recorded",
-  }),
-  "funding_repayment.created": (p) => ({
+    desc: () => "New funding source recorded",
+  },
+  "funding_repayment.created": {
+    Icon: Landmark,
+    tone: "text-sky-800",
+    bg: "bg-sky-50",
     kind: "success",
     title: "Capital repayment",
-    desc: p.total != null ? `${fmt0(p.total)} repaid` : "Repayment recorded",
-  }),
-  "inspection.reimbursed": (p) => ({
+    desc: (p) => (p.total != null ? `${fmt0(p.total)} repaid` : "Repayment recorded"),
+  },
+  "inspection.reimbursed": {
+    Icon: Wrench,
+    tone: "text-stone-800",
+    bg: "bg-stone-100",
     kind: "success",
     title: "Inspection reimbursed",
-    desc: p.amount != null ? `${fmt0(p.amount)} recovered` : "Inspection cost reimbursed",
-  }),
+    desc: (p) => (p.amount != null ? `${fmt0(p.amount)} recovered` : "Inspection cost reimbursed"),
+  },
 };
 
-// Fire the mapped toast for a WS event. Duplicate suppression is handled at
-// the caller level (same-kind within 1s → only one toast).
+// Fire the mapped toast for a WS event.
 function toastForEvent(msg) {
-  const mapper = EVENT_TOAST[msg.kind];
-  if (!mapper) return;
-  const cfg = mapper(msg.payload || {});
-  const fn = cfg.kind === "success" ? toast.success : toast.info;
-  fn(cfg.title, { description: cfg.desc, duration: 4000 });
+  const meta = EVENT_META[msg.kind];
+  if (!meta) return;
+  const fn = meta.kind === "success" ? toast.success : toast.info;
+  fn(meta.title, { description: meta.desc(msg.payload || {}), duration: 4000 });
 }
 
 // Build the WS URL from REACT_APP_BACKEND_URL (http[s] → ws[s]).
@@ -82,6 +103,7 @@ export default function BusinessDashboard() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [live, setLive] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
+  const [events, setEvents] = useState([]);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const refetchDebounce = useRef(null);
@@ -124,6 +146,11 @@ export default function BusinessDashboard() {
             if (msg.kind && msg.kind !== "connected") {
               setLastEvent(msg);
               scheduleRefetch();
+              // Append to the Live Activity Feed (newest first, capped)
+              setEvents((prev) => [
+                { ...msg, receivedAt: Date.now() },
+                ...prev,
+              ].slice(0, FEED_MAX));
               // Fire a toast (with per-kind debounce + startup grace window)
               const now = Date.now();
               if (now >= suppressUntil.current) {
@@ -252,7 +279,7 @@ export default function BusinessDashboard() {
         <ExpiringTile days="Month 2" count={data?.expiring_month2_count} rows={data?.expiring_month2} tone="border-orange-300 bg-orange-50" text="text-orange-800" testid="exp-m2" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <NotificationPanel
           Icon={Bell}
           title="Expiring in 7 Days · Contact These Clients"
@@ -261,6 +288,7 @@ export default function BusinessDashboard() {
           testid="notif-expiring"
         />
         <UpcomingLoansPanel loans={data?.upcoming_loan_repayments || []} />
+        <LiveActivityFeed events={events} live={live} />
       </div>
     </div>
   );
@@ -390,6 +418,81 @@ function UpcomingLoansPanel({ loans }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Relative-time formatter — no library, works well for the last 24h window
+// of live events.
+function relTime(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function LiveActivityFeed({ events, live }) {
+  // Tick every 30s so relative timestamps stay fresh even when no new event arrives.
+  const [, force] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => force((n) => n + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  return (
+    <Card
+      className="p-3 md:p-4 border border-stone-200 shadow-none rounded-lg bg-white"
+      data-testid="live-activity-feed"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Activity className={`w-4 h-4 ${live ? "text-emerald-700" : "text-stone-400"}`} />
+          <span className="text-sm font-semibold">Live Activity</span>
+        </div>
+        <span
+          className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+            live ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"
+          }`}
+        >
+          {events.length}/{FEED_MAX}
+        </span>
+      </div>
+      {events.length === 0 ? (
+        <div className="text-xs text-stone-400 py-6 text-center">
+          Waiting for the first live event…
+        </div>
+      ) : (
+        <div className="max-h-64 overflow-y-auto divide-y divide-stone-100">
+          {events.map((e, idx) => {
+            const meta = EVENT_META[e.kind];
+            const Icon = meta?.Icon || Activity;
+            return (
+              <div
+                key={`${e.receivedAt}-${idx}`}
+                className="py-2 flex items-center gap-2 text-xs"
+                data-testid={`live-feed-row-${idx}`}
+              >
+                <div className={`p-1.5 rounded ${meta?.bg || "bg-stone-100"}`}>
+                  <Icon className={`w-3.5 h-3.5 ${meta?.tone || "text-stone-600"}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{meta?.title || e.kind}</div>
+                  <div className="text-[10px] text-stone-500 truncate">
+                    {meta ? meta.desc(e.payload || {}) : ""}
+                  </div>
+                </div>
+                <div className="text-[10px] text-stone-400 shrink-0 tabular-nums">
+                  {relTime(e.receivedAt)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </Card>

@@ -1,6 +1,19 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 77 — Live Toast Notifications on Business Dashboard)
+**Last updated:** 2026-02 (Iteration 78 — Live Activity Feed on Business Dashboard)
+
+## Iteration 78 (2026-02) — Live Activity Feed ✅
+
+Third piece of the real-time trio (WS push → Toasts → Feed). Directors now see a rolling panel of the last 10 events alongside their KPIs.
+
+- `pages/BusinessDashboard.js`:
+  - New state `events` (bounded to 10, newest first).
+  - Refactored `EVENT_TOAST` → `EVENT_META` — single source of truth for icon, colour tone, title, and description. Both toasts AND the feed pull from it.
+  - New `LiveActivityFeed` component: coloured icon per event kind, event title, description (built via the same mapper), relative timestamp (`just now`, `5s ago`, `12m ago`, …) that auto-refreshes every 30s.
+  - Layout adjusted from `lg:grid-cols-2` → `lg:grid-cols-3` so the feed sits alongside "Expiring in 7 Days" + "Upcoming Loan Repayments".
+  - Header pill (`Live`/`Polling`) governs the Activity icon colour so the whole real-time story reads consistently.
+- data-testids: `live-activity-feed`, `live-feed-row-<index>`.
+- Verified end-to-end: creating 3 expenses via browser fetch immediately populated the feed with 3 rows and updated KPIs in the same push cycle.
 
 ## Iteration 77 (2026-02) — Live Toast Notifications ✅
 
