@@ -1,6 +1,31 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 75 — Real-Time WebSocket Push for Business Dashboard)
+**Last updated:** 2026-02 (Iteration 76 — server.py Refactor + Inventory Category Donut Chart)
+
+## Iteration 76 (2026-02) — Refactor + Inventory Chart ✅
+
+Two housekeeping features shipped together.
+
+### 76a · Inventory Category Donut Chart
+- **New backend endpoint** `GET /api/inventory/category-breakdown` — aggregates every item collection (car, motorcycle, electronic, pezadu) into `{kind, count, market_value, subcategories:[{name, count, market_value}]}`.
+- **New frontend component** `components/InventoryCategoryChart.js` (recharts donut + legend).
+  - Mounted on the Items page just below the InventoryBanner.
+  - Colours match the existing tab-accent palette per kind (`#1B2D5C` Cars, `#C17767` Motorcycles, `#4C7F62` Electronics, `#B8860B` Pezadu).
+  - Hovering a slice OR a legend row expands the subcategory list (top 6 by count) — reveals Cars/Motorcycles subcategory split (sedan/suv/scooter/125cc/…) added in iter74.
+  - data-testid: `inventory-category-chart`, `inv-chart-donut`, `inv-chart-legend`, `inv-chart-row-<kind>`, `inv-chart-sub-<kind>`.
+
+### 76b · server.py Split — contracts / payments / auctions
+`server.py` shrunk from **2109 → 1024 lines** by extracting three domain routers. All paths, methods, response shapes, audit trails, and behaviour are unchanged.
+- **`routes/contracts.py`** (536 lines): `/contracts/*`, `/contracts/{cid}/*` (reactivate, pdf, label-pdf, terms-card, signed-auction-agreement, auction-agreement-pdf, payments-summary-pdf, email-history), `/contracts/labels-pdf`, `/contracts/bulk-email-history`. Owns `_generate_contract_number()` and `_resolve_photo_bytes()`.
+- **`routes/payments.py`** (151 lines): `/payments`, `/payments/{pid}/pdf`, `DELETE /payments/{pid}`. Owns `_generate_receipt_number()` (imported lazily by contracts router for disbursement generation).
+- **`routes/auctions.py`** (435 lines): `/auctions/*` including `/auctions/move`, `/auctions/{aid}/sold`, `/auctions/catalogue/pdf`, `/auctions/catalogue/refresh`; `/invoices/*` (list, get, put, delete, pdf, export). Owns `_generate_invoice_number()`, `_CATALOGUE_CACHE`, `get_or_build_catalogue_pdf()`, `_build_catalogue_bytes_now()`.
+- Updated `routes/public.py` and `scheduler.py` to import catalogue helpers from `routes.auctions` instead of `server`.
+- **Tests**: `tests/test_iter76_route_split.py` (5/5 passing) validates each router's list endpoint + PDF endpoint + route ordering (`labels-pdf` before `{cid}`) + catalogue cache still served.
+
+### Regression status
+- Financial + business + refactor targeted suites: **41/41 + 57/57 + 5/5 pass**.
+- iter75 WebSocket tests still 2/2 pass.
+- Two pre-existing stale test failures remain in `test_iter49_business_dashboard.py` (grace-period count vs overdue, cashflow-forecast 30 vs 60 days) — unrelated to any recent change; noted for future cleanup.
 
 ## Iteration 75 (2026-02) — Real-Time WebSocket Push ✅
 

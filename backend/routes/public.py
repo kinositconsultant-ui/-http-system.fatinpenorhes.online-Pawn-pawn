@@ -48,7 +48,7 @@ async def public_auction_catalogue_pdf():
     from io import BytesIO  # noqa: PLC0415
     from fastapi.responses import StreamingResponse  # noqa: PLC0415
     # Import lazily to avoid circular imports at module load
-    from server import get_or_build_catalogue_pdf  # noqa: PLC0415
+    from routes.auctions import get_or_build_catalogue_pdf  # noqa: PLC0415
 
     pdf_bytes = await get_or_build_catalogue_pdf()
     return StreamingResponse(

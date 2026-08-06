@@ -154,6 +154,54 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/inventory/category-breakdown")
+async def inventory_category_breakdown(_: dict = Depends(get_current_user)):
+    """Item counts by kind and subcategory (for the Items page donut chart).
+
+    Returns:
+      by_kind: [{kind, count, market_value, subcategories: [{name, count, market_value}]}]
+      total_count, total_market_value
+    """
+    kinds_out: list[dict] = []
+    total_count = 0
+    total_value = 0.0
+    for kind in ALL_KINDS:
+        coll = db[COLLECTION_MAP[kind]]
+        count = 0
+        value = 0.0
+        subs: dict[str, dict] = {}
+        async for it in coll.find(
+            {}, {"_id": 0, "category": 1, "market_value": 1}
+        ):
+            count += 1
+            v = float(it.get("market_value", 0) or 0)
+            value += v
+            sub = (it.get("category") or "").strip().lower() or "uncategorized"
+            b = subs.setdefault(sub, {"name": sub, "count": 0, "market_value": 0.0})
+            b["count"] += 1
+            b["market_value"] += v
+        total_count += count
+        total_value += value
+        kinds_out.append({
+            "kind": kind,
+            "count": count,
+            "market_value": round(value, 2),
+            "subcategories": sorted(
+                [
+                    {"name": s["name"], "count": s["count"],
+                     "market_value": round(s["market_value"], 2)}
+                    for s in subs.values()
+                ],
+                key=lambda x: x["count"], reverse=True,
+            ),
+        })
+    return {
+        "by_kind": kinds_out,
+        "total_count": total_count,
+        "total_market_value": round(total_value, 2),
+    }
+
+
 async def _client_dossier(client_id: str) -> dict:
     client = await db.clients.find_one({"id": client_id}, {"_id": 0})
     if not client:

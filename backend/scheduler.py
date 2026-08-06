@@ -153,7 +153,7 @@ def run_catalogue_refresh_sync() -> None:
     details: dict = {}
     try:
         # Import lazily so the scheduler module doesn't tug in server.py at load
-        from server import get_or_build_catalogue_pdf, _CATALOGUE_CACHE  # noqa: PLC0415
+        from routes.auctions import get_or_build_catalogue_pdf, _CATALOGUE_CACHE  # noqa: PLC0415
 
         loop = asyncio.new_event_loop()
         try:

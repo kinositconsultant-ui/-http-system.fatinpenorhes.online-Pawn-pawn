@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import FileUpload from "../components/FileUpload";
 import BulkPhotoDialog from "../components/BulkPhotoDialog";
 import InventoryBanner from "../components/InventoryBanner";
+import InventoryCategoryChart from "../components/InventoryCategoryChart";
 
 const PEZADU_CATEGORIES = ["forklift", "tractor", "loader", "heavy_duty_truck"];
 
@@ -258,6 +259,8 @@ export default function Items() {
       </header>
 
       <InventoryBanner />
+
+      <InventoryCategoryChart />
 
       <Tabs value={kind} onValueChange={setKind}>
         <TabsList
