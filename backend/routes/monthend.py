@@ -15,7 +15,7 @@ Endpoints:
 
 Also exposes `build_monthend_bundle_bytes(...)` which the APScheduler job
 in `scheduler.py` calls on the 1st of every month to persist last month's
-bundle to `/app/backups/monthend/`.
+bundle to `/home/fp/private/pawn_django/backend/backups/monthend/`.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from pdf_utils import (
 
 router = APIRouter()
 
-BUNDLE_ROOT = Path("/app/backups/monthend")
+BUNDLE_ROOT = Path("/home/fp/private/pawn_django/backend/backups/monthend")
 BUNDLE_ROOT.mkdir(parents=True, exist_ok=True)
 
 _MONTH_RE = re.compile(r"^(\d{4})-(\d{2})$")
@@ -334,7 +334,7 @@ def _last_day(year: int, month: int) -> int:
 
 
 def persist_bundle(zip_bytes: bytes, year: int, month: int) -> Path:
-    """Save the bundle to /app/backups/monthend/ and return the Path."""
+    """Save the bundle to /home/fp/private/pawn_django/backend/backups/monthend/ and return the Path."""
     BUNDLE_ROOT.mkdir(parents=True, exist_ok=True)
     path = BUNDLE_ROOT / f"monthend-{year:04d}-{month:02d}.zip"
     path.write_bytes(zip_bytes)
