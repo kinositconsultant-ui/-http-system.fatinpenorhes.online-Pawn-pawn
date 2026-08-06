@@ -35,6 +35,7 @@ PEZADU_CATEGORIES = {"forklift", "tractor", "loader", "heavy_duty_truck"}
 # ---------------------------------------------------------------------
 class CarIn(BaseModel):
     name: str = ""  # human-friendly label e.g. "Toyota Hilux 2020 Black"
+    category: str = ""  # sedan / suv / pickup / truck / van / hatchback / mini_bus / other
     brand: str
     model: str
     description: str = ""
@@ -59,6 +60,7 @@ class CarIn(BaseModel):
 
 class MotorcycleIn(BaseModel):
     name: str = ""
+    category: str = ""  # scooter / cub / sport / adventure / dirt_bike / e_bike / other
     brand: str
     model: str
     description: str = ""

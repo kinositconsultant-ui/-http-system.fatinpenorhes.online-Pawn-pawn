@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 74 — Item categories (Car/Motorcycle). Backend: 4/5 new tests pass. All 8 car categories and 7 motorcycle categories accepted & persisted; POST without category defaults to ''. One minor issue: GET /api/items/car does NOT include `category` key on legacy rows (rows created before this iter). Spec says 'empty string for legacy rows' — but MongoDB rows without the field return no field at all. Frontend still displays '—' correctly (since JS `r[f.k] ?? '—'` handles undefined). Regression: all 61 tests across iter60→iter73 pass. Frontend: Car & Motorcycle tabs show CATEGORY column, form dropdown shows exact 8/7 options with bilingual labels, save round-trips correctly (created row with category=SUV visible in table).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/items/car (and /motorcycle)", "issue": "Legacy documents inserted before iter74 don't have a `category` field in Mongo, so the response omits the key rather than returning ''. Spec asks for '' on legacy rows. Frontend copes via nullish default, but any downstream JSON consumer expecting the key will KeyError. Fix: coerce `category` to '' in list_items/get_item (or run a one-off backfill: db.cars.update_many({category:{$exists:false}},{$set:{category:''}}))."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Item form Dialog", "issues": ["Console warning: 'Missing Description or aria-describedby for DialogContent' — accessibility nit, existing issue, not introduced by this iter."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter74_item_categories.py",
+    "/app/test_reports/pytest/iter74_regression.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Backfill/coerce `category` field to '' on legacy car & motorcycle rows so GET responses always include the key (spec compliance). Frontend works either way — this is only a backend-response contract nit.",
+    "OPTIONAL: Add DialogDescription (or aria-describedby) to Item form DialogContent to silence a11y warning."
+  ],
+  "critical_code_review_comments": [
+    "Items.js is 705 lines — approaching the 700-line split threshold. Consider extracting ItemTable into its own module in a future iter.",
+    "CategoryIn field is a free-text `str` with no enum validation on the backend. If Maun wants to guarantee only valid categories, consider Literal[...] or a validator. Current design accepts arbitrary strings (fine for MVP)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "94% (65/66 total: 61 regression + 4/5 new)", "frontend": "100%"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None persisted — all TEST_* rows created during testing were deleted via DELETE /api/items/{kind}/{id} in test teardown and post-run cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_iter74_item_categories.py covers all 8 car + 7 motorcycle categories, empty-default backward compat, and GET list includes-category. The one failing assertion (`test_get_car_list_has_category_field`) reveals that legacy rows in Mongo lack the field. If main agent fixes via coerce-on-read or backfill, re-run: `pytest backend/tests/test_iter74_item_categories.py -v`.",
+  "rca of the issue": "Legacy category-missing rows: The Pydantic CarIn model has `category: str = ''` which correctly defaults NEW inserts. However, documents inserted in prior iterations don't have the field in Mongo, and `db.cars.find({}, {'_id':0})` returns exactly what's stored — no field means no key in response JSON. Two mitigations: (a) one-off migration script `db.cars.update_many({'category':{'$exists':False}},{'$set':{'category':''}})` and same for motorcycles; or (b) post-process in list_items: `for r in items: r.setdefault('category','')`."
+}

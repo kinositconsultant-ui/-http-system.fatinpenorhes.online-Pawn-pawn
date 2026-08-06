@@ -35,15 +35,44 @@ import InventoryBanner from "../components/InventoryBanner";
 const PEZADU_CATEGORIES = ["forklift", "tractor", "loader", "heavy_duty_truck"];
 
 const KIND_META = {
-  car: { Icon: Car, fields: vehicleFields },
-  motorcycle: { Icon: Bike, fields: vehicleFields },
+  car: { Icon: Car, fields: (t) => vehicleFields(t, "car") },
+  motorcycle: { Icon: Bike, fields: (t) => vehicleFields(t, "motorcycle") },
   electronic: { Icon: Cpu, fields: electronicFields },
   pezadu: { Icon: Truck, fields: pezaduFields },
 };
 
-function vehicleFields(t) {
+const CAR_CATEGORIES = ["sedan", "suv", "pickup", "truck", "van", "hatchback", "mini_bus", "other"];
+const MOTORCYCLE_CATEGORIES = ["scooter", "cub", "sport", "adventure", "dirt_bike", "e_bike", "other"];
+
+const CATEGORY_LABELS = {
+  // Cars · Kareta
+  sedan: "Sedan",
+  suv: "SUV",
+  pickup: "Pickup",
+  truck: "Truck · Kaminhaun",
+  van: "Van",
+  hatchback: "Hatchback",
+  mini_bus: "Mini Bus",
+  // Motorcycles · Motor
+  scooter: "Scooter · Skuta",
+  cub: "Cub · Motor Bebe",
+  sport: "Sport",
+  adventure: "Adventure",
+  dirt_bike: "Dirt Bike",
+  e_bike: "E-Bike · Motor Eletrisidade",
+  other: "Other · Seluk",
+};
+
+function vehicleFields(t, kind = "car") {
+  const cats = kind === "motorcycle" ? MOTORCYCLE_CATEGORIES : CAR_CATEGORIES;
   return [
     { k: "name", label: t("item_name"), required: true, placeholder: "Toyota Hilux 2020 Black" },
+    {
+      k: "category",
+      label: t("category") || "Category · Kategoria",
+      select: true,
+      options: cats.map((c) => ({ value: c, label: CATEGORY_LABELS[c] || c })),
+    },
     { k: "brand", label: t("brand"), required: true },
     { k: "model", label: t("model"), required: true },
     { k: "manufacture_year", label: t("manufacture_year"), type: "number", tableHide: true },
