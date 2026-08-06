@@ -1,6 +1,16 @@
 # PRD — Fatin Penhores Pawn System
 
-**Last updated:** 2026-02 (Iteration 76 — server.py Refactor + Inventory Category Donut Chart)
+**Last updated:** 2026-02 (Iteration 77 — Live Toast Notifications on Business Dashboard)
+
+## Iteration 77 (2026-02) — Live Toast Notifications ✅
+
+Builds on the iter75 WebSocket push. Every dashboard-relevant event now surfaces as a Sonner toast in the top-right corner so directors get instant awareness even without watching the KPI numbers.
+
+- `pages/BusinessDashboard.js` — Added an `EVENT_TOAST` mapper (payment.created → "Payment recorded", contract.created → "New contract signed", auction.sold → "Auction sold", expense.created → "Expense logged", funding_source.created → "Capital source added", funding_repayment.created → "Capital repayment", inspection.reimbursed → "Inspection reimbursed").
+- Uses existing `Toaster` mount in `App.js` (top-right, richColors) — no new dependencies.
+- Per-kind debounce (1500ms) prevents toast spam from bulk actions; a 1.5s startup grace window prevents flooding on mount.
+- Toast body formats currency via existing `fmt0()` helper for consistency with KPI tiles.
+- Verified end-to-end: browser test confirms toast appears within ~1s of a REST mutation, dashboard KPIs simultaneously refresh via the same WS push, `last event: <kind>` caption updates.
 
 ## Iteration 76 (2026-02) — Refactor + Inventory Chart ✅
 

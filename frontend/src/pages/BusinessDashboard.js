@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
+import { toast } from "sonner";
 import {
   Users, FileText, DollarSign, Package,
   Warehouse as WarehouseIcon, Building2, Wallet, Percent,
@@ -16,6 +17,55 @@ const fmt0 = (n) =>
   }).format(Number(n || 0));
 
 const REFRESH_MS = 60000;
+
+// Map WS event kinds to a friendly toast. Return null to skip.
+const EVENT_TOAST = {
+  "payment.created": (p) => ({
+    kind: "success",
+    title: "Payment recorded",
+    desc: p.amount != null ? `${fmt0(p.amount)} received` : "New payment received",
+  }),
+  "contract.created": (p) => ({
+    kind: "info",
+    title: "New contract signed",
+    desc: p.contract_number ? `${p.contract_number}` : "A new pawn contract was created",
+  }),
+  "auction.sold": (p) => ({
+    kind: "success",
+    title: "Auction sold",
+    desc: p.sold_price != null ? `${fmt0(p.sold_price)} realised` : "An auction item was sold",
+  }),
+  "expense.created": (p) => ({
+    kind: "info",
+    title: "Expense logged",
+    desc: [p.category, p.amount != null ? fmt0(p.amount) : ""].filter(Boolean).join(" · "),
+  }),
+  "funding_source.created": () => ({
+    kind: "info",
+    title: "Capital source added",
+    desc: "New funding source recorded",
+  }),
+  "funding_repayment.created": (p) => ({
+    kind: "success",
+    title: "Capital repayment",
+    desc: p.total != null ? `${fmt0(p.total)} repaid` : "Repayment recorded",
+  }),
+  "inspection.reimbursed": (p) => ({
+    kind: "success",
+    title: "Inspection reimbursed",
+    desc: p.amount != null ? `${fmt0(p.amount)} recovered` : "Inspection cost reimbursed",
+  }),
+};
+
+// Fire the mapped toast for a WS event. Duplicate suppression is handled at
+// the caller level (same-kind within 1s → only one toast).
+function toastForEvent(msg) {
+  const mapper = EVENT_TOAST[msg.kind];
+  if (!mapper) return;
+  const cfg = mapper(msg.payload || {});
+  const fn = cfg.kind === "success" ? toast.success : toast.info;
+  fn(cfg.title, { description: cfg.desc, duration: 4000 });
+}
 
 // Build the WS URL from REACT_APP_BACKEND_URL (http[s] → ws[s]).
 function wsUrl() {
@@ -35,6 +85,12 @@ export default function BusinessDashboard() {
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const refetchDebounce = useRef(null);
+  // Suppress duplicate toasts of the same kind within 1500ms (bursts of the
+  // same event from a bulk action shouldn't spam the user).
+  const lastToastAt = useRef({});
+  // Skip toasts on the first ~1s after page load so a fresh mount doesn't
+  // replay every queued event.
+  const suppressUntil = useRef(Date.now() + 1500);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,6 +124,15 @@ export default function BusinessDashboard() {
             if (msg.kind && msg.kind !== "connected") {
               setLastEvent(msg);
               scheduleRefetch();
+              // Fire a toast (with per-kind debounce + startup grace window)
+              const now = Date.now();
+              if (now >= suppressUntil.current) {
+                const last = lastToastAt.current[msg.kind] || 0;
+                if (now - last > 1500) {
+                  lastToastAt.current[msg.kind] = now;
+                  toastForEvent(msg);
+                }
+              }
             }
           } catch { /* ignore non-JSON */ }
         };
