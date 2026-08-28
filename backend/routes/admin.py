@@ -21,7 +21,6 @@ router = APIRouter()
 @router.get("/admin/backups")
 async def list_backups(_: dict = Depends(require_admin)):
     """List all backup artifacts in /app/backups/."""
-    import os
     folder = "/app/backups"
     if not os.path.isdir(folder):
         return []
@@ -40,9 +39,6 @@ async def list_backups(_: dict = Depends(require_admin)):
 @router.post("/admin/backups/generate")
 async def generate_backup(admin: dict = Depends(require_admin)):
     """Run the backup script and return the resulting file list."""
-    import subprocess
-    import sys
-    import os
     env = os.environ.copy()
     proc = subprocess.run(
         [sys.executable, "/app/scripts/build_backup.py"],
@@ -57,9 +53,6 @@ async def generate_backup(admin: dict = Depends(require_admin)):
 @router.post("/admin/backups/generate-project")
 async def generate_project_backup(admin: dict = Depends(require_admin)):
     """Build the complete deployment zip (backend + frontend + Mongo + docs)."""
-    import subprocess
-    import sys
-    import os
     env = os.environ.copy()
     proc = subprocess.run(
         [sys.executable, "/app/scripts/build_full_project_backup.py"],
@@ -84,8 +77,6 @@ async def backup_schedule(_: dict = Depends(require_admin)):
 @router.get("/admin/backups/{name}")
 async def download_backup(name: str, _: dict = Depends(require_admin)):
     """Stream a backup artifact for download. Admin-only."""
-    import os
-    import re
     if not re.match(r"^[\w.\-]+$", name):
         raise HTTPException(status_code=400, detail="Invalid filename")
     path = os.path.join("/app/backups", name)

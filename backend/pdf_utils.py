@@ -459,8 +459,9 @@ def build_payment_history_pdf(
                     _money(running),
                 ])
                 continue
-            # Reduces balance
-            running = max(0.0, running - amount)
+            # Balance column tracks the PRINCIPAL/loan balance only — interest
+            # and penalty payments must NOT reduce it (Jun-2026 client spec).
+            running = max(0.0, running - prin)
             total_amount += amount
             total_principal += prin
             total_interest += interest
@@ -487,7 +488,7 @@ def build_payment_history_pdf(
             "",
         ]
         story.append(_data_table(
-            ["Date", "Receipt", "Type", "Principal", "Interest", "Penalty", "Amount", "Balance"],
+            ["Date", "Receipt", "Type", "Principal", "Interest", "Penalty", "Amount", "Prin. Balance"],
             rows,
             col_widths=[2.0 * cm, 2.4 * cm, 2.4 * cm, 2.0 * cm, 2.0 * cm, 2.0 * cm, 2.0 * cm, 2.2 * cm],
             footer_row=footer,
@@ -1485,7 +1486,7 @@ def build_rules_card_pdf() -> bytes:
     types_box = Table(
         [
             ["Tipu · Type", "Alokasaun · Allocation"],
-            ["interest_only", "Juru dahuluk, sobra ba prinsipál · Interest first, excess to principal"],
+            ["interest_only", "Juru deit — la hamenus prinsipál · Interest only, never reduces principal"],
             ["partial (M1)", "Juru dahuluk, sobra ba prinsipál · Interest first, remainder to principal"],
             ["full", "Juru dahuluk, sobra ba prinsipál — kontratu remata · Redeems contract"],
             ["overdue_full", "Pena → Juru → Prinsipál · Penalty → Interest → Principal"],

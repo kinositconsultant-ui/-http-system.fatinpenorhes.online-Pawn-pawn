@@ -17,6 +17,8 @@ from datetime import datetime, timezone, date, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Optional
 
+from pymongo import UpdateOne
+
 from deps import (
     db,
     utcnow_iso,
@@ -230,7 +232,7 @@ async def _recompute_contract_status(contract: dict) -> dict:
     penalty_paid = 0.0
     per_month_billed: list[float] = []
 
-    def _apply_int_first(amt: float) -> None:
+    def _apply_int_first(amt: float) -> tuple[float, float]:
         nonlocal interest_paid, principal_paid, principal_remaining
         remaining_int = max(0.0, interest_owed - interest_paid)
         take_int = min(amt, remaining_int)
@@ -238,12 +240,18 @@ async def _recompute_contract_status(contract: dict) -> dict:
         take_prin = min(amt - take_int, principal_remaining)
         principal_paid += take_prin
         principal_remaining -= take_prin
+        return take_int, take_prin
 
-    def _apply_all_to_principal(amt: float) -> None:
+    def _apply_all_to_principal(amt: float) -> float:
         nonlocal principal_paid, principal_remaining
         take_prin = min(amt, principal_remaining)
         principal_paid += take_prin
         principal_remaining -= take_prin
+        return take_prin
+
+    # Per-payment allocation snapshot (persisted onto payment docs so the
+    # Payment History PDF / UI can show the exact principal/interest split).
+    alloc_by_pid: dict[str, dict] = {}
 
     for evt_date, evt_type, payload in events:
         if evt_type == "anchor":
@@ -265,34 +273,59 @@ async def _recompute_contract_status(contract: dict) -> dict:
         if ptype == "disbursement":
             continue
 
+        take_int = take_prin = take_pen = 0.0
         if ptype == "partial":
             if interest_rule == "M1":
-                _apply_int_first(amt)
+                take_int, take_prin = _apply_int_first(amt)
             else:  # M2 legacy — partial goes entirely to principal
-                _apply_all_to_principal(amt)
+                take_prin = _apply_all_to_principal(amt)
         elif ptype == "interest_only":
-            # Cover as much unpaid interest as possible; excess to principal.
-            _apply_int_first(amt)
+            # Jun-2026 spec: interest-only payments allocate EXCLUSIVELY to
+            # interest. They must NEVER reduce the principal, even if the
+            # amount exceeds the interest currently owed (any over-payment is
+            # clamped against total billed interest below, not principal).
+            interest_paid += amt
+            take_int = amt
         elif ptype == "full":
             # Redemption — interest first, then principal.
-            _apply_int_first(amt)
+            take_int, take_prin = _apply_int_first(amt)
         elif ptype == "overdue_full":
             pen_remaining = max(0.0, full_penalty - penalty_paid)
             take_pen = min(amt, pen_remaining)
             penalty_paid += take_pen
-            _apply_int_first(amt - take_pen)
+            take_int, take_prin = _apply_int_first(amt - take_pen)
         elif ptype == "overdue_interest_pen":
             pen_remaining = max(0.0, full_penalty - penalty_paid)
             take_pen = min(amt, pen_remaining)
             penalty_paid += take_pen
             rem = amt - take_pen
             remaining_int = max(0.0, interest_owed - interest_paid)
-            interest_paid += min(rem, remaining_int)
+            take_int = min(rem, remaining_int)
+            interest_paid += take_int
         elif ptype == "overdue_penalty_only":
             pen_remaining = max(0.0, full_penalty - penalty_paid)
-            penalty_paid += min(amt, pen_remaining)
+            take_pen = min(amt, pen_remaining)
+            penalty_paid += take_pen
+        if p.get("id"):
+            alloc_by_pid[p["id"]] = {
+                "principal_paid": round(take_prin, 2),
+                "interest_paid": round(take_int, 2),
+                "penalty_paid": round(take_pen, 2),
+            }
 
     interest = round(interest_owed, 2)
+
+    # Persist per-payment allocation splits (only when changed).
+    if alloc_by_pid:
+        ops = []
+        for p in payments:
+            a = alloc_by_pid.get(p.get("id") or "")
+            if not a:
+                continue
+            if any(round(float(p.get(k) or 0), 2) != a[k] for k in a):
+                ops.append(UpdateOne({"id": p["id"]}, {"$set": a}))
+        if ops:
+            await db.payments.bulk_write(ops)
 
     # Display: current-month rate (last month billed) & next-month prediction.
     if per_month_billed:

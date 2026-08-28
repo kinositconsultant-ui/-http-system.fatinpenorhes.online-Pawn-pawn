@@ -1195,3 +1195,14 @@ Three P0 features shipped; tested by testing_agent_v3_fork (report /app/test_rep
 - Backend UPDATED: `/app/backend/routes/whatsapp.py`, `/app/backend/server.py`, `/app/backend/services.py`
 - Frontend NEW: `/app/frontend/src/components/BulkPhotoDialog.js`, `/app/frontend/src/components/WhatsAppStatusPill.js`
 - Frontend UPDATED: `/app/frontend/src/pages/Items.js`, `/app/frontend/src/pages/Contracts.js`, `/app/frontend/src/pages/Settings.js`
+
+## Iteration 80 — Interest-Only Payment Allocation Fix (2026-06) ✅
+User-reported logic bug: interest_only payments could reduce principal.
+### Changes
+1. `services.py` walk: `interest_only` now allocates EXCLUSIVELY to interest — never spills excess into principal (M1 and M2). Full/partial/overdue allocation unchanged.
+2. Per-payment allocation split (`principal_paid`/`interest_paid`/`penalty_paid`) is now computed in the walk and persisted onto each payment doc (bulk_write, only when changed) — powers the Payment History PDF split columns (previously always $0).
+3. `build_payment_history_pdf`: running "Balance" column renamed "Prin. Balance" and now subtracts ONLY the principal portion — a $300 interest-only payment on a $3,000 loan keeps the balance at $3,000.
+4. Rules-card PDF text updated: "interest_only — Juru deit, la hamenus prinsipál".
+### Tests
+- New `tests/test_iter80_interest_only_allocation.py` (5 tests, all pass): exact client example, overpay case, M2 rule, partial regression, sequenced payments.
+- Regression: iter26/27/7/72/36/62 all pass. Pre-existing stale failures in iter4/iter5 (old "overdue" status name) untouched.
