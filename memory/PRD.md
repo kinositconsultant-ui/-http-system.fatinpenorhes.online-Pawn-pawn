@@ -1206,3 +1206,12 @@ User-reported logic bug: interest_only payments could reduce principal.
 ### Tests
 - New `tests/test_iter80_interest_only_allocation.py` (5 tests, all pass): exact client example, overpay case, M2 rule, partial regression, sequenced payments.
 - Regression: iter26/27/7/72/36/62 all pass. Pre-existing stale failures in iter4/iter5 (old "overdue" status name) untouched.
+
+## Iteration 81 — PDF Preview Audit (2026-06) ✅
+Full audit of every PDF preview/download action after the route-split + interest-only fixes.
+### Result: all 26 PDF endpoints PASS (200 + valid %PDF bytes) via live API
+Contract PDF, label, bulk labels, auction agreement, payments-summary (history), payment receipt EN+TET, auction catalogue (private+public), member card, dashboard snapshot, rules card, migration-audit penalty, finance summary/auction-report/capital-sources/expenses, audit-log export, invoice PDF + invoices list, amortization, all 7 Reports v2 tabs (active-contracts, payments, overdue, auction, inventory, financial, treasury).
+### Notes
+- `/clients/{cid}/card-pdf` returns 400 before a card is issued — correct-by-design; UI only shows PDF button when `member_no` exists. Verified 200 after issue-card.
+- UI smoke test: PdfPreviewDialog opens with correct title on Contracts page.
+- Reusable audit script: `/app/backend/tests/pdf_audit.py` (plain script, not collected by pytest).
