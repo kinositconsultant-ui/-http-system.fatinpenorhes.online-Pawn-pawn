@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
 import AppFooter from "../components/AppFooter";
+import { RestoreBanner } from "../components/RestoreBanner";
 import { api } from "../lib/api";
 
 // Threshold at which the sidebar Reports nav shows a red-pulse alert badge.
@@ -216,6 +217,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen flex bg-[#FAFAF9] text-stone-900">
+      <RestoreBanner />
       {/* -------- Desktop sidebar (md+) -------- */}
       <aside className="hidden md:flex w-64 shrink-0 bg-[#4A5568] px-4 py-6 flex-col text-white shadow-xl">
         <SidebarBody user={user} t={t} handleLogout={handleLogout} alertCounts={alertCounts} />

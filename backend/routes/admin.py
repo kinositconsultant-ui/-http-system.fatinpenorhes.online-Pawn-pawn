@@ -17,7 +17,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
-from deps import db, require_admin, write_audit
+from deps import db, get_current_user, require_admin, utcnow_iso, write_audit
+from realtime import notify as rt_notify
 
 router = APIRouter()
 
@@ -138,7 +139,36 @@ async def _run_restore(zip_path: str, admin: dict, display_name: str | None = No
         "collections": result.get("collections"),
         "safety_backup": result.get("safety_backup"),
     })
+    # Post-restore marker (written into the freshly-restored DB) + live push so
+    # every signed-in staff member sees the "data changed" banner.
+    now = utcnow_iso()
+    await db.system_status.update_one(
+        {"id": "singleton"},
+        {"$set": {
+            "id": "singleton",
+            "last_restore_at": now,
+            "restored_from": result.get("restored_from"),
+            "restored_by": admin.get("email"),
+        }},
+        upsert=True,
+    )
+    rt_notify("system.restored", {
+        "restored_from": result.get("restored_from"),
+        "restored_by": admin.get("email"),
+        "at": now,
+    })
     return result
+
+
+@router.get("/system/status")
+async def system_status(_: dict = Depends(get_current_user)):
+    """Lightweight status poll — lets every page detect a recent restore."""
+    doc = await db.system_status.find_one({"id": "singleton"}, {"_id": 0}) or {}
+    return {
+        "last_restore_at": doc.get("last_restore_at"),
+        "restored_from": doc.get("restored_from"),
+        "restored_by": doc.get("restored_by"),
+    }
 
 
 @router.post("/admin/restore/upload")

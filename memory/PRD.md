@@ -1229,3 +1229,14 @@ User request: data backup existed; added full System Restore (admin-only, full r
 - Restore existing (200, 27 collections, data counts identical pre/post), upload restore (200), bad zip 400, wrong name 400, unauth 401, re-login OK, audit entry written, dialog gating verified via screenshot.
 ### Known pre-existing issue (not new)
 - `POST /admin/backups/generate` can 502 through ingress: build_backup.py's uploads-archive step stalls on stale object-storage refs (60s timeout each). Mongo dump zip still gets created early in the script; daily scheduler unaffected by ingress.
+
+## Iteration 83 — Restore Notifications (2026-06) ✅
+Banner for all signed-in staff after a System Restore so nobody works on stale screens.
+### Backend
+- `_run_restore` now upserts `db.system_status` singleton `{last_restore_at, restored_from, restored_by}` (written into the freshly-restored DB) and fires `rt_notify("system.restored", ...)`.
+- `GET /api/system/status` (any authenticated user) returns the marker.
+### Frontend
+- New `components/RestoreBanner.js`: polls `/system/status` every 30s; shows a fixed amber top banner when `last_restore_at > page load time`, with "Refresh now" (reload) and dismiss (per-restore-timestamp). Mounted globally in `AdminLayout`. testids: restore-banner, restore-banner-refresh, restore-banner-dismiss.
+- BusinessDashboard `EVENT_META` gained `system.restored` → instant WS toast + Live Activity Feed entry.
+### Tested (live E2E via Playwright)
+- Banner absent pre-restore → restore triggered mid-session → banner visible on next poll with restorer email → dismiss hides it. `/api/system/status` verified via curl.

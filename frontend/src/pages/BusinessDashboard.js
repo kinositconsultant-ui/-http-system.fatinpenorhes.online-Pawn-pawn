@@ -78,6 +78,14 @@ const EVENT_META = {
     title: "Inspection reimbursed",
     desc: (p) => (p.amount != null ? `${fmt0(p.amount)} recovered` : "Inspection cost reimbursed"),
   },
+  "system.restored": {
+    Icon: AlertOctagon,
+    tone: "text-amber-800",
+    bg: "bg-amber-50",
+    kind: "info",
+    title: "System restore completed",
+    desc: (p) => `Data replaced from ${p.restored_from || "a backup"} — refresh your screens`,
+  },
 };
 
 // Fire the mapped toast for a WS event.
