@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, pdfUrl, API_BASE } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -6,8 +6,9 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Card } from "../components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle } from "lucide-react";
+import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload } from "lucide-react";
 
 export default function Settings() {
   const { t } = useLang();
@@ -20,6 +21,9 @@ export default function Settings() {
   const [backups, setBackups] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [schedule, setSchedule] = useState(null);
+  const [restoreTarget, setRestoreTarget] = useState(null); // { name } | { file }
+  const [restoring, setRestoring] = useState(false);
+  const uploadInputRef = useRef(null);
 
   useEffect(() => {
     api.get("/settings").then((r) => setS(r.data));
@@ -111,6 +115,50 @@ export default function Settings() {
         : "Project zip failed — check backend logs");
     }
     setGenerating(false);
+  };
+
+  const isRestorable = (name) =>
+    name.endsWith(".zip") &&
+    (name.startsWith("mongodb-backup-") || name.startsWith("pre-restore-") || name.startsWith("uploaded-restore-"));
+
+  const runRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoring(true);
+    try {
+      let data;
+      if (restoreTarget.file) {
+        const fd = new FormData();
+        fd.append("file", restoreTarget.file);
+        ({ data } = await api.post("/admin/restore/upload", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 600000,
+        }));
+      } else {
+        ({ data } = await api.post(`/admin/restore/${encodeURIComponent(restoreTarget.name)}`, null, { timeout: 600000 }));
+      }
+      toast.success(
+        `Restored ${data.collections} collections from ${data.restored_from}. Safety snapshot: ${data.safety_backup}`,
+        { duration: 8000 }
+      );
+      setRestoreTarget(null);
+      const r = await api.get("/admin/backups");
+      setBackups(r.data);
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (e) {
+      toast.error(typeof e.response?.data?.detail === "string" ? e.response.data.detail : "Restore failed — check backend logs");
+    }
+    setRestoring(false);
+  };
+
+  const onUploadPick = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".zip")) {
+      toast.error("Please choose a .zip backup file");
+      return;
+    }
+    setRestoreTarget({ file: f });
   };
 
   const fmtSize = (b) => {
@@ -538,6 +586,23 @@ export default function Settings() {
               <Database className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
               {generating ? "Building…" : "Build Full Deployment Zip"}
             </Button>
+            <Button
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={generating || restoring}
+              variant="outline"
+              className="border-red-700 text-red-700 hover:bg-red-700 hover:text-white gap-2"
+              data-testid="settings-upload-restore"
+            >
+              <Upload className="w-4 h-4" /> Upload &amp; Restore
+            </Button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept=".zip"
+              className="hidden"
+              onChange={onUploadPick}
+              data-testid="settings-restore-file-input"
+            />
           </div>
         </div>
         <p className="text-sm text-stone-600">
@@ -576,7 +641,7 @@ export default function Settings() {
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">File</th>
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Size</th>
                   <th className="px-3 py-2 text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Created</th>
-                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Download</th>
+                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -584,6 +649,8 @@ export default function Settings() {
                   const isZip = b.name.endsWith(".zip");
                   const description = b.name.startsWith("mongodb")
                     ? "Database dump (clients, contracts, payments, items, settings, …)"
+                    : b.name.startsWith("pre-restore")
+                    ? "🛟 Automatic safety snapshot taken right before a restore — restore this to undo"
                     : b.name.startsWith("uploads")
                     ? "Uploaded photos & client documents (with MANIFEST.json)"
                     : b.name === "FatinPenhores_Full_Project_Backup.zip"
@@ -608,13 +675,26 @@ export default function Settings() {
                       <td className="px-3 py-3 whitespace-nowrap text-stone-700">{fmtSize(b.size)}</td>
                       <td className="px-3 py-3 whitespace-nowrap text-stone-500">{fmtAge(b.modified)}</td>
                       <td className="px-3 py-3 text-right">
-                        <a
-                          href={pdfUrl(`/admin/backups/${encodeURIComponent(b.name)}`)}
-                          data-testid={`backup-download-${b.name}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#1B2D5C] text-white text-xs font-semibold hover:bg-[#0F1B3A] transition-colors whitespace-nowrap"
-                        >
-                          <Download className="w-3.5 h-3.5" /> Download
-                        </a>
+                        <div className="inline-flex items-center gap-2">
+                          {isRestorable(b.name) && (
+                            <button
+                              type="button"
+                              onClick={() => setRestoreTarget({ name: b.name })}
+                              disabled={restoring}
+                              data-testid={`backup-restore-${b.name}`}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-red-700 text-red-700 text-xs font-semibold hover:bg-red-700 hover:text-white transition-colors whitespace-nowrap"
+                            >
+                              <History className="w-3.5 h-3.5" /> Restore
+                            </button>
+                          )}
+                          <a
+                            href={pdfUrl(`/admin/backups/${encodeURIComponent(b.name)}`)}
+                            data-testid={`backup-download-${b.name}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#1B2D5C] text-white text-xs font-semibold hover:bg-[#0F1B3A] transition-colors whitespace-nowrap"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -632,6 +712,13 @@ export default function Settings() {
           </p>
         </div>
       </Card>
+
+      <RestoreConfirmDialog
+        target={restoreTarget}
+        restoring={restoring}
+        onCancel={() => !restoring && setRestoreTarget(null)}
+        onConfirm={runRestore}
+      />
 
       <div className="flex justify-end">
         <Button
@@ -653,6 +740,62 @@ function Field({ label, children }) {
       <Label className="text-xs uppercase tracking-wider text-stone-500">{label}</Label>
       {children}
     </div>
+  );
+}
+
+/* ---------------- System Restore confirmation ---------------- */
+function RestoreConfirmDialog({ target, restoring, onCancel, onConfirm }) {
+  const [word, setWord] = useState("");
+  useEffect(() => setWord(""), [target]);
+  const sourceLabel = target?.file ? target.file.name : target?.name;
+  const ok = word.trim().toUpperCase() === "RESTORE";
+  return (
+    <Dialog open={!!target} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-lg" data-testid="restore-confirm-dialog">
+        <DialogHeader>
+          <DialogTitle className="font-display text-red-700 flex items-center gap-2">
+            <History className="w-5 h-5" /> System Restore
+          </DialogTitle>
+          <DialogDescription>
+            You are about to <strong>fully replace</strong> all current data with the backup:
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-mono break-all" data-testid="restore-source-name">
+          {sourceLabel}
+        </div>
+        <ul className="text-sm text-stone-600 list-disc pl-5 space-y-1">
+          <li>Every collection (clients, contracts, payments, items, settings, users…) will be replaced.</li>
+          <li>A <strong>safety snapshot</strong> of the current data is taken automatically first, so you can undo.</li>
+          <li>If the backup contains different user accounts, you may need to sign in again.</li>
+        </ul>
+        <div className="space-y-1.5">
+          <Label className="text-xs uppercase tracking-wider text-stone-500">
+            Type <span className="font-bold text-red-700">RESTORE</span> to confirm
+          </Label>
+          <Input
+            value={word}
+            onChange={(e) => setWord(e.target.value)}
+            placeholder="RESTORE"
+            disabled={restoring}
+            data-testid="restore-confirm-input"
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={restoring} data-testid="restore-cancel-btn">
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={!ok || restoring}
+            className="bg-red-700 hover:bg-red-800 gap-2"
+            data-testid="restore-confirm-btn"
+          >
+            <RefreshCw className={`w-4 h-4 ${restoring ? "animate-spin" : ""}`} />
+            {restoring ? "Restoring…" : "Restore Now"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1215,3 +1215,17 @@ Contract PDF, label, bulk labels, auction agreement, payments-summary (history),
 - `/clients/{cid}/card-pdf` returns 400 before a card is issued — correct-by-design; UI only shows PDF button when `member_no` exists. Verified 200 after issue-card.
 - UI smoke test: PdfPreviewDialog opens with correct title on Contracts page.
 - Reusable audit script: `/app/backend/tests/pdf_audit.py` (plain script, not collected by pytest).
+
+## Iteration 82 — System Restore (2026-06) ✅
+User request: data backup existed; added full System Restore (admin-only, full replace).
+### Backend
+- `/app/scripts/restore_backup.py`: safety mongodump of current DB → `pre-restore-<stamp>.zip` (keeps last 3), extracts backup zip, `mongorestore --drop` with nsFrom/nsTo remap (handles backups taken from a different db name).
+- `POST /api/admin/restore/{name}` — restore an existing snapshot (only `mongodb-backup-*`, `pre-restore-*` prefixes).
+- `POST /api/admin/restore/upload` — upload a zip (validated: .zip, ≤200MB, must contain mongodump .bson) via transient temp file; restore; audit-logged (`action: restore`).
+### Frontend (Settings → Backups & Migration)
+- Red "Restore" button per restorable snapshot; "Upload & Restore" button with file picker.
+- `RestoreConfirmDialog`: full-replace warning, safety-snapshot note, must type RESTORE to enable; reloads app after success. testids: settings-upload-restore, backup-restore-{name}, restore-confirm-dialog/input/btn.
+### Tested (live API + UI)
+- Restore existing (200, 27 collections, data counts identical pre/post), upload restore (200), bad zip 400, wrong name 400, unauth 401, re-login OK, audit entry written, dialog gating verified via screenshot.
+### Known pre-existing issue (not new)
+- `POST /admin/backups/generate` can 502 through ingress: build_backup.py's uploads-archive step stalls on stale object-storage refs (60s timeout each). Mongo dump zip still gets created early in the script; daily scheduler unaffected by ingress.

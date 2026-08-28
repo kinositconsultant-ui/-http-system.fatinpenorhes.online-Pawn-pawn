@@ -4,14 +4,17 @@ Extracted from server.py during Phase 2 refactor.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from deps import db, require_admin, write_audit
@@ -95,6 +98,81 @@ async def download_backup(name: str, _: dict = Depends(require_admin)):
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+# =====================================================================
+# System Restore (admin-only, full replace)
+# =====================================================================
+RESTORABLE_PREFIXES = ("mongodb-backup-", "pre-restore-", "uploaded-restore-")
+
+
+def _zip_has_mongodump(path: str) -> bool:
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return any(n.endswith(".bson") for n in zf.namelist())
+    except zipfile.BadZipFile:
+        return False
+
+
+async def _run_restore(zip_path: str, admin: dict, display_name: str | None = None) -> dict:
+    if not _zip_has_mongodump(zip_path):
+        raise HTTPException(status_code=400, detail="Not a valid database backup zip (no mongodump .bson files inside)")
+    proc = subprocess.run(
+        [sys.executable, "/app/scripts/restore_backup.py", zip_path],
+        capture_output=True, text=True, cwd="/app", timeout=600, check=False,
+    )
+    result = {}
+    for line in reversed((proc.stdout or "").strip().splitlines()):
+        try:
+            result = json.loads(line)
+            break
+        except json.JSONDecodeError:
+            continue
+    if proc.returncode != 0 or not result.get("ok"):
+        detail = result.get("error") or proc.stderr[-800:] or "Restore failed"
+        raise HTTPException(status_code=500, detail=detail)
+    if display_name:
+        result["restored_from"] = display_name
+    await write_audit(admin, "restore", "system", "all", {
+        "restored_from": result.get("restored_from"),
+        "collections": result.get("collections"),
+        "safety_backup": result.get("safety_backup"),
+    })
+    return result
+
+
+@router.post("/admin/restore/upload")
+async def restore_from_upload(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    """Upload a backup zip and restore it (full replace of current data).
+
+    The zip is written to a transient temp file only for the duration of the
+    mongorestore run, then deleted — nothing is persisted on the pod.
+    """
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Please upload a .zip backup file")
+    data = await file.read()
+    if len(data) > 200 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Backup file too large (200MB max)")
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    try:
+        tmp.write(data)
+        tmp.close()
+        return await _run_restore(tmp.name, admin, display_name=file.filename)
+    finally:
+        os.unlink(tmp.name)
+
+
+@router.post("/admin/restore/{name}")
+async def restore_from_backup(name: str, admin: dict = Depends(require_admin)):
+    """Restore the database from an existing backup snapshot (full replace)."""
+    if not re.match(r"^[\w.\-]+$", name) or not name.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not name.startswith(RESTORABLE_PREFIXES):
+        raise HTTPException(status_code=400, detail="Only database backup zips can be restored")
+    path = os.path.join("/app/backups", name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    return await _run_restore(path, admin)
 
 
 # =====================================================================
