@@ -40,6 +40,8 @@ from deps import db, get_current_user, COLLECTION_MAP
 router = APIRouter(tags=["inventory"])
 
 ACTIVE_CONTRACT_STATUSES = {"active", "grace_period", "overdue", "auction_ready"}
+# Items physically held by Fatin Penhores. `released` (handed back) and `sold` have left.
+CUSTODY_STATUSES = {"in_stock", "pawned", "redeemed", "auction"}
 WAREHOUSE_KINDS = ("car", "motorcycle", "pezadu")
 OFFICE_KINDS = ("electronic",)
 ALL_KINDS = WAREHOUSE_KINDS + OFFICE_KINDS
@@ -79,6 +81,8 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
     totals = {
         "count_all": 0,
         "market_value_all": 0.0,
+        "count_custody": 0,
+        "market_value_custody": 0.0,
         "count_active": 0,
         "market_value_active": 0.0,
     }
@@ -105,6 +109,9 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
                 by_status[st] += 1
             else:
                 by_status["other"] += 1
+            if st in CUSTODY_STATUSES:
+                totals["count_custody"] += 1
+                totals["market_value_custody"] += v
 
             is_active = it.get("id") in active_item_ids
             if is_active:
@@ -134,6 +141,8 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
         "unique_customers": len(unique_customers),
         "total_items_all": totals["count_all"],
         "total_market_value_all": round(totals["market_value_all"], 2),
+        "total_items_custody": totals["count_custody"],
+        "total_market_value_custody": round(totals["market_value_custody"], 2),
         "total_items_active": totals["count_active"],
         "total_market_value_active": round(totals["market_value_active"], 2),
         "by_kind": by_kind,
@@ -155,13 +164,22 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
 
 
 @router.get("/inventory/category-breakdown")
-async def inventory_category_breakdown(_: dict = Depends(get_current_user)):
+async def inventory_category_breakdown(scope: str = "custody", _: dict = Depends(get_current_user)):
     """Item counts by kind and subcategory (for the Items page donut chart).
 
+    scope: custody (default — items physically held: in_stock/pawned/redeemed/auction),
+           active (items on a live contract), all (every record ever created).
     Returns:
       by_kind: [{kind, count, market_value, subcategories: [{name, count, market_value}]}]
-      total_count, total_market_value
+      total_count, total_market_value, scope
     """
+    if scope not in ("custody", "active", "all"):
+        raise HTTPException(status_code=400, detail="scope must be custody, active or all")
+    active_item_ids: set[str] = set()
+    if scope == "active":
+        async for c in db.contracts.find({"status": {"$in": list(ACTIVE_CONTRACT_STATUSES)}}, {"_id": 0, "item_id": 1}):
+            if c.get("item_id"):
+                active_item_ids.add(c["item_id"])
     kinds_out: list[dict] = []
     total_count = 0
     total_value = 0.0
@@ -171,8 +189,13 @@ async def inventory_category_breakdown(_: dict = Depends(get_current_user)):
         value = 0.0
         subs: dict[str, dict] = {}
         async for it in coll.find(
-            {}, {"_id": 0, "category": 1, "market_value": 1}
+            {}, {"_id": 0, "id": 1, "status": 1, "category": 1, "market_value": 1}
         ):
+            st = (it.get("status") or "in_stock").lower()
+            if scope == "custody" and st not in CUSTODY_STATUSES:
+                continue
+            if scope == "active" and it.get("id") not in active_item_ids:
+                continue
             count += 1
             v = float(it.get("market_value", 0) or 0)
             value += v
@@ -199,6 +222,7 @@ async def inventory_category_breakdown(_: dict = Depends(get_current_user)):
         "by_kind": kinds_out,
         "total_count": total_count,
         "total_market_value": round(total_value, 2),
+        "scope": scope,
     }
 
 

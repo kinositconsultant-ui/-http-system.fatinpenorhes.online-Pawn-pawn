@@ -253,7 +253,8 @@ async def _report_inventory(filters: dict) -> dict:
 
     total_items = len(out_rows)
     total_amount = sum(float(r["market_value"]) for r in out_rows)
-    active_items = sum(1 for r in out_rows if r["status"] in ("pawned", "in_stock"))
+    # "active" here = still in our custody (excludes released / sold)
+    active_items = sum(1 for r in out_rows if r["status"] in ("pawned", "in_stock", "redeemed", "auction"))
     overdue_items = 0
     # count overdue by looking up active contracts whose status is overdue
     overdue_contracts = await db.contracts.find(

@@ -1260,3 +1260,10 @@ Flow: contract redeemed → item.status `redeemed` (awaiting pickup) → warehou
 
 ### Backlog (unchanged)
 - P2 Audit Log full JSON details; P3 Tetum homepage redesign; P3 clickable live feed rows; P3 VIP WhatsApp reminder timing; optional: "Gate pass" button on redeemed contracts in Contracts page.
+
+## Iteration 85 — Inventory Mix custody scope (2026-06) ✅
+Root cause: `/inventory/category-breakdown` counted every item record regardless of status, so the donut never decreased on release/sale (it was a "historical" mix without saying so).
+- `routes/inventory.py`: `CUSTODY_STATUSES = {in_stock, pawned, redeemed, auction}`; category-breakdown takes `?scope=custody|active|all` (default custody, 400 otherwise); analytics adds `total_items_custody` / `total_market_value_custody`.
+- Aligned everywhere: `items.py` staff-assignments skips released/sold items; `reports.py` inventory report `active_items` = in-custody statuses; InventoryBanner tile renamed "Items (In Custody)" (hint shows historical count).
+- `InventoryCategoryChart.js`: 3-way pill toggle (In custody / Active pawns / All historical), subtitle states the basis. Verified live: custody 1,265 · active 777 · all 1,296.
+- Known pre-existing (not touched): Items page kind-tab strip overflows at 390px.

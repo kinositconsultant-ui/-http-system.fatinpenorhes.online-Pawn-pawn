@@ -88,12 +88,12 @@ export default function InventoryBanner() {
         />
         <BannerTile
           Icon={Package}
-          label="Items (Historical)"
-          value={data ? data.total_items_all : "…"}
-          hint={data ? fmtUSD0(data.total_market_value_all) : ""}
+          label="Items (In Custody)"
+          value={data ? data.total_items_custody : "…"}
+          hint={data ? `${fmtUSD0(data.total_market_value_custody)} · ${data.total_items_all} historical` : ""}
           tone="text-stone-800"
           bg="bg-stone-50 border-stone-300"
-          testid="ib-historical"
+          testid="ib-custody"
         />
         <BannerTile
           Icon={DollarSign}

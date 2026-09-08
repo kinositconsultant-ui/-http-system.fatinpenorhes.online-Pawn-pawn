@@ -283,6 +283,9 @@ async def staff_assignments(_: dict = Depends(get_current_user)):
     async def _collect(kind: str, group: str):
         coll = db[COLLECTION_MAP[kind]]
         async for it in coll.find({}, {"_id": 0}):
+            # Released / sold items have left our custody — nobody is responsible for them.
+            if (it.get("status") or "in_stock") in ("released", "sold"):
+                continue
             uid = (it.get("responsible_staff") or "").strip()
             # Unassigned rows go into per-group buckets so warehouse and
             # office each show their own "Unassigned" pile.

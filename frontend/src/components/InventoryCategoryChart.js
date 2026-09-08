@@ -20,14 +20,21 @@ const fmtUsd = (n) =>
     maximumFractionDigits: 0,
   }).format(Number(n || 0));
 
+const SCOPES = [
+  { key: "custody", label: "In custody", sub: "items physically held (excludes released & sold)" },
+  { key: "active", label: "Active pawns", sub: "items on a live contract" },
+  { key: "all", label: "All (historical)", sub: "every item record ever created" },
+];
+
 export default function InventoryCategoryChart() {
   const [data, setData] = useState(null);
+  const [scope, setScope] = useState("custody");
   const [hovered, setHovered] = useState(null); // { kind } while hovering a slice
 
   useEffect(() => {
     let cancelled = false;
     api
-      .get("/inventory/category-breakdown")
+      .get(`/inventory/category-breakdown?scope=${scope}`)
       .then((r) => {
         if (!cancelled) setData(r.data);
       })
@@ -37,7 +44,7 @@ export default function InventoryCategoryChart() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   if (!data) {
     return (
@@ -69,11 +76,28 @@ export default function InventoryCategoryChart() {
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="text-eyebrow">Inventory Mix</div>
-          <div className="text-sm text-stone-600">
-            {fmt(data.total_count)} items · {fmtUsd(data.total_market_value)} total market value
+          <div className="text-sm text-stone-600" data-testid="inv-chart-subtitle">
+            {fmt(data.total_count)} items · {fmtUsd(data.total_market_value)} market value
+            <span className="text-stone-400"> — {SCOPES.find((s) => s.key === scope)?.sub}</span>
           </div>
         </div>
-        <div className="text-[11px] text-stone-500">Hover a slice for subcategory detail</div>
+        <div className="flex items-center gap-1" data-testid="inv-chart-scope">
+          {SCOPES.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setScope(s.key)}
+              data-testid={`inv-chart-scope-${s.key}`}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-full border transition-colors ${
+                scope === s.key
+                  ? "bg-[#1B2D5C] text-white border-[#1B2D5C]"
+                  : "bg-white text-stone-600 border-stone-300 hover:border-stone-500"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
