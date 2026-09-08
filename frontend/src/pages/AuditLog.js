@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { FileDown, FileText, RotateCcw, Filter } from "lucide-react";
+import { FileDown, FileText, RotateCcw, Filter, ChevronRight, ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 const RESOURCE_OPTIONS = [
@@ -41,8 +41,56 @@ const ACTION_OPTIONS = [
   "revoke_card",
   "whatsapp_send",
   "whatsapp_adhoc_send",
+  "whatsapp_pickup_ready",
+  "warehouse_receive",
+  "warehouse_release",
+  "restore",
   "run_reminders",
 ];
+
+function DetailsCell({ data, rowId }) {
+  const [open, setOpen] = useState(false);
+  if (!data || (typeof data === "object" && Object.keys(data).length === 0)) return <span>—</span>;
+  if (typeof data === "string") return <span>{data}</span>;
+  const summary = Object.entries(data)
+    .slice(0, 4)
+    .map(([k, v]) => `${k}=${typeof v === "object" ? "…" : String(v).slice(0, 40)}`)
+    .join(", ");
+  const json = JSON.stringify(data, null, 2);
+  const copy = () => {
+    navigator.clipboard?.writeText(json);
+    toast.success("JSON copied");
+  };
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        data-testid={`audit-details-toggle-${rowId}`}
+        className="inline-flex items-center gap-1 text-left text-stone-700 hover:text-[#1B2D5C]"
+        title={open ? "Hide full JSON" : "Show full JSON"}
+      >
+        {open ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+        <span className="break-words">{summary}</span>
+      </button>
+      {open && (
+        <div className="relative" data-testid={`audit-details-json-${rowId}`}>
+          <button
+            type="button"
+            onClick={copy}
+            data-testid={`audit-details-copy-${rowId}`}
+            className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-white/90 border border-stone-200 px-1.5 py-0.5 text-[10px] text-stone-600 hover:text-[#1B2D5C]"
+          >
+            <Copy className="w-3 h-3" /> Copy
+          </button>
+          <pre className="text-[11px] leading-snug bg-stone-900 text-stone-100 rounded-md p-3 overflow-x-auto max-h-80 whitespace-pre-wrap break-all">
+            {json}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AuditLog() {
   const { t } = useLang();
@@ -124,15 +172,6 @@ export default function AuditLog() {
     } catch (e) {
       toast.error(e.response?.data?.detail || "PDF export failed");
     }
-  };
-
-  const formatDetails = (d) => {
-    if (!d || (typeof d === "object" && Object.keys(d).length === 0)) return "—";
-    if (typeof d === "string") return d;
-    return Object.entries(d)
-      .slice(0, 4)
-      .map(([k, v]) => `${k}=${typeof v === "object" ? "…" : String(v).slice(0, 40)}`)
-      .join(", ");
   };
 
   return (
@@ -290,7 +329,7 @@ export default function AuditLog() {
                   {(r.resource_id || "").slice(0, 8)}
                 </Td>
                 <Td className="text-xs text-stone-600 max-w-md break-words">
-                  {formatDetails(r.details || r.payload)}
+                  <DetailsCell data={r.details || r.payload} rowId={r.id} />
                 </Td>
               </tr>
             ))}

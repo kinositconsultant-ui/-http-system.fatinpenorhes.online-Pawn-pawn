@@ -1267,3 +1267,10 @@ Root cause: `/inventory/category-breakdown` counted every item record regardless
 - Aligned everywhere: `items.py` staff-assignments skips released/sold items; `reports.py` inventory report `active_items` = in-custody statuses; InventoryBanner tile renamed "Items (In Custody)" (hint shows historical count).
 - `InventoryCategoryChart.js`: 3-way pill toggle (In custody / Active pawns / All historical), subtitle states the basis. Verified live: custody 1,265 · active 777 · all 1,296.
 - Known pre-existing (not touched): Items page kind-tab strip overflows at 390px.
+
+## Iteration 86 — Four follow-ups (2026-06) ✅
+- **Mobile tab fix**: `Items.js` TabsList scrolls horizontally on phones (`overflow-x-auto flex-nowrap`, hidden scrollbar, `shrink-0` triggers). Verified no document overflow at 390px.
+- **Gate pass shortcut**: `Contracts.js` — redeemed+released rows get `contract-gate-pass-{id}` (opens `/warehouse/releases/{id}/pdf` in PdfPreviewDialog); redeemed-but-not-released rows get `contract-awaiting-pickup-{id}` linking to /warehouse-receipts.
+- **Pickup reminder**: `routes/payments.py` `_send_pickup_ready_whatsapp` — on newly redeemed contract sends bilingual (Tetum+English) WhatsApp text via `whatsapp.send_text` (MOCKED when WhatsApp not configured), logs to `whatsapp_log` (template `pickup_ready`), audit `whatsapp_pickup_ready`; never blocks the payment. Response includes `pickup_notification`.
+- **Audit log details**: `AuditLog.js` `DetailsCell` — click summary to expand full pretty-printed JSON with Copy button; added new action filter options (whatsapp_pickup_ready, warehouse_receive, warehouse_release, restore).
+- Verified live via API + Playwright; release/interest regression tests pass.

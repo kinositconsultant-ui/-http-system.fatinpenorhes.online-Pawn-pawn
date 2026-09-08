@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { api, API_BASE, pdfUrl } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera, AlertTriangle, Phone, Mail, Clock, Upload, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, FileDown, Gavel, MessageCircle, RefreshCw, ScrollText, Eye, QrCode, Camera, AlertTriangle, Phone, Mail, Clock, Upload, CheckCircle2, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
 import WhatsAppStatusPill from "../components/WhatsAppStatusPill";
@@ -53,6 +53,7 @@ function formatYearMonth(ym) {
 
 export default function Contracts() {
   const { t } = useLang();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get("status") || "";
   const [rows, setRows] = useState([]);
@@ -882,6 +883,33 @@ export default function Contracts() {
                     )}
                     {["auction_ready", "auction"].includes(r.status) && (
                       <SignedAgreementButton contract={r} onDone={load} />
+                    )}
+                    {r.status === "redeemed" && r.item_released && (
+                      <button
+                        type="button"
+                        onClick={() => setPdfPreview({
+                          open: true,
+                          url: pdfUrl(`/warehouse/releases/${r.id}/pdf`),
+                          title: `Gate pass · ${r.contract_number}`,
+                          filename: `${r.contract_number}-release.pdf`,
+                        })}
+                        data-testid={`contract-gate-pass-${r.id}`}
+                        title="Gate pass / item release receipt (reprint)"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
+                      >
+                        <PackageCheck className="w-3 h-3" />
+                      </button>
+                    )}
+                    {r.status === "redeemed" && !r.item_released && (
+                      <button
+                        type="button"
+                        onClick={() => navigate("/warehouse-receipts")}
+                        data-testid={`contract-awaiting-pickup-${r.id}`}
+                        title="Fully paid — item awaiting hand-over at warehouse (click to release)"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition-colors"
+                      >
+                        <PackageCheck className="w-3 h-3" />
+                      </button>
                     )}
                     <button
                       type="button"

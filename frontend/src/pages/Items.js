@@ -264,13 +264,13 @@ export default function Items() {
 
       <Tabs value={kind} onValueChange={setKind}>
         <TabsList
-          className="bg-stone-100 border border-stone-200 p-1 rounded-lg gap-1 h-auto"
+          className="bg-stone-100 border border-stone-200 p-1 rounded-lg gap-1 h-auto w-full sm:w-auto justify-start overflow-x-auto flex-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           data-testid="items-tabs"
         >
           <TabsTrigger
             value="car"
             data-testid="items-tab-car"
-            className="data-[state=active]:bg-[#1B2D5C] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#1B2D5C] px-4 py-2 rounded-md font-medium transition-colors"
+            className="data-[state=active]:bg-[#1B2D5C] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#1B2D5C] px-4 py-2 rounded-md font-medium transition-colors shrink-0"
           >
             <Car className="w-4 h-4 mr-2" />
             {t("car")}
@@ -278,7 +278,7 @@ export default function Items() {
           <TabsTrigger
             value="motorcycle"
             data-testid="items-tab-motorcycle"
-            className="data-[state=active]:bg-[#C17767] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#C17767] px-4 py-2 rounded-md font-medium transition-colors"
+            className="data-[state=active]:bg-[#C17767] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#C17767] px-4 py-2 rounded-md font-medium transition-colors shrink-0"
           >
             <Bike className="w-4 h-4 mr-2" />
             {t("motorcycle")}
@@ -286,7 +286,7 @@ export default function Items() {
           <TabsTrigger
             value="electronic"
             data-testid="items-tab-electronic"
-            className="data-[state=active]:bg-[#4C7F62] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#4C7F62] px-4 py-2 rounded-md font-medium transition-colors"
+            className="data-[state=active]:bg-[#4C7F62] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#4C7F62] px-4 py-2 rounded-md font-medium transition-colors shrink-0"
           >
             <Cpu className="w-4 h-4 mr-2" />
             {t("electronic")}
@@ -294,7 +294,7 @@ export default function Items() {
           <TabsTrigger
             value="pezadu"
             data-testid="items-tab-pezadu"
-            className="data-[state=active]:bg-[#B8860B] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#B8860B] px-4 py-2 rounded-md font-medium transition-colors"
+            className="data-[state=active]:bg-[#B8860B] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#B8860B] px-4 py-2 rounded-md font-medium transition-colors shrink-0"
           >
             <Truck className="w-4 h-4 mr-2" />
             {t("pezadu")}

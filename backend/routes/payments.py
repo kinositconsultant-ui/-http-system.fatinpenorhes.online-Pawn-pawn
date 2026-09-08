@@ -25,7 +25,9 @@ from deps import (
 from services import (
     _fetch_item,
     _recompute_contract_status,
+    _decrypted_settings,
 )
+import whatsapp as wapp
 from pdf_utils import build_receipt_pdf
 from realtime import notify as rt_notify
 
@@ -119,7 +121,57 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
             "contract_number": contract.get("contract_number"),
             "item_type": contract.get("item_type"),
         })
+        pickup = await _send_pickup_ready_whatsapp(contract, user)
+        return {"payment": doc, "contract": updated, "pickup_notification": pickup}
     return {"payment": doc, "contract": updated}
+
+
+PICKUP_ITEM_LABEL = {"car": "kareta · car", "motorcycle": "motor · motorcycle",
+                     "pezadu": "ekipamentu pezadu · heavy equipment", "electronic": "eletróniku · electronic item"}
+
+
+async def _send_pickup_ready_whatsapp(contract: dict, actor: dict) -> dict:
+    """Tell the client their loan is settled and the item is ready for collection. Never blocks the payment."""
+    client_doc = await db.clients.find_one({"id": contract.get("client_id")}, {"_id": 0}) or {}
+    phone = (client_doc.get("phone") or "").strip()
+    if not phone:
+        return {"status": "skipped", "reason": "Client has no phone number"}
+    name = client_doc.get("full_name") or "Kliente"
+    cnum = contract.get("contract_number", "")
+    kind = PICKUP_ITEM_LABEL.get(contract.get("item_type"), "sasán · item")
+    body = (
+        f"Bondia {name}! Fatin Penhores konfirma katak kontratu {cnum} selu tomak ona. "
+        f"Ita-boot nia {kind} prontu atu foti iha ami-nia fatin (Caicoli, Dili). "
+        f"Favór lori ita-boot nia dokumentu identidade. Obrigadu!\n\n"
+        f"Hello {name}! Fatin Penhores confirms contract {cnum} is fully paid. "
+        f"Your {kind.split(' · ')[-1]} is ready for collection at our premises (Caicoli, Dili). "
+        f"Please bring your ID. Thank you!"
+    )
+    try:
+        settings = await _decrypted_settings()
+        result = await wapp.send_text(phone, body, settings)
+    except Exception as exc:  # network / config errors must not fail the payment
+        result = {"status": "failed", "error": str(exc)}
+    await db.whatsapp_log.insert_one({
+        "id": new_id(),
+        "contract_id": contract["id"],
+        "contract_number": cnum,
+        "client_id": client_doc.get("id"),
+        "client_phone": phone,
+        "language": "tet+en",
+        "template": "pickup_ready",
+        "parameters": [name, cnum],
+        "body": body,
+        "result": result,
+        "meta_message_id": result.get("meta_message_id"),
+        "delivery_status": result.get("status") or "queued",
+        "sent_at": result.get("sent_at"),
+        "actor_id": actor.get("id"),
+        "created_at": utcnow_iso(),
+    })
+    await write_audit(actor, "whatsapp_pickup_ready", "contract", contract["id"],
+                      {"contract_number": cnum, "to": phone, "result_status": result.get("status")})
+    return {"status": result.get("status"), "to": phone}
 
 
 @router.get("/payments/{pid}/pdf")
