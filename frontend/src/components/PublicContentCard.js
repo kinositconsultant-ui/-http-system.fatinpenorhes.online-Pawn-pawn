@@ -1,9 +1,12 @@
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import { toast } from "sonner";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import { FileText, Plus, Trash2, Eye, EyeOff, MapPin } from "lucide-react";
+import { FileText, Plus, Trash2, Eye, EyeOff, MapPin, Inbox, Check, X } from "lucide-react";
 
 const SERVICES = [
   { key: "car", label: "Car guarantee" },
@@ -20,6 +23,52 @@ const FIELDS = [
 ];
 
 const newId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+// Visitor reviews waiting for approval (submitted via /review or the Contact page).
+function PendingReviews({ onApproved }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const load = () => api.get("/reviews?status=pending").then((r) => setRows(r.data)).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  const act = async (id, action) => {
+    setBusy(id);
+    try {
+      const { data } = await api.post(`/reviews/${id}/${action}`);
+      toast.success(action === "approve" ? "Approved — now live on the homepage" : "Review rejected");
+      if (action === "approve") onApproved(data.testimonials);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Action failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-3 space-y-2" data-testid="pending-reviews">
+      <div className="text-xs font-semibold text-amber-900 inline-flex items-center gap-1.5">
+        <Inbox className="w-3.5 h-3.5" /> {rows.length} visitor review{rows.length > 1 ? "s" : ""} waiting for approval
+      </div>
+      {rows.map((r) => (
+        <div key={r.id} className="rounded-md bg-white border border-amber-200 p-3 flex items-start gap-3" data-testid={`pending-review-${r.id}`}>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">{r.name} <span className="text-stone-400 font-normal">· {r.role || "—"} · {r.lang.toUpperCase()}</span></div>
+            <p className="text-sm text-stone-700 mt-1">“{r.text}”</p>
+            {r.contact && <div className="text-[11px] text-stone-400 mt-1">Contact: {r.contact}</div>}
+          </div>
+          <div className="flex flex-col gap-1 shrink-0">
+            <Button type="button" size="sm" className="h-7 bg-emerald-700 hover:bg-emerald-800" disabled={busy === r.id} onClick={() => act(r.id, "approve")} data-testid={`review-approve-${r.id}`}>
+              <Check className="w-3.5 h-3.5 mr-1" /> Approve
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="h-7 text-rose-700 border-rose-200" disabled={busy === r.id} onClick={() => act(r.id, "reject")} data-testid={`review-reject-${r.id}`}>
+              <X className="w-3.5 h-3.5 mr-1" /> Reject
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Settings → Public Content: Services copy, homepage testimonials, Contact map.
 export default function PublicContentCard({ s, onChange, defaults = {} }) {
@@ -79,6 +128,7 @@ export default function PublicContentCard({ s, onChange, defaults = {} }) {
             <Plus className="w-3.5 h-3.5 mr-1" /> Add
           </Button>
         </div>
+        <PendingReviews onApproved={(list) => list && onChange("testimonials", list)} />
         <div className="space-y-2">
           {items.map((tm, i) => (
             <div key={tm.id} className={`rounded-lg border p-3 space-y-2 ${tm.visible === false ? "border-stone-200 bg-stone-50 opacity-70" : "border-stone-200 bg-white"}`} data-testid={`testimonial-row-${i}`}>

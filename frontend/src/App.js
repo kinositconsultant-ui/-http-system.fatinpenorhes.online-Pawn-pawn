@@ -14,6 +14,7 @@ import Home from "@/pages/public/Home";
 import AuctionPublic from "@/pages/public/AuctionPublic";
 import Warehouse from "@/pages/public/Warehouse";
 import About from "@/pages/public/About";
+import Review from "@/pages/public/Review";
 import Contact from "@/pages/public/Contact";
 import Services from "@/pages/public/Services";
 import Simulasaun from "@/pages/public/Simulasaun";
@@ -50,6 +51,7 @@ function App() {
               {/* Public site */}
               <Route element={<PublicLayout />}>
                 <Route path="/" element={<Home />} />
+                <Route path="/review" element={<Review />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/auction" element={<AuctionPublic />} />

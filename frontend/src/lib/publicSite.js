@@ -33,15 +33,32 @@ const resolve = (data, preview = false) => ({
 });
 
 // Settings → "Preview changes" stores the resolved draft here and opens /?preview=1.
-export const isPreviewMode = () => new URLSearchParams(window.location.search).get("preview") === "1";
-export function readPreviewDraft() {
-  if (!isPreviewMode()) return null;
+const PREVIEW_FLAG = "fp_site_preview_on";
+// Preview mode sticks for the whole tab (sessionStorage) so Services / FAQ / Contact stay in preview.
+export const isPreviewMode = () => {
+  if (new URLSearchParams(window.location.search).get("preview") === "1") {
+    sessionStorage.setItem(PREVIEW_FLAG, "1");
+    return true;
+  }
+  return sessionStorage.getItem(PREVIEW_FLAG) === "1";
+};
+export function exitPreview() {
+  sessionStorage.removeItem(PREVIEW_FLAG);
+  localStorage.removeItem(PREVIEW_KEY);
+  cache = null;
+}
+export function readPreviewPayload() {
   try {
-    const raw = sessionStorage.getItem(PREVIEW_KEY) || localStorage.getItem(PREVIEW_KEY);
+    const raw = localStorage.getItem(PREVIEW_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
+}
+export function readPreviewDraft() {
+  if (!isPreviewMode()) return null;
+  const p = readPreviewPayload();
+  return p ? p.resolved || p : null;
 }
 
 export function loadPublicSite(force = false) {

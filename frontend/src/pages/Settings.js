@@ -25,7 +25,7 @@ export default function Settings() {
     setPreviewing(true);
     try {
       const { data } = await api.post("/public/site/preview", s);
-      localStorage.setItem(PREVIEW_KEY, JSON.stringify(data));
+      localStorage.setItem(PREVIEW_KEY, JSON.stringify({ resolved: data, draft: s }));
       window.open("/?preview=1", "_blank", "noopener");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Could not build preview");
@@ -341,6 +341,7 @@ export default function Settings() {
               type="date"
               value={s.next_auction_date || ""}
               onChange={(e) => onChange("next_auction_date", e.target.value)}
+              title="Drives the live countdown on the public homepage (auction starts 09:00)"
               data-testid="settings-next-auction-date"
             />
           </Field>

@@ -3,7 +3,7 @@ import dict from "../lib/i18n";
 
 const LangContext = createContext(null);
 
-const PUBLIC_PREFIXES = ["/about", "/services", "/auction", "/warehouse", "/simulasaun", "/faq", "/contact", "/verify"];
+const PUBLIC_PREFIXES = ["/about", "/services", "/auction", "/warehouse", "/simulasaun", "/faq", "/contact", "/verify", "/review"];
 const isPublicPath = (p) => p === "/" || PUBLIC_PREFIXES.some((x) => p.startsWith(x));
 
 export function LangProvider({ children }) {

@@ -6,6 +6,10 @@ import { Button } from "../ui/button";
 import { Gavel, ArrowRight, Lock, Car, Bike, Truck, Laptop } from "lucide-react";
 
 const KIND_ICON = { car: Car, motorcycle: Bike, pezadu: Truck, electronic: Laptop };
+const KIND_LABEL = {
+  en: { car: "Car", motorcycle: "Motorcycle", pezadu: "Heavy equipment", electronic: "Electronics" },
+  tet: { car: "Karreta", motorcycle: "Motor", pezadu: "Pezadu", electronic: "Eletróniku" },
+};
 const fmtUsd = (n) => `USD $${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 const COPY = {
@@ -94,9 +98,30 @@ export default function AuctionHighlights({ nextDate }) {
           </div>
           <div className="p-6 md:p-8">
             {data.locked ? (
-              <div className="h-full min-h-[220px] rounded-2xl border border-dashed border-stone-300 bg-stone-50 flex flex-col items-center justify-center text-center p-6" data-testid="home-auction-locked">
-                <Lock className="w-8 h-8 text-stone-400" />
-                <p className="mt-3 text-sm text-stone-600 max-w-xs">{c.locked}</p>
+              <div className="h-full min-h-[220px] flex flex-col" data-testid="home-auction-locked">
+                <div className="grid grid-cols-3 gap-3 flex-1">
+                  {(data.teasers || []).map((tz) => {
+                    const Icon = KIND_ICON[tz.item_type] || Car;
+                    return (
+                      <div key={tz.id} className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 aspect-[4/5] sm:aspect-[4/3]" data-testid={`home-auction-teaser-${tz.id}`}>
+                        {tz.photo_url ? (
+                          <img src={tz.photo_url} alt="" className="absolute inset-0 w-full h-full object-cover blur-md scale-110 select-none pointer-events-none" />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#1B2D5C]/15 to-[#C17767]/15" />
+                        )}
+                        <div className="absolute inset-0 bg-[#0F1B3A]/25" />
+                        <div className="relative h-full flex flex-col items-center justify-center text-center p-3">
+                          <div className="w-11 h-11 rounded-full bg-white/85 backdrop-blur flex items-center justify-center shadow">
+                            <Icon className="w-5 h-5 text-[#1B2D5C]" />
+                          </div>
+                          <div className="mt-2 text-[10px] uppercase tracking-widest font-semibold text-white drop-shadow">{KIND_LABEL[lang]?.[tz.item_type] || tz.item_type}</div>
+                          {tz.manufacture_year && <div className="text-xs text-white/90 drop-shadow">{tz.manufacture_year}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-xs text-stone-500 inline-flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> {c.locked}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

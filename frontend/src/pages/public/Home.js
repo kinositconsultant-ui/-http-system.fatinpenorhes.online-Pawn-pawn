@@ -3,7 +3,7 @@ import { useLang } from "../../context/LangContext";
 import { Button } from "../../components/ui/button";
 import {
   ArrowRight, ShieldCheck, Clock, FileSignature, Car, Bike, Smartphone, Truck,
-  UserPlus, Search, Banknote, KeyRound, Quote, MessageCircle, Calculator, MapPin, CheckCircle2,
+  UserPlus, Search, Banknote, KeyRound, Quote, MessageCircle, Calculator, MapPin, CheckCircle2, Star,
 } from "lucide-react";
 import { usePublicSite } from "../../lib/publicSite";
 import AuctionHighlights from "../../components/public/AuctionHighlights";
@@ -214,9 +214,14 @@ function Testimonials({ t, items, lang }) {
   const list = items && items.length ? items : null;
   return (
     <section className="max-w-7xl mx-auto px-6 lg:px-10 mt-20 md:mt-28" data-testid="home-testimonials">
-      <div className="max-w-2xl">
-        <Eyebrow>{t("home_testimonials_eyebrow")}</Eyebrow>
-        <H2>{t("home_testimonials_title")}</H2>
+      <div className="flex items-end justify-between gap-6 flex-wrap">
+        <div className="max-w-2xl">
+          <Eyebrow>{t("home_testimonials_eyebrow")}</Eyebrow>
+          <H2>{t("home_testimonials_title")}</H2>
+        </div>
+        <Link to="/review" className="inline-flex items-center gap-1 text-sm font-semibold text-[#C17767] hover:underline" data-testid="home-review-link">
+          <Star className="w-4 h-4" /> {t("leave_review")}
+        </Link>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mt-10">
         {(list || TESTIMONIALS).map((tm, i) => (

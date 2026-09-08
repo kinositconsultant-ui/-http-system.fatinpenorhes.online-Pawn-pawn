@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { MapPin, Mail, Phone, Clock } from "lucide-react";
 import { usePublicSite } from "../../lib/publicSite";
+import ReviewForm from "../../components/public/ReviewForm";
 import { toast } from "sonner";
 
 const blank = { name: "", email: "", phone: "", message: "" };
@@ -109,6 +110,9 @@ export default function Contact() {
           {sending ? "…" : t("send_message")}
         </Button>
       </form>
+      <div className="md:col-span-2" data-testid="contact-review-section">
+        <ReviewForm compact />
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ const dict = {
     home_hero_card_2: "Your item stored safely in our warehouse",
     home_hero_card_3: "Printed contract + WhatsApp reminders",
     home_shop_label: "Shop: Caicoli, Dili",
+    leave_review: "Leave a review",
     // Nav
     home: "Home",
     auction_items: "Auction Items",
@@ -441,6 +442,7 @@ const dict = {
     home_hero_card_2: "Ó nia sasán rai seguru iha ami nia armazén",
     home_hero_card_3: "Kontratu imprime + lembrasaun WhatsApp",
     home_shop_label: "Loja: Caicoli, Dili",
+    leave_review: "Husik ita-boot nia opiniaun",
     home: "Home",
     auction_items: "Lelaun",
     warehouse: "Warehouse",

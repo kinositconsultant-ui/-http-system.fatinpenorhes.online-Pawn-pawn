@@ -17,7 +17,7 @@ from pydantic import BaseModel, EmailStr
 
 import storage as objstore
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
-from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS, ITEM_KINDS
+from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS, ITEM_KINDS, TESTIMONIAL_DEFAULTS
 from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
 
 router = APIRouter()
@@ -131,16 +131,71 @@ async def public_auction_highlights(limit: int = 3):
     s = await get_settings_doc()
     locked = bool(s.get("warehouse_password_hash"))
     total = await db.auctions.count_documents({"status": "listed"})
-    items = []
-    if not locked:
-        for a in await db.auctions.find({"status": "listed"}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(limit, 6))):
-            item = await _fetch_item(a["item_type"], a["item_id"]) or {}
+    items, teasers = [], []
+    for a in await db.auctions.find({"status": "listed"}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(limit, 6))):
+        item = await _fetch_item(a["item_type"], a["item_id"]) or {}
+        if locked:
+            # Teaser only: blurred photo + kind + year. No brand / model / price behind the lock.
+            teasers.append({"id": a["id"], "item_type": a["item_type"], "manufacture_year": item.get("manufacture_year"),
+                            "photo_url": item.get("thumbnail_url") or item.get("photo_url", "")})
+        else:
             items.append({
                 "id": a["id"], "item_type": a["item_type"], "starting_price": a.get("starting_price", 0),
                 "brand": item.get("brand", ""), "model": item.get("model", ""), "name": item.get("name", ""),
                 "photo_url": item.get("photo_url", ""), "manufacture_year": item.get("manufacture_year"),
             })
-    return {"locked": locked, "total": total, "next_auction_date": s.get("next_auction_date") or "", "items": items}
+    return {"locked": locked, "total": total, "next_auction_date": s.get("next_auction_date") or "", "items": items, "teasers": teasers}
+
+
+class ReviewIn(BaseModel):
+    name: str
+    role: str = ""
+    text: str
+    lang: str = "tet"
+    contact: str = ""
+
+
+@router.post("/public/reviews")
+async def submit_review(payload: ReviewIn):
+    """Visitor-submitted testimonial; held for admin approval (Settings → Public Content)."""
+    name, text = payload.name.strip(), payload.text.strip()
+    if len(name) < 2 or len(text) < 10:
+        raise HTTPException(status_code=422, detail="Please give your name and a review of at least 10 characters")
+    if len(text) > 600:
+        raise HTTPException(status_code=422, detail="Review is too long (max 600 characters)")
+    doc = {"id": new_id(), "name": name[:80], "role": payload.role.strip()[:80], "text": text,
+           "lang": "tet" if payload.lang == "tet" else "en", "contact": payload.contact.strip()[:120],
+           "status": "pending", "created_at": utcnow_iso()}
+    await db.reviews.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "id": doc["id"]}
+
+
+@router.get("/reviews")
+async def list_reviews(status: str = "pending", _: dict = Depends(require_admin)):
+    return await db.reviews.find({"status": status}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@router.post("/reviews/{rid}/{action}")
+async def moderate_review(rid: str, action: str, user: dict = Depends(require_admin)):
+    """approve → becomes a visible homepage testimonial; reject → hidden from the queue."""
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="action must be approve or reject")
+    r = await db.reviews.find_one({"id": rid}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Review not found")
+    testimonials = None
+    if action == "approve":
+        s = await get_settings_doc()
+        current = s.get("testimonials") if isinstance(s.get("testimonials"), list) and s.get("testimonials") else [dict(x) for x in TESTIMONIAL_DEFAULTS]
+        entry = {"id": f"r-{rid}", "name": r["name"], "role": r.get("role", ""), "role_tet": r.get("role", ""),
+                 "text_en": r["text"] if r.get("lang") == "en" else "", "text_tet": r["text"] if r.get("lang") == "tet" else "",
+                 "visible": True, "source": "review"}
+        testimonials = [x for x in current if x.get("id") != entry["id"]] + [entry]
+        await db.settings.update_one({"id": "singleton"}, {"$set": {"testimonials": testimonials}}, upsert=True)
+    await db.reviews.update_one({"id": rid}, {"$set": {"status": "approved" if action == "approve" else "rejected",
+                                                       "moderated_by": user.get("id"), "moderated_at": utcnow_iso()}})
+    return {"ok": True, "status": action, "testimonials": testimonials}
 
 
 @router.get("/public/site-image/{slot}")

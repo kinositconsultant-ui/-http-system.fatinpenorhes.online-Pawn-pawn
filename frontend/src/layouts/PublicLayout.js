@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
 import { usePublicSite } from "../lib/publicSite";
+import PreviewRibbon from "../components/public/PreviewRibbon";
 import { Phone } from "lucide-react";
 
 const navItemClass = ({ isActive }) =>
@@ -19,11 +20,7 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9]">
-      {preview && (
-        <div className="sticky top-0 z-[60] bg-[#B8860B] text-[#0F1B3A] text-xs font-semibold text-center py-1.5 px-4" data-testid="site-preview-ribbon">
-          PREVIEW — showing unsaved Settings changes. Close this tab and click Save in Settings to publish.
-        </div>
-      )}
+      {preview && <PreviewRibbon />}
       {/* Top navy bar */}
       <header
         className="sticky top-0 z-30 bg-[#1A2A52] shadow-md"
@@ -142,6 +139,9 @@ export default function PublicLayout() {
             <p className="text-sm text-white/80" data-testid="footer-whatsapp">WhatsApp: {contact.contact_whatsapp}</p>
             <p className="text-sm text-white/80" data-testid="footer-email">{contact.contact_email}</p>
             <p className="text-sm text-white/60" data-testid="footer-hours">{contact.contact_hours}</p>
+            <Link to="/review" className="inline-block mt-3 text-sm text-[#F0B435] hover:underline" data-testid="footer-review-link">
+              {t("leave_review")} →
+            </Link>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-[#F0B435] mb-3 font-semibold">
