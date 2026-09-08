@@ -1240,3 +1240,23 @@ Banner for all signed-in staff after a System Restore so nobody works on stale s
 - BusinessDashboard `EVENT_META` gained `system.restored` → instant WS toast + Live Activity Feed entry.
 ### Tested (live E2E via Playwright)
 - Banner absent pre-restore → restore triggered mid-session → banner visible on next poll with restorer email → dismiss hides it. `/api/system/status` verified via curl.
+
+## Iteration 84 — Warehouse Release / Item Hand-over (2026-06) ✅
+Question answered: how a warehouse item leaves inventory after the contract is fully paid.
+Flow: contract redeemed → item.status `redeemed` (awaiting pickup) → warehouse "Ready for release" → staff record collector → item.status `released`, `active_contract_id` cleared → gate-pass PDF. Warehouse (Active) counters were already derived from active-contract statuses; release now closes physical custody.
+
+### Backend
+- `routes/payments.py`: on redemption set `contract.redeemed_at`, `item_released=false`, item status `redeemed`, `rt_notify("contract.redeemed")`. Payment delete that un-redeems reverts item `redeemed → pawned`.
+- `routes/warehouse.py`: `GET /api/warehouse/releases/pending`, `GET /api/warehouse/releases`, `POST /api/warehouse/releases/{cid}` (collector name/ID/relation, condition, fuel, km, notes, photo; 409 if already released, 400 if not redeemed), `GET /api/warehouse/releases/{cid}/pdf` (gate pass). Audit action `warehouse_release`, event `item.released`. All item kinds (warehouse group = car/motorcycle/pezadu, office = electronic). Orphan contracts with missing item doc are excluded from the queue.
+- `routes/contracts.py`: `released` items can be pawned again. `routes/inventory.py`: `by_status.released`.
+- `pdf_utils.build_release_pass_pdf` (bilingual Tetum/English, signature block).
+
+### Frontend
+- `components/WarehouseReleasePanel.js` (ReleaseQueue / ReleaseDialog / ReleaseHistory + PDF preview); `WarehouseReceipts.js` now has 4 tabs (Pending, History, Ready for release, Released).
+- `Items.js`: filter chips "Awaiting pickup" (redeemed) and "Released"; badge colour for released. `InventoryBanner` shows released count. `BusinessDashboard` EVENT_META for `contract.redeemed` / `item.released`.
+
+### Tested
+- Testing agent iteration_81: 16 pytest cases (`tests/test_iter81_warehouse_release.py`) + UI E2E all PASS.
+
+### Backlog (unchanged)
+- P2 Audit Log full JSON details; P3 Tetum homepage redesign; P3 clickable live feed rows; P3 VIP WhatsApp reminder timing; optional: "Gate pass" button on redeemed contracts in Contracts page.

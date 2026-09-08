@@ -38,6 +38,22 @@ const EVENT_META = {
     title: "New contract signed",
     desc: (p) => p.contract_number || "A new pawn contract was created",
   },
+  "contract.redeemed": {
+    Icon: HandCoins,
+    tone: "text-emerald-800",
+    bg: "bg-emerald-50",
+    kind: "success",
+    title: "Contract fully paid — ready for release",
+    desc: (p) => [p.contract_number, p.item_type].filter(Boolean).join(" · ") || "Item awaiting hand-over at warehouse",
+  },
+  "item.released": {
+    Icon: FileText,
+    tone: "text-teal-800",
+    bg: "bg-teal-50",
+    kind: "info",
+    title: "Item released to client",
+    desc: (p) => [p.contract_number, p.collector_name ? `collected by ${p.collector_name}` : ""].filter(Boolean).join(" · "),
+  },
   "auction.sold": {
     Icon: Gavel,
     tone: "text-amber-800",

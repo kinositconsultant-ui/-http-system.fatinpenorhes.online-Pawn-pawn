@@ -92,12 +92,20 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     doc["receipt_number"] = receipt_number
     doc["created_at"] = utcnow_iso()
     await db.payments.insert_one(doc)
+    was_redeemed = contract.get("status") == "redeemed"
     updated = await _recompute_contract_status(contract)
+    newly_redeemed = updated["status"] == "redeemed" and not was_redeemed
     if updated["status"] == "redeemed":
+        # Money is settled; the item now waits for physical hand-over (warehouse release).
         await db[COLLECTION_MAP[contract["item_type"]]].update_one(
             {"id": contract["item_id"]},
             {"$set": {"status": "redeemed"}},
         )
+        if newly_redeemed:
+            await db.contracts.update_one(
+                {"id": contract["id"]},
+                {"$set": {"redeemed_at": utcnow_iso(), "item_released": False}},
+            )
     await write_audit(user, "create", "payment", doc["id"], {
         "receipt_number": receipt_number,
         "amount": doc["amount"],
@@ -105,6 +113,12 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     })
     doc.pop("_id", None)
     rt_notify("payment.created", {"contract_id": doc["contract_id"], "amount": doc["amount"]})
+    if newly_redeemed:
+        rt_notify("contract.redeemed", {
+            "contract_id": contract["id"],
+            "contract_number": contract.get("contract_number"),
+            "item_type": contract.get("item_type"),
+        })
     return {"payment": doc, "contract": updated}
 
 
@@ -141,7 +155,16 @@ async def delete_payment(pid: str, user: dict = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Payment not found")
     contract = await db.contracts.find_one({"id": payment.get("contract_id")}, {"_id": 0})
     if contract:
-        await _recompute_contract_status(contract)
+        was_redeemed = contract.get("status") == "redeemed"
+        already_released = bool(contract.get("item_released"))
+        updated = await _recompute_contract_status(contract)
+        # Un-redeemed by the deletion: put the item back under pawn so counts stay consistent.
+        if was_redeemed and updated["status"] != "redeemed" and not already_released:
+            await db[COLLECTION_MAP[contract["item_type"]]].update_one(
+                {"id": contract["item_id"], "status": "redeemed"},
+                {"$set": {"status": "pawned"}},
+            )
+            await db.contracts.update_one({"id": contract["id"]}, {"$unset": {"redeemed_at": "", "item_released": ""}})
     await write_audit(user, "delete", "payment", pid, {
         "receipt_number": payment.get("receipt_number"),
         "amount": payment.get("amount"),

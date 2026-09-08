@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 81: Warehouse Release (outbound hand-over) flow end-to-end test. Wrote pytest suite covering redemption -> pending -> release -> history -> PDF -> re-pawn -> payment-delete revert (16 tests, all passing). UI E2E validated: 4 tabs on /warehouse-receipts (wh-tab-pending/history/release/released), Ready-for-release queue with card + Release dialog (prefills client name), save flow shows 'Item released' toast, Released tab count increments, gate-pass PDF button appears in history table. /items page shows 'Awaiting pickup' and 'Released' filter chips with counts. Business dashboard loads without crashing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BusinessDashboard", "issues": ["Recharts container reports width(-1)/height(-1) warnings on initial mount (visual charts still render). Consider providing an explicit min-height on ResponsiveContainer wrappers."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter81_warehouse_release.py",
+    "/app/test_reports/pytest/iter81_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "warehouse.py release_item correctly $unset active_contract_id and sets status 'released'.",
+    "releases_pending correctly filters orphan contracts (no item doc) - good.",
+    "Release dialog uses Radix Select for condition; default value 'good' works even when option click intercepted (fine).",
+    "PDF endpoint uses get_current_user (any auth user) rather than require_module('warehouse'); acceptable but consider tightening if audit desired."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter81_warehouse_release.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% of tested selectors"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "Test contracts + payments are created and cleaned up within the pytest module and UI test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full backend regression: pytest /app/backend/tests/test_iter81_warehouse_release.py. If DB in_stock car count runs low, tests skip gracefully. UI selectors verified: wh-tab-{pending,history,release,released}, wh-release-pending-{cid}, wh-release-open-{cid}, wh-release-dialog, wh-release-collector, wh-release-id, wh-release-condition, wh-release-save, wh-release-history-table, wh-release-pdf-{cid}, wh-release-empty, item-filter-redeemed, item-filter-released."
+}

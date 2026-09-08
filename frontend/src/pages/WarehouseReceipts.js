@@ -22,14 +22,18 @@ import {
   Fuel,
   Gauge,
   ClipboardCheck,
+  PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ReleaseQueue, ReleaseHistory } from "../components/WarehouseReleasePanel";
 
 const KIND_ICON = { car: Car, motorcycle: Bike, pezadu: Truck };
 
 export default function WarehouseReceipts() {
   const [pending, setPending] = useState([]);
   const [receipts, setReceipts] = useState([]);
+  const [releasePending, setReleasePending] = useState([]);
+  const [releases, setReleases] = useState([]);
   const [tab, setTab] = useState("pending");
   const [q, setQ] = useState("");
   const [receiveFor, setReceiveFor] = useState(null);
@@ -45,12 +49,16 @@ export default function WarehouseReceipts() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const [p, r] = await Promise.all([
+    const [p, r, rp, rh] = await Promise.all([
       api.get("/warehouse/pending"),
       api.get("/warehouse/receipts"),
+      api.get("/warehouse/releases/pending"),
+      api.get("/warehouse/releases"),
     ]);
     setPending(p.data);
     setReceipts(r.data);
+    setReleasePending(rp.data);
+    setReleases(rh.data);
   };
   useEffect(() => { load(); }, []);
 
@@ -126,15 +134,15 @@ export default function WarehouseReceipts() {
         <div>
           <div className="text-eyebrow">Warehouse Operations</div>
           <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mt-1">
-            Warehouse Receipts
+            Warehouse Receipts & Releases
           </h1>
           <p className="text-sm text-stone-600 mt-1 max-w-2xl">
-            After the office signs a contract, physical assets (car, motorcycle,
-            pezadu) are delivered here. Confirm receipt, record condition, fuel
-            level and mileage, and attach a photo for the audit trail.
+            Inbound: confirm receipt of pawned assets with condition, fuel and mileage.
+            Outbound: once a contract is fully paid, hand the item back to the client
+            and record who collected it — this closes custody and updates inventory.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={tab === "pending" ? "default" : "outline"}
             onClick={() => setTab("pending")}
@@ -153,8 +161,29 @@ export default function WarehouseReceipts() {
             <CheckCircle2 className="w-4 h-4 mr-1" />
             History ({receipts.length})
           </Button>
+          <Button
+            variant={tab === "release" ? "default" : "outline"}
+            onClick={() => setTab("release")}
+            data-testid="wh-tab-release"
+            className={tab === "release" ? "bg-emerald-700 hover:bg-emerald-800" : "border-emerald-300 text-emerald-800"}
+          >
+            <PackageCheck className="w-4 h-4 mr-1" />
+            Ready for release ({releasePending.length})
+          </Button>
+          <Button
+            variant={tab === "released" ? "default" : "outline"}
+            onClick={() => setTab("released")}
+            data-testid="wh-tab-released"
+            className={tab === "released" ? "bg-emerald-700 hover:bg-emerald-800" : "border-emerald-300 text-emerald-800"}
+          >
+            <CheckCircle2 className="w-4 h-4 mr-1" />
+            Released ({releases.length})
+          </Button>
         </div>
       </header>
+
+      {tab === "release" && <ReleaseQueue rows={releasePending} onReleased={load} />}
+      {tab === "released" && <ReleaseHistory rows={releases} />}
 
       {tab === "pending" && (
         <>

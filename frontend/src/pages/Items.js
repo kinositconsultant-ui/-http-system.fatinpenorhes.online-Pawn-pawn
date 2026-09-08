@@ -418,6 +418,8 @@ function ItemTable({ kind }) {
             all: rows.length,
             in_stock: rows.filter((r) => !r.status || r.status === "in_stock").length,
             pawned: rows.filter((r) => r.status === "pawned").length,
+            redeemed: rows.filter((r) => r.status === "redeemed").length,
+            released: rows.filter((r) => r.status === "released").length,
             sold: rows.filter((r) => r.status === "sold").length,
           }}
         />
@@ -612,6 +614,8 @@ function ItemTable({ kind }) {
                         ? "bg-amber-50 text-amber-800 border-amber-200"
                         : r.status === "redeemed"
                         ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : r.status === "released"
+                        ? "bg-teal-50 text-teal-800 border-teal-200"
                         : r.status === "auction"
                         ? "bg-orange-50 text-orange-800 border-orange-200"
                         : r.status === "sold"
@@ -675,6 +679,8 @@ function FilterChips({ value, onChange, counts }) {
     { key: "all", label: "All", color: "bg-stone-800 text-white border-stone-800" },
     { key: "in_stock", label: "In Stock", color: "bg-emerald-600 text-white border-emerald-600" },
     { key: "pawned", label: "Pawned", color: "bg-amber-600 text-white border-amber-600" },
+    { key: "redeemed", label: "Awaiting pickup", color: "bg-emerald-600 text-white border-emerald-600" },
+    { key: "released", label: "Released", color: "bg-teal-600 text-white border-teal-600" },
     { key: "sold", label: "Sold", color: "bg-stone-500 text-white border-stone-500" },
   ];
   return (

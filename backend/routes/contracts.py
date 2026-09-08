@@ -155,7 +155,7 @@ async def create_contract(payload: ContractIn, user: dict = Depends(require_not_
     item = await _fetch_item(payload.item_type, payload.item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    if item.get("status") not in ("in_stock", None):
+    if item.get("status") not in ("in_stock", "released", None):
         raise HTTPException(status_code=400, detail="Item is not available")
     try:
         cd = date.fromisoformat(payload.contract_date)

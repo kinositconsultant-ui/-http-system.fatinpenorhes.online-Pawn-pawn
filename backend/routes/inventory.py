@@ -87,7 +87,7 @@ async def inventory_analytics(_: dict = Depends(get_current_user)):
                  "count_location_warehouse": 0, "market_value_location_warehouse": 0.0}
     office = {"count_active": 0, "market_value_active": 0.0,
               "count_location_office": 0, "market_value_location_office": 0.0}
-    by_status = {"in_stock": 0, "pawned": 0, "redeemed": 0, "sold": 0, "auctioned": 0, "other": 0}
+    by_status = {"in_stock": 0, "pawned": 0, "redeemed": 0, "released": 0, "sold": 0, "auctioned": 0, "other": 0}
 
     for kind in ALL_KINDS:
         coll = db[COLLECTION_MAP[kind]]

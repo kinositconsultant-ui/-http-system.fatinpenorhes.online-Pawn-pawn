@@ -130,6 +130,7 @@ export default function InventoryBanner() {
           <StatusPill label="in stock" value={data?.by_status.in_stock} tone="bg-stone-100 text-stone-700 border-stone-300" />
           <StatusPill label="pawned" value={data?.by_status.pawned} tone="bg-sky-100 text-sky-800 border-sky-300" />
           <StatusPill label="redeemed" value={data?.by_status.redeemed} tone="bg-emerald-100 text-emerald-800 border-emerald-300" />
+          <StatusPill label="released" value={data?.by_status.released} tone="bg-teal-100 text-teal-800 border-teal-300" />
           <StatusPill label="sold" value={data?.by_status.sold} tone="bg-amber-100 text-amber-800 border-amber-300" />
           <StatusPill label="auctioned" value={data?.by_status.auctioned} tone="bg-rose-100 text-rose-800 border-rose-300" />
         </div>

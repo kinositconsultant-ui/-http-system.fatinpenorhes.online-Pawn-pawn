@@ -1122,6 +1122,85 @@ def build_invoices_list_pdf(invoices: list[dict]) -> bytes:
     return buf.getvalue()
 
 
+def build_release_pass_pdf(contract: dict, client: dict, item: dict) -> bytes:
+    """One-page bilingual hand-over receipt / gate pass for a redeemed item."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=False)
+    GREEN = colors.HexColor("#ECFDF5")
+    label = ParagraphStyle("RelLbl", parent=s["Small"], fontName="Helvetica-Bold", textColor=NAVY)
+    item_name = (item.get("name") or f'{item.get("brand", "")} {item.get("model", "")}'.strip() or "—") if item else "—"
+    released_at = (contract.get("item_released_at") or "")[:16].replace("T", " ")
+    relation = {"owner": "Kliente rasik · Owner", "representative": "Reprezentante · Representative"}.get(
+        contract.get("release_collector_relation"), contract.get("release_collector_relation") or "—")
+
+    def _kv(rows, widths=(6.2 * cm, 10.4 * cm)):
+        t = Table([[Paragraph(k, label), Paragraph(str(v if v not in (None, "") else "—"), s["Body"])] for k, v in rows],
+                  colWidths=list(widths))
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), GREEN),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.4, RULE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return t
+
+    story = [
+        _branded_header(s),
+        Paragraph("Resibu Entrega Sasán · Item Release / Gate Pass", s["DocTitle"]),
+        Paragraph(f"Kontratu · Contract <b>{contract.get('contract_number') or '—'}</b> — "
+                  f"selu tomak · fully paid", s["Center"]),
+        Spacer(1, 0.4 * cm),
+        Paragraph("1. Sasán · Item", s["Article"]),
+        _kv([
+            ("Sasán · Item", item_name),
+            ("Tipu · Type", contract.get("item_type")),
+            ("Matríkula / Seriál · Plate / Serial", item.get("plate") or item.get("serial")),
+            ("Kondisaun iha entrega · Condition at release", contract.get("release_condition")),
+            ("Kombustível · Fuel %", contract.get("release_fuel_percent")),
+            ("Kilometrajen · Mileage (km)", contract.get("release_mileage_km")),
+            ("Nota · Notes", contract.get("release_notes")),
+        ]),
+        Paragraph("2. Kliente no ema ne'ebé simu · Client & collector", s["Article"]),
+        _kv([
+            ("Kliente · Client", client.get("full_name")),
+            ("Telefone · Phone", client.get("phone")),
+            ("Ema ne'ebé simu · Collected by", contract.get("release_collector_name")),
+            ("Nú. ID · ID number", contract.get("release_collector_id_number")),
+            ("Relasaun · Relation", relation),
+        ]),
+        Paragraph("3. Entrega · Hand-over", s["Article"]),
+        _kv([
+            ("Data hahú kontratu · Contract date", contract.get("contract_date")),
+            ("Data selu tomak · Redeemed on", (contract.get("redeemed_at") or "")[:10]),
+            ("Data entrega · Released on", released_at),
+            ("Entrega husi · Released by", contract.get("released_by_name")),
+        ]),
+        Spacer(1, 0.3 * cm),
+        Paragraph(
+            "Ha'u konfirma katak ha'u simu fila sasán iha leten ho kondisaun ne'ebé deskreve. · "
+            "I confirm I have received the above item back in the condition described. "
+            "Fatin Penhores' custody of this item ends at the date and time above.",
+            s["Body"]),
+        Spacer(1, 1.2 * cm),
+    ]
+    sign = Table(
+        [["_______________________", "_______________________"],
+         [contract.get("release_collector_name") or client.get("full_name") or "—", contract.get("released_by_name") or "Fatin Penhores"],
+         ["Asinatura simu · Collector Signature", "Ofisiál Armazén · Warehouse Officer"]],
+        colWidths=[8 * cm, 8 * cm],
+    )
+    sign.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 1), (-1, 1), "Helvetica-Bold", 9.5),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("TEXTCOLOR", (0, 1), (-1, 1), NAVY),
+        ("TEXTCOLOR", (0, 2), (-1, 2), MUTED),
+    ]))
+    story.append(sign)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def build_loan_terms_card_pdf(contract: dict, client: dict, item: dict) -> bytes:
     """One-page bilingual "Terms of your Loan" card, personalized for a specific contract.
 
