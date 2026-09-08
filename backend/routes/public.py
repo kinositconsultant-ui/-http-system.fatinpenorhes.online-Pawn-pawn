@@ -12,10 +12,12 @@ import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr
 
+import storage as objstore
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
-from services import _fetch_item, get_settings_doc
+from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS
 from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
 
 router = APIRouter()
@@ -103,6 +105,33 @@ async def public_auction_status():
     """Same lock state as the warehouse — public pages share one visitor password."""
     s = await get_settings_doc()
     return {"locked": bool(s.get("warehouse_password_hash"))}
+
+
+@router.get("/public/site")
+async def public_site():
+    """Public website config: image URL per slot + contact details (no auth)."""
+    s = await get_settings_doc()
+    return public_site_config(s)
+
+
+@router.get("/public/site-image/{slot}")
+async def public_site_image(slot: str):
+    """Serve an admin-uploaded website image without auth (whitelisted slots only)."""
+    if slot not in SITE_IMAGE_SLOTS:
+        raise HTTPException(status_code=404, detail="Unknown image slot")
+    s = await get_settings_doc()
+    key = ((s.get("site_images") or {}).get(slot) or "").strip()
+    if not key or key.startswith("http"):
+        raise HTTPException(status_code=404, detail="No uploaded image for this slot")
+    record = await db.files.find_one({"storage_path": key, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        data, content_type = objstore.get_object(key)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Storage error: {e}")
+    return Response(content=data, media_type=record.get("content_type") or content_type,
+                    headers={"Cache-Control": "public, max-age=300"})
 
 
 @router.get("/public/warehouse")

@@ -26,6 +26,7 @@ from services import (
     _fetch_item,
     _recompute_contract_status,
     _decrypted_settings,
+    render_pickup_message,
 )
 import whatsapp as wapp
 from pdf_utils import build_receipt_pdf
@@ -126,29 +127,19 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     return {"payment": doc, "contract": updated}
 
 
-PICKUP_ITEM_LABEL = {"car": "kareta · car", "motorcycle": "motor · motorcycle",
-                     "pezadu": "ekipamentu pezadu · heavy equipment", "electronic": "eletróniku · electronic item"}
-
-
-async def _send_pickup_ready_whatsapp(contract: dict, actor: dict) -> dict:
+async def _send_pickup_ready_whatsapp(contract: dict, actor: dict, *, force: bool = False, template: str = "pickup_ready") -> dict:
     """Tell the client their loan is settled and the item is ready for collection. Never blocks the payment."""
+    settings = await _decrypted_settings()
+    if not force and settings.get("pickup_notify_enabled", True) is False:
+        return {"status": "disabled", "reason": "Pickup notifications are switched off in Settings"}
     client_doc = await db.clients.find_one({"id": contract.get("client_id")}, {"_id": 0}) or {}
     phone = (client_doc.get("phone") or "").strip()
     if not phone:
         return {"status": "skipped", "reason": "Client has no phone number"}
     name = client_doc.get("full_name") or "Kliente"
     cnum = contract.get("contract_number", "")
-    kind = PICKUP_ITEM_LABEL.get(contract.get("item_type"), "sasán · item")
-    body = (
-        f"Bondia {name}! Fatin Penhores konfirma katak kontratu {cnum} selu tomak ona. "
-        f"Ita-boot nia {kind} prontu atu foti iha ami-nia fatin (Caicoli, Dili). "
-        f"Favór lori ita-boot nia dokumentu identidade. Obrigadu!\n\n"
-        f"Hello {name}! Fatin Penhores confirms contract {cnum} is fully paid. "
-        f"Your {kind.split(' · ')[-1]} is ready for collection at our premises (Caicoli, Dili). "
-        f"Please bring your ID. Thank you!"
-    )
+    body = render_pickup_message(settings, name, cnum, contract.get("item_type"))
     try:
-        settings = await _decrypted_settings()
         result = await wapp.send_text(phone, body, settings)
     except Exception as exc:  # network / config errors must not fail the payment
         result = {"status": "failed", "error": str(exc)}
@@ -159,7 +150,7 @@ async def _send_pickup_ready_whatsapp(contract: dict, actor: dict) -> dict:
         "client_id": client_doc.get("id"),
         "client_phone": phone,
         "language": "tet+en",
-        "template": "pickup_ready",
+        "template": template,
         "parameters": [name, cnum],
         "body": body,
         "result": result,
@@ -169,7 +160,7 @@ async def _send_pickup_ready_whatsapp(contract: dict, actor: dict) -> dict:
         "actor_id": actor.get("id"),
         "created_at": utcnow_iso(),
     })
-    await write_audit(actor, "whatsapp_pickup_ready", "contract", contract["id"],
+    await write_audit(actor, f"whatsapp_{template}", "contract", contract["id"],
                       {"contract_number": cnum, "to": phone, "result_status": result.get("status")})
     return {"status": result.get("status"), "to": phone}
 

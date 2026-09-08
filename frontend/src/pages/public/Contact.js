@@ -5,13 +5,15 @@ import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { MapPin, Mail, Phone } from "lucide-react";
+import { MapPin, Mail, Phone, Clock } from "lucide-react";
+import { usePublicSite } from "../../lib/publicSite";
 import { toast } from "sonner";
 
 const blank = { name: "", email: "", phone: "", message: "" };
 
 export default function Contact() {
   const { t } = useLang();
+  const { contact } = usePublicSite();
   const [form, setForm] = useState(blank);
   const [sending, setSending] = useState(false);
 
@@ -38,13 +40,16 @@ export default function Contact() {
         </p>
         <div className="mt-8 space-y-4 text-sm">
           <div className="flex items-center gap-3 text-stone-700">
-            <MapPin className="w-4 h-4 text-[#1B2D5C]" /> Caicoli, Dili, Timor-Leste
+            <MapPin className="w-4 h-4 text-[#1B2D5C]" /> <span data-testid="contact-address">{contact.contact_address}</span>
           </div>
           <div className="flex items-center gap-3 text-stone-700">
-            <Mail className="w-4 h-4 text-[#1B2D5C]" /> fatinpenhores@gmail.com
+            <Mail className="w-4 h-4 text-[#1B2D5C]" /> <a href={`mailto:${contact.contact_email}`} data-testid="contact-email">{contact.contact_email}</a>
           </div>
           <div className="flex items-center gap-3 text-stone-700">
-            <Phone className="w-4 h-4 text-[#1B2D5C]" /> WhatsApp: +670 78372678
+            <Phone className="w-4 h-4 text-[#1B2D5C]" /> <a href={contact.whatsapp_link} target="_blank" rel="noopener noreferrer" data-testid="contact-whatsapp">WhatsApp: {contact.contact_whatsapp}</a>
+          </div>
+          <div className="flex items-center gap-3 text-stone-700">
+            <Clock className="w-4 h-4 text-[#1B2D5C]" /> <span data-testid="contact-hours">{contact.contact_hours}</span>
           </div>
         </div>
       </div>

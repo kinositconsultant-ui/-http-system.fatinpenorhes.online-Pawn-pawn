@@ -9,10 +9,13 @@ import { Card } from "../components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload } from "lucide-react";
+import PublicSiteCard from "../components/PublicSiteCard";
+import { loadPublicSite } from "../lib/publicSite";
 
 export default function Settings() {
   const { t } = useLang();
   const [s, setS] = useState(null);
+  const [siteDefaults, setSiteDefaults] = useState({});
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [testPhone, setTestPhone] = useState("");
@@ -29,6 +32,7 @@ export default function Settings() {
     api.get("/settings").then((r) => setS(r.data));
     api.get("/admin/backups").then((r) => setBackups(r.data)).catch(() => {});
     api.get("/admin/backups/schedule").then((r) => setSchedule(r.data)).catch(() => {});
+    loadPublicSite().then((site) => setSiteDefaults(site.images || {}));
   }, []);
 
   const onChange = (k, v) => setS((cur) => ({ ...cur, [k]: v }));
@@ -46,6 +50,7 @@ export default function Settings() {
       );
       const { data } = await api.put("/settings", payload);
       setS(data);
+      loadPublicSite(true).then((site) => setSiteDefaults(site.images || {}));
       toast.success("Settings saved");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
@@ -474,6 +479,48 @@ export default function Settings() {
               data-testid="settings-wa-template-tet"
             />
           </Field>
+          <div className="md:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 space-y-3" data-testid="pickup-notify-card">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-semibold text-sm text-emerald-900">"Ready for collection" WhatsApp</div>
+                <div className="text-xs text-stone-600 mt-0.5">
+                  Sent automatically the moment a contract is fully paid. Placeholders: <code className="font-mono">{"{name}"}</code>, <code className="font-mono">{"{contract}"}</code>, <code className="font-mono">{"{item}"}</code>. Leave a box empty to use the built-in wording.
+                </div>
+              </div>
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <span className="text-xs uppercase tracking-wider text-stone-500">
+                  {s.pickup_notify_enabled !== false ? "Enabled" : "Disabled"}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={s.pickup_notify_enabled !== false}
+                  onChange={(e) => onChange("pickup_notify_enabled", e.target.checked)}
+                  data-testid="pickup-notify-toggle"
+                  className="accent-emerald-700 w-5 h-5"
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Wording (Tetum)">
+                <Textarea
+                  rows={4}
+                  value={s.pickup_message_tet || ""}
+                  onChange={(e) => onChange("pickup_message_tet", e.target.value)}
+                  placeholder="Bondia {name}! Fatin Penhores konfirma katak kontratu {contract} selu tomak ona. Ita-boot nia {item} prontu atu foti…"
+                  data-testid="pickup-message-tet"
+                />
+              </Field>
+              <Field label="Wording (English)">
+                <Textarea
+                  rows={4}
+                  value={s.pickup_message_en || ""}
+                  onChange={(e) => onChange("pickup_message_en", e.target.value)}
+                  placeholder="Hello {name}! Fatin Penhores confirms contract {contract} is fully paid. Your {item} is ready for collection…"
+                  data-testid="pickup-message-en"
+                />
+              </Field>
+            </div>
+          </div>
           <Field label="Reminder days before due">
             <Input
               type="number"
@@ -553,6 +600,9 @@ export default function Settings() {
 
       {/* Daily overdue reminders (iter17) */}
       <RemindersCard s={s} onChange={onChange} />
+
+      {/* Public website: contact details + Home / Services pictures */}
+      <PublicSiteCard s={s} onChange={onChange} defaults={siteDefaults} />
 
       {/* Backups & Migration */}
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">

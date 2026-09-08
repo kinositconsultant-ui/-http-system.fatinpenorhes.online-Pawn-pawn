@@ -3,3 +3,22 @@
 .App {
     min-height: 100vh;
 }
+
+/* Public homepage motion + Tais textile motif */
+@keyframes fp-rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.fp-rise { animation: fp-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.fp-tais {
+    background-image: repeating-linear-gradient(
+        90deg,
+        #C17767 0 14px, #B8860B 14px 20px, #1B2D5C 20px 34px,
+        #FAFAF9 34px 38px, #4C7F62 38px 48px, #FAFAF9 48px 52px
+    );
+}
+.fp-tais-soft {
+    background-image: repeating-linear-gradient(
+        135deg, rgba(193,119,103,0.09) 0 2px, transparent 2px 14px
+    );
+}

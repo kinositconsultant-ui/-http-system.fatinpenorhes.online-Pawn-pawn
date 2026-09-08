@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useLang } from "../context/LangContext";
 import LangToggle from "../components/LangToggle";
+import { usePublicSite } from "../lib/publicSite";
 import { Phone } from "lucide-react";
 
 const navItemClass = ({ isActive }) =>
@@ -12,6 +13,7 @@ const navItemClass = ({ isActive }) =>
 
 export default function PublicLayout() {
   const { t } = useLang();
+  const { contact } = usePublicSite();
   const location = useLocation();
   const showWA = !location.pathname.startsWith("/login");
 
@@ -96,12 +98,12 @@ export default function PublicLayout() {
       {/* Floating WhatsApp button */}
       {showWA && (
         <a
-          href="https://wa.me/67078372678"
+          href={contact.whatsapp_link}
           target="_blank"
           rel="noopener noreferrer"
           data-testid="public-whatsapp-fab"
           className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#25D366] hover:bg-[#1EA952] text-white shadow-xl flex items-center justify-center transition-colors"
-          title="WhatsApp +670 78372678"
+          title={`WhatsApp ${contact.contact_whatsapp}`}
         >
           <Phone className="w-6 h-6" />
         </a>
@@ -131,9 +133,10 @@ export default function PublicLayout() {
             <div className="text-[10px] uppercase tracking-[0.2em] text-[#F0B435] mb-3 font-semibold">
               {t("contact")}
             </div>
-            <p className="text-sm text-white/80">Caicoli, Dili, Timor-Leste</p>
-            <p className="text-sm text-white/80">WhatsApp: +670 78372678</p>
-            <p className="text-sm text-white/80">fatinpenhores@gmail.com</p>
+            <p className="text-sm text-white/80" data-testid="footer-address">{contact.contact_address}</p>
+            <p className="text-sm text-white/80" data-testid="footer-whatsapp">WhatsApp: {contact.contact_whatsapp}</p>
+            <p className="text-sm text-white/80" data-testid="footer-email">{contact.contact_email}</p>
+            <p className="text-sm text-white/60" data-testid="footer-hours">{contact.contact_hours}</p>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-[#F0B435] mb-3 font-semibold">

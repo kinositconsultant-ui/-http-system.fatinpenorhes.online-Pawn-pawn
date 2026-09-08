@@ -1274,3 +1274,16 @@ Root cause: `/inventory/category-breakdown` counted every item record regardless
 - **Pickup reminder**: `routes/payments.py` `_send_pickup_ready_whatsapp` — on newly redeemed contract sends bilingual (Tetum+English) WhatsApp text via `whatsapp.send_text` (MOCKED when WhatsApp not configured), logs to `whatsapp_log` (template `pickup_ready`), audit `whatsapp_pickup_ready`; never blocks the payment. Response includes `pickup_notification`.
 - **Audit log details**: `AuditLog.js` `DetailsCell` — click summary to expand full pretty-printed JSON with Copy button; added new action filter options (whatsapp_pickup_ready, warehouse_receive, warehouse_release, restore).
 - Verified live via API + Playwright; release/interest regression tests pass.
+
+## Iteration 87 — Pickup toggle, clickable feed, Tetum homepage, overdue pickups (2026-06) ✅
+- **Pickup Reminder Toggle**: `SettingsIn.pickup_notify_enabled` + `pickup_message_tet/en` ({name} {contract} {item}); `services.render_pickup_message`; `_send_pickup_ready_whatsapp(force, template)` honours the toggle; Settings → WhatsApp card `pickup-notify-card`.
+- **Clickable Live Feed**: `BusinessDashboard.eventLink()` → rows navigate (`data-href`); `Contracts.js` supports `?contract=<id|number>` focus with `contracts-focus-pill`.
+- **Tetum Homepage**: `LangContext` defaults to `tet` on public paths (admin stays EN); `Home.js` rebuilt per `/app/design_guidelines.json` — hero with generated Dili image + glass rate card, tais stripe motif (`.fp-tais`), bento category mosaic with rate badges (Karreta 10% · Motorizada 15% · Eletróniku 15% · Pezadu 10%), navy 4-step section, testimonials, CTA. New i18n keys `home_*`. NOTE: homepage copy says motorcycles 15% per owner request, while Settings default `interest_rate_motorcycle` is still 10 — admin can change in Settings.
+- **Overdue Pickups**: `GET /api/warehouse/releases/overdue?days=7`, `days_waiting`/`last_nudge_at` on pending rows, `POST /api/warehouse/releases/{cid}/nudge` (WhatsApp, MOCKED when unconfigured, audit `whatsapp_pickup_nudge`); ReleaseQueue amber banner + "overdue only" filter + Nudge button.
+- Tested: testing agent iteration_82 — 10 backend tests + full UI E2E PASS.
+
+## Iteration 88 — Public website settings: pictures + contact details (2026-06) ✅
+- Settings → **Public Website** card (`components/PublicSiteCard.js`): contact_phone / contact_whatsapp / contact_email / contact_address / contact_hours + 10 image slots (5 Home, 5 Services) with Replace (upload via /api/upload → object storage) and Reset-to-default.
+- Backend: `SettingsIn.site_images` + contact_* fields; `services.SITE_IMAGE_SLOTS` (Timor-Leste generated defaults), `public_site_config()`; `GET /api/public/site` (no auth) and `GET /api/public/site-image/{slot}` (serves uploaded slot images publicly, whitelisted slots only).
+- Frontend: `lib/publicSite.js` (`usePublicSite`, cached); Home, Services, Contact, About and PublicLayout footer/WhatsApp FAB all read images + contact from it. Services page now uses 5 generated Timor-Leste-natural photos.
+- Verified live: upload → set slot → public route serves image → homepage shows it; contact edits reflected in footer/Contact/FAB; reset returns defaults.

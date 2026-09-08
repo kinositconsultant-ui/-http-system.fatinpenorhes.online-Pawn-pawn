@@ -6,8 +6,10 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import PdfPreviewDialog from "./PdfPreviewDialog";
-import { Car, Bike, Truck, Laptop, Search, PackageCheck, FileText, Fuel, Gauge, Camera, UserCheck } from "lucide-react";
+import { Car, Bike, Truck, Laptop, Search, PackageCheck, FileText, Fuel, Gauge, Camera, UserCheck, AlertTriangle, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+
+const OVERDUE_DAYS = 7;
 
 const KIND_ICON = { car: Car, motorcycle: Bike, pezadu: Truck, electronic: Laptop };
 const itemLabel = (r) => r.item?.name || `${r.item?.brand || ""} ${r.item?.model || ""}`.trim() || "—";
@@ -15,17 +17,47 @@ const fmtWhen = (v) => (v ? new Date(v).toLocaleString() : "—");
 
 export function ReleaseQueue({ rows, onReleased }) {
   const [q, setQ] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [target, setTarget] = useState(null);
+  const [nudging, setNudging] = useState(null);
+  const overdueCount = rows.filter((r) => (r.days_waiting || 0) >= OVERDUE_DAYS).length;
   const filtered = useMemo(() => {
-    if (!q.trim()) return rows;
+    let out = rows;
+    if (overdueOnly) out = out.filter((r) => (r.days_waiting || 0) >= OVERDUE_DAYS);
+    if (!q.trim()) return out;
     const s = q.toLowerCase();
-    return rows.filter((r) =>
+    return out.filter((r) =>
       [r.contract_number, r.client_name, r.item?.brand, r.item?.model, r.item?.plate]
         .filter(Boolean).some((v) => v.toLowerCase().includes(s)));
-  }, [rows, q]);
+  }, [rows, q, overdueOnly]);
+
+  const nudge = async (r) => {
+    setNudging(r.id);
+    try {
+      const { data } = await api.post(`/warehouse/releases/${r.id}/nudge`);
+      toast.success(data.status === "mocked" ? "Reminder logged (WhatsApp not configured — MOCK)" : "WhatsApp reminder sent");
+      onReleased();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send reminder");
+    } finally {
+      setNudging(null);
+    }
+  };
 
   return (
     <>
+      {overdueCount > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" data-testid="wh-overdue-banner">
+          <div className="flex items-center gap-2 text-sm text-amber-900">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span><span className="font-semibold">{overdueCount}</span> paid-off item{overdueCount > 1 ? "s" : ""} not collected for {OVERDUE_DAYS}+ days. Nudge the client via WhatsApp.</span>
+          </div>
+          <button type="button" onClick={() => setOverdueOnly((v) => !v)} data-testid="wh-overdue-filter"
+            className={`text-xs font-medium px-3 py-1 rounded-full border transition-colors ${overdueOnly ? "bg-amber-600 text-white border-amber-600" : "bg-white text-amber-900 border-amber-300 hover:border-amber-500"}`}>
+            {overdueOnly ? "Showing overdue only" : "Show overdue only"}
+          </button>
+        </div>
+      )}
       <Card className="p-3 border border-stone-200 shadow-none rounded-lg bg-white">
         <div className="relative">
           <Search className="absolute left-2 top-2.5 w-4 h-4 text-stone-400" />
@@ -41,12 +73,13 @@ export function ReleaseQueue({ rows, onReleased }) {
         )}
         {filtered.map((r) => {
           const Icon = KIND_ICON[r.item_type] || Car;
+          const overdue = (r.days_waiting || 0) >= OVERDUE_DAYS;
           return (
-            <Card key={r.id} className="p-4 border border-emerald-200 bg-emerald-50/30 hover:shadow-md transition-all"
+            <Card key={r.id} className={`p-4 border hover:shadow-md transition-all ${overdue ? "border-amber-300 bg-amber-50/40" : "border-emerald-200 bg-emerald-50/30"}`}
               data-testid={`wh-release-pending-${r.id}`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-600/10 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-emerald-700" />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${overdue ? "bg-amber-600/10" : "bg-emerald-600/10"}`}>
+                  <Icon className={`w-5 h-5 ${overdue ? "text-amber-700" : "text-emerald-700"}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-xs text-stone-500">{r.contract_number}</div>
@@ -59,12 +92,29 @@ export function ReleaseQueue({ rows, onReleased }) {
               <div className="mt-3 text-xs text-stone-600 space-y-1">
                 <div>Client: <span className="font-medium">{r.client_name || "—"}</span></div>
                 {r.item?.plate && <div>Plate: <span className="font-mono">{r.item.plate}</span></div>}
-                <div>Paid off: {r.redeemed_at ? r.redeemed_at.slice(0, 10) : "—"}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>Paid off: {r.redeemed_at ? r.redeemed_at.slice(0, 10) : "—"}</span>
+                  {r.days_waiting != null && (
+                    <span className={`px-1.5 py-0.5 rounded-full border text-[10px] font-medium ${overdue ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-stone-100 text-stone-600 border-stone-200"}`}
+                      data-testid={`wh-release-days-${r.id}`}>
+                      {r.days_waiting} day{r.days_waiting === 1 ? "" : "s"} waiting
+                    </span>
+                  )}
+                </div>
+                {r.last_nudge_at && <div className="text-[10px] text-stone-500">Last reminder: {fmtWhen(r.last_nudge_at)}</div>}
               </div>
-              <Button className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800" onClick={() => setTarget(r)}
-                data-testid={`wh-release-open-${r.id}`}>
-                <PackageCheck className="w-4 h-4 mr-1" /> Release to client
-              </Button>
+              <div className="mt-3 flex gap-2">
+                <Button className="flex-1 bg-emerald-700 hover:bg-emerald-800" onClick={() => setTarget(r)}
+                  data-testid={`wh-release-open-${r.id}`}>
+                  <PackageCheck className="w-4 h-4 mr-1" /> Release
+                </Button>
+                {overdue && (
+                  <Button variant="outline" className="border-[#25D366] text-emerald-800 hover:bg-emerald-50" disabled={nudging === r.id}
+                    onClick={() => nudge(r)} data-testid={`wh-release-nudge-${r.id}`} title="Send WhatsApp pickup reminder">
+                    <MessageCircle className="w-4 h-4 mr-1" /> {nudging === r.id ? "Sending…" : "Nudge"}
+                  </Button>
+                )}
+              </div>
             </Card>
           );
         })}

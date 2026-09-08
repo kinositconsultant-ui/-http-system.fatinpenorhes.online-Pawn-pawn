@@ -52,7 +52,76 @@ DEFAULT_SETTINGS = {
     "reminder_days_before": 3,
     "reminders_enabled": True,
     "opening_cash_balance": 0.0,
+    "pickup_notify_enabled": True,
+    "pickup_message_tet": "",
+    "pickup_message_en": "",
+    "site_images": {},
+    "contact_phone": "+670 78372678",
+    "contact_whatsapp": "+670 78372678",
+    "contact_email": "fatinpenhores@gmail.com",
+    "contact_address": "Caicoli, Dili, Timor-Leste",
+    "contact_hours": "Segunda–Sábadu · 09:00–18:00",
 }
+
+# Public-website image slots. Admins can override any slot from Settings → Public Website
+# (uploaded files are stored in object storage and served via /api/public/site-image/{slot}).
+_IMG = "https://static.prod-images.emergentagent.com/jobs/7e09fb06-54ad-4312-b74c-802a3b1278f0/images/"
+SITE_IMAGE_SLOTS = {
+    "home_hero": {"label": "Homepage hero", "default": _IMG + "2814e99c56332a78c1decdb6595a9ed90842ef98c7d1b806d0df3958c7e06646.jpeg"},
+    "home_car": {"label": "Homepage · Cars", "default": _IMG + "c34836af03801ceb2a1d17b24dab9755c02eddde6a528026f05954b4be4b4793.jpeg"},
+    "home_moto": {"label": "Homepage · Motorcycles", "default": _IMG + "565ecc42cfac57fb39339659fe1acd0a3af360ee75ed9ef093548424128fb1b7.jpeg"},
+    "home_elek": {"label": "Homepage · Electronics", "default": _IMG + "c6ae9d885b3a3f1fe0316ec4b308e772149fff6849b711dc78d0dcec9a7aa587.jpeg"},
+    "home_pez": {"label": "Homepage · Heavy equipment", "default": _IMG + "4345338453db1b69af389469d91b99f0e3a12d6c751285cfa1f2abd0e70fde52.jpeg"},
+    "svc_car": {"label": "Services · Car guarantee", "default": _IMG + "e633ef5e6f6d6d454979d04345aa1eed8e32225eade03a03369e917d8a379137.jpeg"},
+    "svc_moto": {"label": "Services · Motorcycle guarantee", "default": _IMG + "f76936e0dbf1b0f6ea8721c18c619bfb20a8b4329a4c804c71f5765cd2cae09a.jpeg"},
+    "svc_computer": {"label": "Services · Computer guarantee", "default": _IMG + "aad732dbf737126e6231fe8b5d8cc72a81b99bba5d9cf773a2dc7d0e01ec4d32.jpeg"},
+    "svc_phone": {"label": "Services · Phone guarantee", "default": _IMG + "bd0d725633a5579b25120b06b43458a0f65831d691ee2443f13e37b202400246.jpeg"},
+    "svc_heavy": {"label": "Services · Heavy equipment guarantee", "default": _IMG + "88986dcba32a527b73873383392c31b04f4d4bcccb33641e794123ffc04b2dbc.jpeg"},
+}
+CONTACT_KEYS = ("contact_phone", "contact_whatsapp", "contact_email", "contact_address", "contact_hours")
+
+
+def public_site_config(settings: dict) -> dict:
+    """What the public website needs: resolved image URL per slot + contact details."""
+    overrides = settings.get("site_images") or {}
+    images = {}
+    for slot, meta in SITE_IMAGE_SLOTS.items():
+        custom = (overrides.get(slot) or "").strip()
+        if custom.startswith("http"):
+            images[slot] = custom
+        elif custom:
+            images[slot] = f"/api/public/site-image/{slot}"  # storage key → served by public route
+        else:
+            images[slot] = meta["default"]
+    contact = {k: settings.get(k) or DEFAULT_SETTINGS[k] for k in CONTACT_KEYS}
+    digits = "".join(ch for ch in contact["contact_whatsapp"] if ch.isdigit())
+    contact["whatsapp_link"] = f"https://wa.me/{digits}" if digits else ""
+    return {"images": images, "contact": contact}
+
+PICKUP_DEFAULT_TET = (
+    "Bondia {name}! Fatin Penhores konfirma katak kontratu {contract} selu tomak ona. "
+    "Ita-boot nia {item} prontu atu foti iha ami-nia fatin (Caicoli, Dili). "
+    "Favór lori ita-boot nia dokumentu identidade. Obrigadu!"
+)
+PICKUP_DEFAULT_EN = (
+    "Hello {name}! Fatin Penhores confirms contract {contract} is fully paid. "
+    "Your {item} is ready for collection at our premises (Caicoli, Dili). "
+    "Please bring your ID. Thank you!"
+)
+PICKUP_ITEM_LABEL = {
+    "car": ("kareta", "car"), "motorcycle": ("motor", "motorcycle"),
+    "pezadu": ("ekipamentu pezadu", "heavy equipment"), "electronic": ("eletróniku", "electronic item"),
+}
+
+
+def render_pickup_message(settings: dict, name: str, contract_number: str, item_type: str) -> str:
+    """Bilingual (Tetum + English) 'ready for collection' body, using admin wording when set."""
+    tet_item, en_item = PICKUP_ITEM_LABEL.get(item_type, ("sasán", "item"))
+    tet = (settings.get("pickup_message_tet") or "").strip() or PICKUP_DEFAULT_TET
+    en = (settings.get("pickup_message_en") or "").strip() or PICKUP_DEFAULT_EN
+    def _fill(tpl, item):
+        return tpl.replace("{name}", name).replace("{contract}", contract_number).replace("{item}", item)
+    return f"{_fill(tet, tet_item)}\n\n{_fill(en, en_item)}"
 
 
 # ---------------------------------------------------------------------

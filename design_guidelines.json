@@ -1,86 +1,102 @@
 {
-  "theme": "Light",
-  "archetype": "Archetype 1: Organic & Earthy",
-  "domain": "Finance / Retail (Pawn Shop Management)",
+  "project_identity": {
+    "name": "Fatin Penhores Pawn System",
+    "location": "Caicoli, Dili, Timor-Leste",
+    "primary_language": "Tetum (tet)",
+    "secondary_language": "English (en) via toggle",
+    "archetype": "ORGANIC & EARTHY / OLD MONEY TECH (Trust, Security, Timorese Cultural Heritage)",
+    "design_persona": "E1 Anti-AI Designer - Fusion over Imitation with Subtle Tais Motif & Strong Tactile Identity"
+  },
+  "color_palette": {
+    "navy_primary": "#1B2D5C",
+    "navy_dark": "#0F1B3A",
+    "terracotta_accent": "#C17767",
+    "terracotta_dark": "#A96253",
+    "gold_highlight": "#B8860B",
+    "forest_green": "#4C7F62",
+    "sage_neutral": "#8F9779",
+    "cream_background": "#FAFAF9",
+    "stone_50": "#F9F9F8",
+    "stone_100": "#F5F5F4",
+    "stone_200": "#E7E5E4",
+    "stone_800": "#292524",
+    "stone_900": "#1C1917"
+  },
   "typography": {
-    "heading_font": "Outfit",
-    "body_font": "Work Sans",
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight text-stone-900 font-semibold",
-      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight text-stone-900 font-medium",
-      "h3": "text-xl sm:text-2xl text-stone-800 font-medium",
-      "h4": "text-lg sm:text-xl text-stone-800 font-medium",
-      "body": "text-base text-stone-600 leading-relaxed",
-      "small_label": "text-xs tracking-[0.2em] uppercase text-stone-500 font-semibold"
+    "display_font": "Outfit / serif display (font-display)",
+    "body_font": "Work Sans (font-sans)",
+    "h1_hero": "text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-[1.08]",
+    "h2_section": "text-3xl md:text-4xl lg:text-5xl tracking-tight leading-tight",
+    "h3_subsection": "text-xl md:text-2xl font-semibold",
+    "eyebrow_label": "text-[11px] uppercase tracking-[0.28em] font-semibold text-[#C17767]"
+  },
+  "image_urls": {
+    "hero_background": "https://images.unsplash.com/photo-1746438411098-f6c1fd25b220?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHxUaW1vciUyMExlc3RlJTIwRGlsaSUyMGxhbmRzY2FwZSUyMGNpdHklMjB2ZWhpY2xlfGVufDB8fHx8MTc4ODg2MjA3NHww&ixlib=rb-4.1.0&q=85",
+    "category_car": "https://images.unsplash.com/photo-1596466588448-6e6ceb1da41c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHw0fHxjYXIlMjBtb3RvcmN5Y2xlJTIwaGVhdnklMjBlcXVpcG1lbnQlMjBlbGVjdHJvbmljc3xlbnwwfHx8fDE3ODg4NjIwNzR8MA&ixlib=rb-4.1.0&q=85",
+    "category_moto": "https://images.unsplash.com/photo-1626840362735-afb64615318d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwzfHxjYXIlMjBtb3RvcmN5Y2xlJTIwaGVhdnklMjBlcXVpcG1lbnQlMjBlbGVjdHJvbmljc3xlbnwwfHx8fDE3ODg4NjIwNzR8MA&ixlib=rb-4.1.0&q=85",
+    "category_pezadu": "https://images.unsplash.com/photo-1760011604179-b75b048fd19f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwzfHxleGNhdmF0b3IlMjBjb25zdHJ1Y3Rpb24lMjB0cnVjayUyMHZlaGljbGUlMjBsYXB0b3AlMjBjYW1lcmF8ZW58MHx8fHwxNzg4ODYyMDc4fDA&ixlib=rb-4.1.0&q=85",
+    "category_eletroniku": "https://images.unsplash.com/photo-1590506978404-d3e577192a18?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxjYXIlMjBtb3RvcmN5Y2xlJTIwaGVhdnklMjBlcXVpcG1lbnQlMjBlbGVjdHJvbmljc3xlbnwwfHx8fDE3ODg4NjIwNzR8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "layout_and_sections": {
+    "hero_section": {
+      "style": "Full-bleed background with coastal/mountain Timor-Leste texture, dark gradient overlay from navy_dark (0.85) to navy_primary (0.5), subtle noise texture overlay",
+      "eyebrow_badge": "Live status indicator (emerald pulse) + Tetum tagline: 'Fatin Penhores Seguru & Transparente no Caicoli'",
+      "primary_ctas": [
+        {"label": "Simula Empréstimu (Loan Simulator)", "to": "/simulasaun", "testid": "home-cta-simulasaun", "style": "bg-[#C17767] hover:bg-[#A96253] text-white font-medium px-6 py-3 rounded-lg shadow-lg"},
+        {"label": "Haree Leilão (Auctions)", "to": "/auction", "testid": "home-cta-auction", "style": "bg-white/10 hover:bg-white/20 text-white border border-white/20 px-6 py-3 rounded-lg backdrop-blur-sm"},
+        {"label": "Fatin WhatsApp", "href": "https://wa.me/67078372678", "testid": "home-cta-whatsapp-hero", "style": "bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-lg flex items-center gap-2"}
+      ]
+    },
+    "trust_values_strip": {
+      "container": "3-column overlapping grid (-mt-12 md:-mt-16 z-20 max-w-7xl)",
+      "cards": [
+        {"title": "Jurus Funan Més (10% - 15%)", "body": "Taxa jurus transparenas, sem kustu subar. Kontratu legal ho kopia imprimi idak-idak.", "icon": "ShieldCheck"},
+        {"title": "Simu Osan Rápido / Same-Day Cash", "body": "Lori o ho Karreta, Motor ka Eletróniku, simu cash USD iha loron ne'e kedas.", "icon": "Clock"},
+        {"title": "Foti Hikas ho Dignidade", "body": "Pagu pasial, pagu jurus de'it ka selu hotu — hili prazu ne'ebé di'ak ba o.", "icon": "FileSignature"}
+      ]
+    },
+    "category_mosaic": {
+      "eyebrow": "KATEGORIA SASÁN",
+      "title": "Bena / Penhores Sasán Ne'ebé Ami Simu",
+      "subtitle": "Valorizasaun ágil no seguru ba veíkulu no ekipamentu oioin iha Dili",
+      "layout": "Grid asymmetrical tetris-inspired bento layout (1 md:2 lg:4 col)",
+      "items": [
+        {"key": "car", "title": "Karreta / Cars", "rate": "Jurus 10% / més", "body": "Sedan, SUV, Pickup no Van ho dokumentu STNK/BPKB kompletu.", "img": "category_car"},
+        {"key": "moto", "title": "Motor / Motorcycles", "rate": "Jurus 10% / més", "body": "Motor automatic, manual no trail ho xave no dokumentu fólio.", "img": "category_moto"},
+        {"key": "pez", "title": "Ekipamentu Pezadu / Heavy Eq.", "rate": "Jurus 10% / més", "body": "Excavator, Truck, Loader no masin konstrusaun nian.", "img": "category_pezadu"},
+        {"key": "elek", "title": "Eletróniku / Electronics", "rate": "Jurus 15% / més", "body": "Laptop, Smartphone, Kamera digital no TV LED foun.", "img": "category_eletroniku"}
+      ]
+    },
+    "four_step_process": {
+      "eyebrow": "PASU PENHORES 4",
+      "title": "Oinsá Pasu Penhores Sura Husi Inísiu no Simu Osan",
+      "steps": [
+        {"step": "01", "title": "1. Registu & Lori Sasán", "body": "Aproxima ba ami-nia loja iha Caicoli, Dili ho ID (BI/Pasaporte) no sasán ne'ebé atu bena.", "icon": "UserPlus"},
+        {"step": "02", "title": "2. Avaliasaun Ágil", "body": "Ami-nia ekipa foti auto no halo inspeksaun fiziku hodi fo valór préstamu máksimu.", "icon": "Search"},
+        {"step": "03", "title": "3. Asina & Simu Osan", "body": "Simu fólio kontratu formal no simu osan cash USD iha minutu balun de'it.", "icon": "Banknote"},
+        {"step": "04", "title": "4. Selu & Foti Hikas", "body": "Selu tuir prazu ka renova jurus de'it, lori hikas o-nia sasán seguru husi ami-nia armazén.", "icon": "KeyRound"}
+      ]
+    },
+    "testimonials_section": {
+      "eyebrow": "TESTEMUÑA HUSI KLIENTE",
+      "title": "Sua Voz, Ami-nia Kredibilidade",
+      "testimonials": [
+        {"text": "Prosesu lais tebes iha Caicoli. Ha'u bena ha'u-nia motor Honda hodi resolve urjénsia família nian no simu osan iha 20 minutu de'it.", "name": "Simao da Costa", "role": "Empresáriu, Dili"},
+        {"text": "Transparénsia total iha taxa jurus. Sira Rai ha'u-nia laptop ho seguru tebes iha armazén to'u ha'u selu fali.", "name": "Maria Fernandes", "role": "Estudante Unu. Dili"},
+        {"text": "Ami penhores Excavator Pezadu ba projetu nian. Kontratu claru tebes no atendimento amigável tebetebes.", "name": "João Pereira", "role": "Kontratista, Baucau"}
+      ]
+    },
+    "final_cta_section": {
+      "title": "Precisa Osan Kesh Urgente Iha Caicoli, Dili?",
+      "subtitle": "Vizita ami-nia loja agora ka kontaktu viá WhatsApp ba konsultasaun gratuitu no simulasaun préstamu.",
+      "location": "Loja: Caicoli, Dili, Timor-Leste (Besik Sentru Sidade)",
+      "whatsapp": "+670 78372678"
     }
   },
-  "colors": {
-    "background": "#FAFAF9",
-    "surface": "#FFFFFF",
-    "primary": "#2F4F4F",
-    "primary_hover": "#1D3333",
-    "secondary": "#8F9779",
-    "accent": "#C17767",
-    "accent_hover": "#A96253",
-    "text_main": "#1C1917",
-    "text_muted": "#57534E",
-    "border": "#E7E5E4",
-    "success": "#4C7F62",
-    "warning": "#D4A373",
-    "error": "#993333"
-  },
-  "layout": {
-    "spacing_system": "Generous spacing: p-6 or p-8 for cards, gap-6 for dashboard grids.",
-    "dashboard_grid": "Mode B (Control Room): grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6. Flat backgrounds with 1px border. No excessive shadows.",
-    "marketing_grid": "Mode A (Tetris Grid): Asymmetric, large breathable sections for the public site.",
-    "alignment": "Left-align complex data forms and paragraphs. Top-level headers can be centered if balancing the layout."
-  },
-  "components": {
-    "buttons": "Solid primary color for primary actions. Minimal border radius (rounded-md). hover:bg-opacity-90 transition-all.",
-    "cards": "Flat Solid surfaces. bg-white, 1px border-stone-200, shadow-sm. Internal padding p-6.",
-    "tables": "Shadcn based. Dense data. Horizontal scrollable for pawn items. Frozen headers. Include inline filters for active/redeemed/overdue/auction states.",
-    "forms": "Shadcn based. Use distinct fieldsets for Timor-Leste geography (municipality, posto, suco, aldeia).",
-    "navigation": "Sticky header with backdrop-blur-xl bg-white/70. Clear separation between public site links and admin dashboard CTA."
-  },
-  "media": [
-    {
-      "category": "hero_public",
-      "url": "https://images.unsplash.com/photo-1591325408953-ef9298125f96?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHx0aW1vciUyMGxlc3RlJTIwZGlsaSUyMGxhbmRzY2FwZXxlbnwwfHx8fDE3ODIxMjY2MTZ8MA&ixlib=rb-4.1.0&q=85",
-      "description": "Timor Leste Dili Landscape for the public-facing landing page hero to establish local trust."
-    },
-    {
-      "category": "pawn_jewelry_showcase",
-      "url": "https://images.unsplash.com/photo-1600003014755-ba31aa59c4b6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxqZXdlbHJ5JTIwbHV4dXJ5JTIwcGF3biUyMHdhdGNofGVufDB8fHx8MTc4MjEyNjYxNHww&ixlib=rb-4.1.0&q=85",
-      "description": "High-end watch, representing electronics/jewelry in the auction and warehouse sections."
-    },
-    {
-      "category": "pawn_vehicle_showcase",
-      "url": "https://images.pexels.com/photos/13574410/pexels-photo-13574410.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "description": "Warehouse garage with vehicles, representing the pawned cars/motorcycles storage."
-    }
-  ],
-  "accessibility_and_testing": {
-    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='submit-contract-btn', data-testid='client-id-input').",
-    "contrast": "Text over backgrounds must meet APCA or minimum WCAG AA. Interactive elements must highlight clearly on focus/hover."
-  },
-  "specific_flows": {
-    "dashboard_kpis": "Cards showing Total clients, Active contracts, Total loan amount (USD), Total payments, Profit/interest summary, Overdue contracts.",
-    "client_registration": "Forms including fields for BI/Electoral/Passport, phone, address, municipality, posto, suco, aldeia.",
-    "pawn_item_management": "Tabs or separate forms for Car, Motorcycle, Electronic. Vehicles require plate, chassis, fuel %. Electronics require brand, model, serial. Include document/photo upload dropzones.",
-    "contract_module": "Auto-generate CTR-YYYY-####. Loan amount input, interest rate select (10/15%), date pickers for contract and due date.",
-    "payment_module": "Input for full/partial/interest-only. Display remaining balance. Provide print receipt CTA.",
-    "bilingual": "UI copy structured to allow easy translation file mapping (EN/PT toggle in header)."
-  },
-  "instructions_to_main_agent": [
-    "Build the application using React (.js files, not .tsx), Tailwind CSS, and Shadcn UI components.",
-    "Implement a hybrid fullstack architecture: an admin dashboard and public marketing pages.",
-    "Update tailwind.config.js to include fonts 'Outfit' and 'Work Sans' and the specified organic color palette.",
-    "Use 'lucide-react' for all iconography.",
-    "Ensure the dashboard uses a 'Control Room' grid layout for the 6 requested KPIs.",
-    "Implement the complex inventory tables for pawn items with horizontal scroll and precise column headers.",
-    "Add 'data-testid' to ALL interactive elements (buttons, inputs, links, table rows).",
-    "Create a bilingual toggle component (EN/PT) that updates state/context.",
-    "Never use placeholder image services. Use the exact media URLs provided in the media section.",
-    "Forms must handle the specific Timor-Leste address taxonomy (municipality, posto, suco, aldeia)."
-  ]
+  "general_ui_ux_guidelines": {
+    "data_testids": "Mandatory on all interactive elements (buttons, links, cards, tabs, inputs)",
+    "responsive_spacing": "Mobile-first, generous padding (p-6, py-16, py-24), grid-cols-1 breaking to md:grid-cols-2 lg:grid-cols-4",
+    "tais_motif_accent": "Subtle Timorese geometric woven Tais border lines or background patterns (#C17767 and #B8860B) to ground the design locally",
+    "theme_support": "Navy primary (#1B2D5C) with Terracotta (#C17767) accents and warm stone neutrals (#FAFAF9 / #F5F5F4)"
+  }
 }

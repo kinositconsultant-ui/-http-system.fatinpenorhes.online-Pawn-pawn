@@ -105,8 +105,45 @@ async def releases_pending(_: dict = Depends(require_module("warehouse"))):
     ).sort("redeemed_at", -1).to_list(2000)
     cmap = await _client_map()
     rows = [await _release_row(c, cmap) for c in contracts]
+    now = datetime.now(timezone.utc)
+    for r in rows:
+        r["days_waiting"] = _days_since(r.get("redeemed_at"), now)
+        r["last_nudge_at"] = next((c.get("pickup_nudge_at") for c in contracts if c["id"] == r["id"]), None)
     # Nothing to hand over if the item record no longer exists (legacy/orphan contracts).
     return [r for r in rows if r["item"]]
+
+
+def _days_since(iso: Optional[str], now: datetime) -> Optional[int]:
+    if not iso:
+        return None
+    try:
+        return max(0, (now - datetime.fromisoformat(iso.replace("Z", "+00:00"))).days)
+    except ValueError:
+        return None
+
+
+@router.get("/warehouse/releases/overdue")
+async def releases_overdue(days: int = 7, _: dict = Depends(require_module("warehouse"))):
+    """Paid-off items not collected for `days`+ days (default 7)."""
+    rows = await releases_pending(_)
+    return [r for r in rows if (r.get("days_waiting") or 0) >= max(1, days)]
+
+
+@router.post("/warehouse/releases/{cid}/nudge")
+async def release_nudge(cid: str, user: dict = Depends(require_module("warehouse"))):
+    """Send the client a WhatsApp reminder that their item is still waiting for collection."""
+    from routes.payments import _send_pickup_ready_whatsapp  # noqa: PLC0415
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    if c.get("status") != "redeemed" or c.get("item_released"):
+        raise HTTPException(status_code=400, detail="Item is not awaiting collection")
+    result = await _send_pickup_ready_whatsapp(c, user, force=True, template="pickup_nudge")
+    if result.get("status") in ("skipped", "failed"):
+        raise HTTPException(status_code=400, detail=result.get("reason") or result.get("error") or "Send failed")
+    now = utcnow_iso()
+    await db.contracts.update_one({"id": cid}, {"$set": {"pickup_nudge_at": now}, "$inc": {"pickup_nudge_count": 1}})
+    return {**result, "nudged_at": now}
 
 
 @router.get("/warehouse/releases")

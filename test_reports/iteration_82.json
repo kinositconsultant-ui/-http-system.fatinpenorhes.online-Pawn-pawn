@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 82: Verified 4 features (Pickup Reminder Toggle, Clickable Live Feed, Tetum Homepage default, Overdue Pickups w/ Nudge). Backend: 10/10 pytest passing (test_iter82_pickup_overdue.py) covering GET/PUT /api/settings pickup fields, disabled -> pickup_notification.status='disabled', enabled + custom EN template -> 'mocked' + rendered placeholders in whatsapp/logs, /warehouse/releases/pending has days_waiting+last_nudge_at, /warehouse/releases/overdue?days=7 filters ≥7d and lists seeded CTR-2026-0899 (10 days), POST nudge -> mocked + audit log 'whatsapp_pickup_nudge' + whatsapp_log template 'pickup_nudge' + last_nudge_at set, 400 on non-redeemed, 401 unauthenticated. Frontend: Public homepage in a fresh context defaults to Tetum h1 'Penhór ho konfiansa. Foti hikas ho dignidade.' with EN toggle switching copy; all required data-testids present (home-hero, home-hero-card desktop, home-cta-simulasaun/auction/whatsapp-hero, 4 home-category-*, 4 home-step-*, 3 home-testimonial-*, home-final-cta); no horizontal overflow at 390px; /login defaults to EN. Settings page shows pickup-notify-card + pickup-notify-toggle + pickup-message-tet/en textareas; toggling + saving persists across reload. Warehouse Ready-for-release tab shows amber wh-overdue-banner (1 count), wh-overdue-filter, seeded overdue card with wh-release-days-{cid} ('10 days waiting') and wh-release-nudge-{cid}; clicking Nudge shows toast 'Reminder logged (WhatsApp not configured — MOCK)' and card updates with 'Last reminder: <timestamp>'. Live Feed: after POST /api/payments (interest_only $10) on active contract on /business, live-feed-row-0 appears with data-href='/payments?contract=<id>' and clicking navigates to filtered /payments. /contracts?contract=<id> shows contracts-focus-pill 'contract · CTR-...' and filtered list (1 of 896). Regression: released seeded CTR-2026-0899 via POST /api/warehouse/releases/{cid} (HTTP 200), deleted contract (HTTP 200), car returned to in_stock — all clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter82_pickup_overdue.py",
+    "/app/test_reports/pytest/iter82_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Nudge endpoint responds correctly with mocked status and phone; audit trail complete.",
+    "Pickup message renderer correctly substitutes {name}/{contract}/{item} placeholders in EN body; verified via /api/whatsapp/logs.",
+    "PublicLayout LangContext defaults to Tetum on first visit (no localStorage) and correctly keeps admin console EN.",
+    "Contracts focus pill 'Clear filter ×' works but the × button could be given a distinct data-testid (e.g. contracts-focus-pill-clear) to make automated tests more reliable — currently there are multiple × icons on the page. Non-blocking."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter82_pickup_overdue.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of tested selectors"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "Test contracts created and cleaned up within pytest module; seeded overdue CTR-2026-0899 released + deleted at end of regression; car item returned to in_stock.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend suite: pytest /app/backend/tests/test_iter82_pickup_overdue.py (requires REACT_APP_BACKEND_URL in env). Seed cid at /tmp/cid3 was released during regression cleanup — recreate if follow-up tests need it. Frontend selectors verified: pickup-notify-card, pickup-notify-toggle, pickup-message-tet/en, wh-overdue-banner, wh-overdue-filter, wh-release-days-{cid}, wh-release-nudge-{cid}, live-feed-row-0 (data-href), contracts-focus-pill, home-hero, home-hero-card, home-cta-simulasaun/auction/whatsapp-hero, home-category-*, home-step-*, home-testimonial-*, home-final-cta.",
+  "rca of the issue": "N/A — no failures."
+}

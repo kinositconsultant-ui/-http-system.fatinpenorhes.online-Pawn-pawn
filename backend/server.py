@@ -272,6 +272,15 @@ class SettingsIn(BaseModel):
     next_auction_date: str = ""  # ISO date shown on public catalogue and PDF; empty = "TBA"
     opening_cash_balance: float = 0.0  # Cash the shop already had before the system began tracking; added to Cash on Hand.
     admin_alerts_phone: str = ""  # Optional WhatsApp number (E.164, e.g. +67078372678) to receive capital-installment reminders alongside email.
+    pickup_notify_enabled: bool = True  # Auto WhatsApp "item ready for collection" when a contract is fully paid
+    pickup_message_tet: str = ""  # Placeholders: {name} {contract} {item}; empty = built-in default
+    pickup_message_en: str = ""
+    site_images: dict = {}  # slot -> storage_path or absolute URL (see services.SITE_IMAGE_SLOTS)
+    contact_phone: str = ""
+    contact_whatsapp: str = ""
+    contact_email: str = ""
+    contact_address: str = ""
+    contact_hours: str = ""
 
 
 @api.get("/settings")

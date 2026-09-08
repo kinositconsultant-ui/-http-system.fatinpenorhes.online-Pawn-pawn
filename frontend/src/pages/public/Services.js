@@ -1,12 +1,22 @@
 import { Link } from "react-router-dom";
 import { useLang } from "../../context/LangContext";
 import { Car, Bike, Cpu, Smartphone, Truck, ChevronRight } from "lucide-react";
+import { usePublicSite } from "../../lib/publicSite";
+
+const B = "https://static.prod-images.emergentagent.com/jobs/7e09fb06-54ad-4312-b74c-802a3b1278f0/images/";
+const FALLBACK = {
+  svc_car: B + "e633ef5e6f6d6d454979d04345aa1eed8e32225eade03a03369e917d8a379137.jpeg",
+  svc_moto: B + "f76936e0dbf1b0f6ea8721c18c619bfb20a8b4329a4c804c71f5765cd2cae09a.jpeg",
+  svc_computer: B + "aad732dbf737126e6231fe8b5d8cc72a81b99bba5d9cf773a2dc7d0e01ec4d32.jpeg",
+  svc_phone: B + "bd0d725633a5579b25120b06b43458a0f65831d691ee2443f13e37b202400246.jpeg",
+  svc_heavy: B + "88986dcba32a527b73873383392c31b04f4d4bcccb33641e794123ffc04b2dbc.jpeg",
+};
 
 const SERVICES = [
   {
     key: "car",
+    slot: "svc_car",
     Icon: Car,
-    img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80",
     titleEn: "Car Guarantee",
     titleTet: "Garantia Karreta",
     descEn: "Loans with car, pickup or commercial vehicle as collateral.",
@@ -14,8 +24,8 @@ const SERVICES = [
   },
   {
     key: "motorcycle",
+    slot: "svc_moto",
     Icon: Bike,
-    img: "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=900&q=80",
     titleEn: "Motorcycle Guarantee",
     titleTet: "Garantia Motor",
     descEn: "Use your motorcycle as collateral for a quick loan.",
@@ -23,8 +33,8 @@ const SERVICES = [
   },
   {
     key: "computer",
+    slot: "svc_computer",
     Icon: Cpu,
-    img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80",
     titleEn: "Computer Guarantee",
     titleTet: "Garantia Komputer",
     descEn: "Laptops, desktops, monitors and other IT equipment.",
@@ -32,8 +42,8 @@ const SERVICES = [
   },
   {
     key: "phone",
+    slot: "svc_phone",
     Icon: Smartphone,
-    img: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=80",
     titleEn: "Phone Guarantee",
     titleTet: "Garantia Telefone",
     descEn: "Smartphones and tablets can be used as collateral.",
@@ -41,8 +51,8 @@ const SERVICES = [
   },
   {
     key: "heavy",
+    slot: "svc_heavy",
     Icon: Truck,
-    img: "https://images.unsplash.com/photo-1591768793355-74d04bb6608f?auto=format&fit=crop&w=900&q=80",
     titleEn: "Heavy Equipment Guarantee",
     titleTet: "Garantia Pezadu",
     descEn: "Forklift, tractor, loader, heavy duty truck — accepted as collateral.",
@@ -52,6 +62,7 @@ const SERVICES = [
 
 export default function Services() {
   const { lang } = useLang();
+  const { images } = usePublicSite();
   return (
     <section className="bg-white py-16">
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
@@ -70,7 +81,7 @@ export default function Services() {
             >
               <div className="aspect-[16/10] overflow-hidden">
                 <img
-                  src={s.img}
+                  src={images[s.slot] || FALLBACK[s.slot]}
                   alt={s.key}
                   className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                 />

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
@@ -17,6 +18,31 @@ const fmt0 = (n) =>
   }).format(Number(n || 0));
 
 const REFRESH_MS = 60000;
+
+// Where a live-feed row should take the user when clicked.
+const eventLink = (kind, p = {}) => {
+  switch (kind) {
+    case "payment.created":
+      return p.contract_id ? `/payments?contract=${p.contract_id}` : "/payments";
+    case "contract.created":
+    case "contract.redeemed":
+      return p.contract_id ? `/contracts?contract=${p.contract_id}` : "/contracts";
+    case "item.released":
+      return "/warehouse-receipts";
+    case "auction.sold":
+      return "/auctions";
+    case "expense.created":
+    case "funding_source.created":
+    case "funding_repayment.created":
+      return "/finance";
+    case "inspection.reimbursed":
+      return "/inspections";
+    case "system.restored":
+      return "/settings";
+    default:
+      return null;
+  }
+};
 const FEED_MAX = 10;
 
 // Central event → display metadata. Toasts and the Live Activity Feed both
@@ -477,6 +503,7 @@ function relTime(ts) {
 }
 
 function LiveActivityFeed({ events, live }) {
+  const navigate = useNavigate();
   // Tick every 30s so relative timestamps stay fresh even when no new event arrives.
   const [, force] = useState(0);
   useEffect(() => {
@@ -511,11 +538,20 @@ function LiveActivityFeed({ events, live }) {
           {events.map((e, idx) => {
             const meta = EVENT_META[e.kind];
             const Icon = meta?.Icon || Activity;
+            const href = eventLink(e.kind, e.payload);
             return (
               <div
                 key={`${e.receivedAt}-${idx}`}
-                className="py-2 flex items-center gap-2 text-xs"
+                role={href ? "button" : undefined}
+                tabIndex={href ? 0 : undefined}
+                onClick={() => href && navigate(href)}
+                onKeyDown={(ev) => href && (ev.key === "Enter" || ev.key === " ") && navigate(href)}
+                title={href ? "Open source record" : undefined}
+                className={`py-2 flex items-center gap-2 text-xs rounded-md -mx-1 px-1 transition-colors ${
+                  href ? "cursor-pointer hover:bg-stone-50 focus:outline-none focus:bg-stone-50" : ""
+                }`}
                 data-testid={`live-feed-row-${idx}`}
+                data-href={href || undefined}
               >
                 <div className={`p-1.5 rounded ${meta?.bg || "bg-stone-100"}`}>
                   <Icon className={`w-3.5 h-3.5 ${meta?.tone || "text-stone-600"}`} />

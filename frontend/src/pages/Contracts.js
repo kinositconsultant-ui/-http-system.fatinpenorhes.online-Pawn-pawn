@@ -311,15 +311,19 @@ export default function Contracts() {
   // Dashboard link here with `?status=active|overdue|grace_period|redeemed|auction_ready`.
   // Legacy `?status=overdue` links are treated as `grace_period` (same 1-10 day window).
   const monthFilter = searchParams.get("month") || "";
+  const contractFocus = searchParams.get("contract") || "";
   const filteredRows = useMemo(() => {
     let out = rows;
+    if (contractFocus) {
+      return out.filter((r) => r.id === contractFocus || r.contract_number === contractFocus);
+    }
     if (statusFilter) {
       const sf = statusFilter === "overdue" ? "grace_period" : statusFilter;
       out = out.filter((r) => r.status === sf || (sf === "grace_period" && r.status === "overdue"));
     }
     if (monthFilter) out = out.filter((r) => (r.contract_date || "").startsWith(monthFilter));
     return out;
-  }, [rows, statusFilter, monthFilter]);
+  }, [rows, statusFilter, monthFilter, contractFocus]);
   const clearStatusFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("status");
@@ -720,13 +724,18 @@ export default function Contracts() {
       )}
 
       <div className="rounded-lg border border-stone-200 bg-white overflow-x-auto">
-        {(statusFilter || monthFilter) && (
+        {(statusFilter || monthFilter || contractFocus) && (
           <div
             className="px-4 py-2 border-b border-stone-200 bg-stone-50 flex items-center justify-between flex-wrap gap-2 text-sm"
             data-testid="contracts-filter-pill"
           >
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-stone-500">Filtered:</span>
+              {contractFocus && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium" data-testid="contracts-focus-pill">
+                  contract · {filteredRows[0]?.contract_number || contractFocus.slice(0, 8)}
+                </span>
+              )}
               {statusFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-300 text-xs font-medium uppercase tracking-wider">
                   status · {statusFilter.replace(/_/g, " ")}
