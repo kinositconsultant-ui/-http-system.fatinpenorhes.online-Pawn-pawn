@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from "sonner";
 import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload } from "lucide-react";
 import PublicSiteCard from "../components/PublicSiteCard";
+import PublicContentCard from "../components/PublicContentCard";
 import { loadPublicSite } from "../lib/publicSite";
 
 export default function Settings() {
@@ -32,7 +33,7 @@ export default function Settings() {
     api.get("/settings").then((r) => setS(r.data));
     api.get("/admin/backups").then((r) => setBackups(r.data)).catch(() => {});
     api.get("/admin/backups/schedule").then((r) => setSchedule(r.data)).catch(() => {});
-    loadPublicSite().then((site) => setSiteDefaults(site.images || {}));
+    loadPublicSite().then((site) => setSiteDefaults(site));
   }, []);
 
   const onChange = (k, v) => setS((cur) => ({ ...cur, [k]: v }));
@@ -50,7 +51,7 @@ export default function Settings() {
       );
       const { data } = await api.put("/settings", payload);
       setS(data);
-      loadPublicSite(true).then((site) => setSiteDefaults(site.images || {}));
+      loadPublicSite(true).then((site) => setSiteDefaults(site));
       toast.success("Settings saved");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
@@ -602,7 +603,8 @@ export default function Settings() {
       <RemindersCard s={s} onChange={onChange} />
 
       {/* Public website: contact details + Home / Services pictures */}
-      <PublicSiteCard s={s} onChange={onChange} defaults={siteDefaults} />
+      <PublicSiteCard s={s} onChange={onChange} defaults={siteDefaults.images || {}} />
+      <PublicContentCard s={s} onChange={onChange} defaults={siteDefaults} />
 
       {/* Backups & Migration */}
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">

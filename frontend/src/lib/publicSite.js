@@ -20,6 +20,10 @@ const resolve = (data) => ({
     Object.entries(data.images || {}).map(([k, v]) => [k, v.startsWith("/api/") ? `${BACKEND_URL}${v}` : v])
   ),
   contact: { ...DEFAULT_CONTACT, ...(data.contact || {}) },
+  rates: data.rates || {},
+  services: data.services || {},
+  testimonials: data.testimonials || [],
+  map_embed_url: data.map_embed_url || "",
 });
 
 export function loadPublicSite(force = false) {
@@ -28,7 +32,7 @@ export function loadPublicSite(force = false) {
     inflight = api
       .get("/public/site")
       .then((r) => { cache = resolve(r.data); return cache; })
-      .catch(() => { cache = { images: {}, contact: DEFAULT_CONTACT }; return cache; })
+      .catch(() => { cache = { images: {}, contact: DEFAULT_CONTACT, rates: {}, services: {}, testimonials: [], map_embed_url: "" }; return cache; })
       .finally(() => { inflight = null; });
   }
   return inflight;
@@ -36,7 +40,7 @@ export function loadPublicSite(force = false) {
 
 // Images + contact details for the public website, editable by admins in Settings → Public Website.
 export function usePublicSite() {
-  const [site, setSite] = useState(cache || { images: {}, contact: DEFAULT_CONTACT });
+  const [site, setSite] = useState(cache || { images: {}, contact: DEFAULT_CONTACT, rates: {}, services: {}, testimonials: [], map_embed_url: "" });
   useEffect(() => {
     let alive = true;
     loadPublicSite().then((s) => alive && setSite(s));

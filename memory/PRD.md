@@ -1287,3 +1287,10 @@ Root cause: `/inventory/category-breakdown` counted every item record regardless
 - Backend: `SettingsIn.site_images` + contact_* fields; `services.SITE_IMAGE_SLOTS` (Timor-Leste generated defaults), `public_site_config()`; `GET /api/public/site` (no auth) and `GET /api/public/site-image/{slot}` (serves uploaded slot images publicly, whitelisted slots only).
 - Frontend: `lib/publicSite.js` (`usePublicSite`, cached); Home, Services, Contact, About and PublicLayout footer/WhatsApp FAB all read images + contact from it. Services page now uses 5 generated Timor-Leste-natural photos.
 - Verified live: upload → set slot → public route serves image → homepage shows it; contact edits reflected in footer/Contact/FAB; reset returns defaults.
+
+## Iteration 89 — Public content editing (2026-06) ✅
+- Settings → **Public Content** card (`components/PublicContentCard.js`): Services titles/descriptions (TET+EN, per service, blank = built-in), Testimonials manager (add / hide / delete, TET+EN quote, role), optional Google Maps embed URL.
+- Backend `SettingsIn.services_text / testimonials / map_embed_url`; `public_site_config` now also returns `rates` (live interest_rate_*), merged `services`, visible `testimonials`, `map_embed_url` (auto-derived from contact_address when blank).
+- Home: rate badges + hero "10–15%" range read live rates (`home-rate-{key}`, `home-hero-rate-range`); testimonials from Settings (fallback to i18n defaults). Services page text from Settings. Contact page shows Google Maps iframe (`contact-map`).
+- NOTE: homepage motorcycle badge now shows the real Settings rate (currently 10%). Owner previously asked for "motorizada 15%" → change `Interest rate · Motorcycle` in Settings to 15 to reflect it everywhere (contracts + homepage).
+- Verified live via API + browser.

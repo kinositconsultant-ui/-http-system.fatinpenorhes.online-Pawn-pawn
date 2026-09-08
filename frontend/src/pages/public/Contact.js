@@ -13,7 +13,7 @@ const blank = { name: "", email: "", phone: "", message: "" };
 
 export default function Contact() {
   const { t } = useLang();
-  const { contact } = usePublicSite();
+  const { contact, map_embed_url: mapUrl } = usePublicSite();
   const [form, setForm] = useState(blank);
   const [sending, setSending] = useState(false);
 
@@ -52,6 +52,11 @@ export default function Contact() {
             <Clock className="w-4 h-4 text-[#1B2D5C]" /> <span data-testid="contact-hours">{contact.contact_hours}</span>
           </div>
         </div>
+        {mapUrl && (
+          <div className="mt-8 rounded-xl overflow-hidden border border-stone-200 shadow-sm aspect-[4/3]" data-testid="contact-map">
+            <iframe title="Fatin Penhores location" src={mapUrl} className="w-full h-full" loading="lazy" allowFullScreen referrerPolicy="no-referrer-when-downgrade" />
+          </div>
+        )}
       </div>
       <form
         onSubmit={submit}

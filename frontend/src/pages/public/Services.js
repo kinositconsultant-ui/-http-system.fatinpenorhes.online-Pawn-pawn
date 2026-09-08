@@ -62,7 +62,7 @@ const SERVICES = [
 
 export default function Services() {
   const { lang } = useLang();
-  const { images } = usePublicSite();
+  const { images, services = {} } = usePublicSite();
   return (
     <section className="bg-white py-16">
       <div className="max-w-7xl mx-auto px-6 lg:px-10">
@@ -92,11 +92,11 @@ export default function Services() {
                     <s.Icon className="w-5 h-5" />
                   </div>
                   <h3 className="font-display text-xl font-bold text-[#1A2A52]">
-                    {lang === "tet" ? s.titleTet : s.titleEn}
+                    {lang === "tet" ? services[s.key]?.title_tet || s.titleTet : services[s.key]?.title_en || s.titleEn}
                   </h3>
                 </div>
                 <p className="text-sm text-stone-600">
-                  {lang === "tet" ? s.descTet : s.descEn}
+                  {lang === "tet" ? services[s.key]?.desc_tet || s.descTet : services[s.key]?.desc_en || s.descEn}
                 </p>
                 <Link
                   to="/contact"

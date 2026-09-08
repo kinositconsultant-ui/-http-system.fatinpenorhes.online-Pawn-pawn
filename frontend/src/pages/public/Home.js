@@ -17,10 +17,10 @@ const FALLBACK = {
 const SLOT = { hero: "home_hero", car: "home_car", moto: "home_moto", elek: "home_elek", pez: "home_pez" };
 
 const CATEGORIES = [
-  { key: "car", Icon: Car, titleKey: "cat_car_title", bodyKey: "cat_car_body", rate: "10%", span: "lg:col-span-2 lg:row-span-2 aspect-[4/5] lg:aspect-auto" },
-  { key: "moto", Icon: Bike, titleKey: "cat_moto_title", bodyKey: "cat_moto_body", rate: "15%", span: "aspect-[4/5] lg:aspect-[4/3]" },
-  { key: "elek", Icon: Smartphone, titleKey: "cat_elek_title", bodyKey: "cat_elek_body", rate: "15%", span: "aspect-[4/5] lg:aspect-[4/3]" },
-  { key: "pez", Icon: Truck, titleKey: "cat_pez_title", bodyKey: "cat_pez_body", rate: "10%", span: "lg:col-span-2 aspect-[4/5] sm:aspect-[16/9]" },
+  { key: "car", Icon: Car, titleKey: "cat_car_title", bodyKey: "cat_car_body", rateKey: "car", span: "lg:col-span-2 lg:row-span-2 aspect-[4/5] lg:aspect-auto" },
+  { key: "moto", Icon: Bike, titleKey: "cat_moto_title", bodyKey: "cat_moto_body", rateKey: "motorcycle", span: "aspect-[4/5] lg:aspect-[4/3]" },
+  { key: "elek", Icon: Smartphone, titleKey: "cat_elek_title", bodyKey: "cat_elek_body", rateKey: "electronic", span: "aspect-[4/5] lg:aspect-[4/3]" },
+  { key: "pez", Icon: Truck, titleKey: "cat_pez_title", bodyKey: "cat_pez_body", rateKey: "pezadu", span: "lg:col-span-2 aspect-[4/5] sm:aspect-[16/9]" },
 ];
 
 const STEPS = [
@@ -50,12 +50,18 @@ const H2 = ({ children }) => (
 );
 
 export default function Home() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const site = usePublicSite();
+  const rateRange = (() => {
+    const v = Object.values(site.rates || {}).map(Number).filter((n) => n > 0);
+    if (!v.length) return "10–15%";
+    const lo = Math.min(...v), hi = Math.max(...v);
+    return lo === hi ? `${lo}%` : `${lo}–${hi}%`;
+  })();
   const img = (k) => site.images[SLOT[k]] || FALLBACK[k];
   return (
     <div className="pb-20 fp-tais-soft" data-testid="home-root">
-      <Hero t={t} img={img} contact={site.contact} />
+      <Hero t={t} img={img} contact={site.contact} rateRange={rateRange} />
       <section className="max-w-7xl mx-auto px-6 lg:px-10 -mt-12 md:-mt-16 relative z-10">
         <div className="grid md:grid-cols-3 gap-4 md:gap-6">
           {VALUES.map((v, i) => (
@@ -70,15 +76,15 @@ export default function Home() {
           ))}
         </div>
       </section>
-      <Categories t={t} img={img} />
+      <Categories t={t} img={img} rates={site.rates} />
       <Steps t={t} />
-      <Testimonials t={t} />
+      <Testimonials t={t} items={site.testimonials} lang={lang} />
       <FinalCta t={t} contact={site.contact} />
     </div>
   );
 }
 
-function Hero({ t, img, contact }) {
+function Hero({ t, img, contact, rateRange }) {
   return (
     <section className="relative overflow-hidden" data-testid="home-hero">
       <div className="absolute inset-0">
@@ -121,7 +127,7 @@ function Hero({ t, img, contact }) {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-white/10 border border-white/10 p-4">
               <div className="text-[10px] uppercase tracking-widest text-white/60">{t("home_rate_label")}</div>
-              <div className="font-display text-3xl mt-1">10<span className="text-lg">–</span>15%</div>
+              <div className="font-display text-3xl mt-1" data-testid="home-hero-rate-range">{rateRange}</div>
             </div>
             <div className="rounded-xl bg-white/10 border border-white/10 p-4">
               <div className="text-[10px] uppercase tracking-widest text-white/60">{t("home_term_label")}</div>
@@ -140,7 +146,7 @@ function Hero({ t, img, contact }) {
   );
 }
 
-function Categories({ t, img }) {
+function Categories({ t, img, rates }) {
   return (
     <section className="max-w-7xl mx-auto px-6 lg:px-10 mt-20 md:mt-28" data-testid="home-categories">
       <div className="max-w-2xl">
@@ -154,7 +160,7 @@ function Categories({ t, img }) {
             <img src={img(c.key)} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-[900ms] group-hover:scale-105" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0F1B3A]/90 via-[#0F1B3A]/30 to-transparent" />
             <div className="absolute top-4 right-4 inline-flex items-baseline gap-1 rounded-full bg-white/90 backdrop-blur px-3 py-1 text-[#1B2D5C] shadow">
-              <span className="font-display text-base leading-none">{c.rate}</span>
+              <span className="font-display text-base leading-none" data-testid={`home-rate-${c.key}`}>{rates?.[c.rateKey] ?? "—"}%</span>
               <span className="text-[10px] uppercase tracking-wider text-stone-600">/ {t("home_rate_label").split(" ").pop()}</span>
             </div>
             <div className="relative h-full flex flex-col justify-end p-5 md:p-6 text-white">
@@ -202,7 +208,8 @@ function Steps({ t }) {
   );
 }
 
-function Testimonials({ t }) {
+function Testimonials({ t, items, lang }) {
+  const list = items && items.length ? items : null;
   return (
     <section className="max-w-7xl mx-auto px-6 lg:px-10 mt-20 md:mt-28" data-testid="home-testimonials">
       <div className="max-w-2xl">
@@ -210,13 +217,15 @@ function Testimonials({ t }) {
         <H2>{t("home_testimonials_title")}</H2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mt-10">
-        {TESTIMONIALS.map((tm, i) => (
-          <figure key={i} className="relative rounded-2xl border border-stone-200 bg-white p-6 md:p-7 shadow-sm hover:shadow-md transition-shadow" data-testid={`home-testimonial-${i}`}>
+        {(list || TESTIMONIALS).map((tm, i) => (
+          <figure key={tm.id || i} className="relative rounded-2xl border border-stone-200 bg-white p-6 md:p-7 shadow-sm hover:shadow-md transition-shadow" data-testid={`home-testimonial-${i}`}>
             <Quote className="w-8 h-8 text-[#C17767]/30 absolute top-4 right-4" />
-            <blockquote className="text-stone-700 text-sm md:text-base leading-relaxed">&ldquo;{t(tm.textKey)}&rdquo;</blockquote>
+            <blockquote className="text-stone-700 text-sm md:text-base leading-relaxed">
+              &ldquo;{list ? (lang === "tet" ? tm.text_tet || tm.text_en : tm.text_en || tm.text_tet) : t(tm.textKey)}&rdquo;
+            </blockquote>
             <figcaption className="mt-5 pt-4 border-t border-stone-100">
-              <div className="font-display text-base text-stone-900">{t(tm.nameKey)}</div>
-              <div className="text-[11px] uppercase tracking-widest text-stone-500 mt-1">{t(tm.roleKey)}</div>
+              <div className="font-display text-base text-stone-900">{list ? tm.name : t(tm.nameKey)}</div>
+              <div className="text-[11px] uppercase tracking-widest text-stone-500 mt-1">{list ? (lang === "tet" ? tm.role_tet || tm.role : tm.role || tm.role_tet) : t(tm.roleKey)}</div>
             </figcaption>
           </figure>
         ))}

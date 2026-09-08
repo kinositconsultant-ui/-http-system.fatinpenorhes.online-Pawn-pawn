@@ -61,6 +61,9 @@ DEFAULT_SETTINGS = {
     "contact_email": "fatinpenhores@gmail.com",
     "contact_address": "Caicoli, Dili, Timor-Leste",
     "contact_hours": "Segunda–Sábadu · 09:00–18:00",
+    "services_text": {},
+    "testimonials": [],
+    "map_embed_url": "",
 }
 
 # Public-website image slots. Admins can override any slot from Settings → Public Website
@@ -79,10 +82,38 @@ SITE_IMAGE_SLOTS = {
     "svc_heavy": {"label": "Services · Heavy equipment guarantee", "default": _IMG + "88986dcba32a527b73873383392c31b04f4d4bcccb33641e794123ffc04b2dbc.jpeg"},
 }
 CONTACT_KEYS = ("contact_phone", "contact_whatsapp", "contact_email", "contact_address", "contact_hours")
+SERVICE_DEFAULTS = {
+    "car": {"title_en": "Car Guarantee", "title_tet": "Garantia Karreta",
+            "desc_en": "Loans with car, pickup or commercial vehicle as collateral.",
+            "desc_tet": "Emprestimu ho garantia karreta privadu, pickup ka veikulu komersial."},
+    "motorcycle": {"title_en": "Motorcycle Guarantee", "title_tet": "Garantia Motor",
+                   "desc_en": "Use your motorcycle as collateral for a quick loan.",
+                   "desc_tet": "Motor bele uza hanesan garantia atu hetan osan lalais."},
+    "computer": {"title_en": "Computer Guarantee", "title_tet": "Garantia Komputer",
+                 "desc_en": "Laptops, desktops, monitors and other IT equipment.",
+                 "desc_tet": "Laptop, desktop, monitor no ekipamentu IT seluk."},
+    "phone": {"title_en": "Phone Guarantee", "title_tet": "Garantia Telefone",
+              "desc_en": "Smartphones and tablets can be used as collateral.",
+              "desc_tet": "Smartphone no tablet bele sai garantia tuir avaliasaun valor."},
+    "heavy": {"title_en": "Heavy Equipment Guarantee", "title_tet": "Garantia Pezadu",
+              "desc_en": "Forklift, tractor, loader, heavy duty truck — accepted as collateral.",
+              "desc_tet": "Forklift, traktór, loader, kamiaun pezadu — simu hanesan garantia."},
+}
+TESTIMONIAL_DEFAULTS = [
+    {"id": "d1", "name": "Maria S.", "role": "Small business owner · Dili", "role_tet": "Negosiante ki'ik · Dili", "visible": True,
+     "text_en": "Fatin Penhores treated me with respect. I paid in parts over two months and got my Honda back — no hidden fees.",
+     "text_tet": "Fatin Penhores trata ha'u ho respeitu. Ha'u selu parsiál ba fulan rua, hetan ha'u nia Honda fali — laiha kustu subar."},
+    {"id": "d2", "name": "João B.", "role": "Electrician · Comoro", "role_tet": "Elektrisista · Comoro", "visible": True,
+     "text_en": "Great service. I brought a laptop and left with cash the same day. The team explained everything clearly.",
+     "text_tet": "Servisu di'ak tebes. Ha'u lori laptop, sai ho osan iha loron ida deit. Ekipa nia informasaun klaru."},
+    {"id": "d3", "name": "Antonio L.", "role": "Auction buyer · Dili", "role_tet": "Kliente leilaun · Dili", "visible": True,
+     "text_en": "Transparent auction listings. I bought a motorbike at a fair price.",
+     "text_tet": "Lista leilaun transparente. Ha'u sosa motor ida ho folin justu."},
+]
 
 
 def public_site_config(settings: dict) -> dict:
-    """What the public website needs: resolved image URL per slot + contact details."""
+    """What the public website needs: images, contact, live rates, services copy, testimonials, map."""
     overrides = settings.get("site_images") or {}
     images = {}
     for slot, meta in SITE_IMAGE_SLOTS.items():
@@ -96,7 +127,22 @@ def public_site_config(settings: dict) -> dict:
     contact = {k: settings.get(k) or DEFAULT_SETTINGS[k] for k in CONTACT_KEYS}
     digits = "".join(ch for ch in contact["contact_whatsapp"] if ch.isdigit())
     contact["whatsapp_link"] = f"https://wa.me/{digits}" if digits else ""
-    return {"images": images, "contact": contact}
+    svc_over = settings.get("services_text") or {}
+    services = {k: {**v, **{f: t for f, t in (svc_over.get(k) or {}).items() if (t or "").strip()}}
+                for k, v in SERVICE_DEFAULTS.items()}
+    testimonials = settings.get("testimonials")
+    if not isinstance(testimonials, list) or not testimonials:
+        testimonials = TESTIMONIAL_DEFAULTS
+    rates = {k: settings.get(f"interest_rate_{k}", DEFAULT_SETTINGS[f"interest_rate_{k}"]) for k in ITEM_KINDS}
+    map_url = (settings.get("map_embed_url") or "").strip()
+    if not map_url:
+        from urllib.parse import quote_plus
+        map_url = f"https://www.google.com/maps?q={quote_plus(contact['contact_address'])}&output=embed"
+    return {
+        "images": images, "contact": contact, "rates": rates, "services": services,
+        "testimonials": [x for x in testimonials if x.get("visible", True)],
+        "map_embed_url": map_url,
+    }
 
 PICKUP_DEFAULT_TET = (
     "Bondia {name}! Fatin Penhores konfirma katak kontratu {contract} selu tomak ona. "
