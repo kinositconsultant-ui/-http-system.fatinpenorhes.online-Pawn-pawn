@@ -284,6 +284,7 @@ class SettingsIn(BaseModel):
     services_text: dict = {}  # {service_key: {title_en,title_tet,desc_en,desc_tet}} overrides
     testimonials: list = []   # [{id,name,role,role_tet,text_en,text_tet,visible}] — empty = built-in defaults
     map_embed_url: str = ""   # optional Google Maps embed URL; empty = derived from contact_address
+    faq_items: list = []      # [{id,q_en,q_tet,a_en,a_tet,visible}] — empty = built-in defaults
 
 
 @api.get("/settings")

@@ -1294,3 +1294,10 @@ Root cause: `/inventory/category-breakdown` counted every item record regardless
 - Home: rate badges + hero "10–15%" range read live rates (`home-rate-{key}`, `home-hero-rate-range`); testimonials from Settings (fallback to i18n defaults). Services page text from Settings. Contact page shows Google Maps iframe (`contact-map`).
 - NOTE: homepage motorcycle badge now shows the real Settings rate (currently 10%). Owner previously asked for "motorizada 15%" → change `Interest rate · Motorcycle` in Settings to 15 to reflect it everywhere (contracts + homepage).
 - Verified live via API + browser.
+
+## Iteration 90 — Motorcycle 15%, FAQ editor, Preview changes, Auction highlights (2026-06) ✅
+- `interest_rate_motorcycle` set to **15** in Settings (DB) and DEFAULT_SETTINGS → homepage badge + new motorcycle contracts agree.
+- FAQ editor: `SettingsIn.faq_items`, `FAQ_DEFAULTS`, `public_site_config.faq`; FAQ page reads Settings; manager (add/hide/delete, TET+EN) in PublicContentCard.
+- Preview changes: `POST /api/public/site/preview` (admin) resolves unsaved draft → stored in localStorage `fp_site_preview` → opens `/?preview=1`; `publicSite.js` uses the draft in preview mode; PublicLayout shows gold `site-preview-ribbon`. Live site unaffected until Save.
+- Auction highlights: `GET /api/public/auction-highlights` (total, next_auction_date, items only when listing not password-locked); `components/public/AuctionHighlights.js` on Home with live countdown to next_auction_date 09:00 (Settings), lock placeholder when protected. Section hidden when no listed items and no date.
+- Verified live via browser (rates, countdown, FAQ, preview ribbon + draft values, live unchanged). Unlocked item-card branch not visually verified (visitor password is set).

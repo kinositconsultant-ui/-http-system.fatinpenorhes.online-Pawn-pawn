@@ -33,6 +33,12 @@ export default function PublicContentCard({ s, onChange, defaults = {} }) {
   const add = () => setItems([...items, { id: newId(), name: "", role: "", role_tet: "", text_en: "", text_tet: "", visible: true }]);
   const remove = (id) => setItems(items.filter((x) => x.id !== id));
 
+  const faqList = Array.isArray(s.faq_items) && s.faq_items.length ? s.faq_items : null;
+  const faqItems = faqList || (defaults.faq || []).map((x) => ({ ...x }));
+  const setFaq = (next) => onChange("faq_items", next);
+  const updFaq = (id, patch) => setFaq(faqItems.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const addFaq = () => setFaq([...faqItems, { id: newId(), q_en: "", q_tet: "", a_en: "", a_tet: "", visible: true }]);
+
   return (
     <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-6" data-testid="public-content-card">
       <div className="flex items-center gap-2">
@@ -91,6 +97,38 @@ export default function PublicContentCard({ s, onChange, defaults = {} }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <Textarea rows={2} placeholder="Quote (Tetum)" value={tm.text_tet || ""} onChange={(e) => update(tm.id, { text_tet: e.target.value })} data-testid={`testimonial-text-tet-${i}`} />
                 <Textarea rows={2} placeholder="Quote (English)" value={tm.text_en || ""} onChange={(e) => update(tm.id, { text_en: e.target.value })} data-testid={`testimonial-text-en-${i}`} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs uppercase tracking-wider text-stone-500 font-semibold">FAQ (public page)</div>
+          <Button type="button" size="sm" variant="outline" onClick={addFaq} data-testid="faq-add">
+            <Plus className="w-3.5 h-3.5 mr-1" /> Add question
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {faqItems.map((f, i) => (
+            <div key={f.id} className={`rounded-lg border p-3 space-y-2 ${f.visible === false ? "border-stone-200 bg-stone-50 opacity-70" : "border-stone-200 bg-white"}`} data-testid={`faq-row-${i}`}>
+              <div className="flex items-start gap-2">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <Input placeholder="Question (Tetum)" value={f.q_tet || ""} onChange={(e) => updFaq(f.id, { q_tet: e.target.value })} data-testid={`faq-q-tet-${i}`} />
+                  <Input placeholder="Question (English)" value={f.q_en || ""} onChange={(e) => updFaq(f.id, { q_en: e.target.value })} data-testid={`faq-q-en-${i}`} />
+                  <Textarea rows={2} placeholder="Answer (Tetum)" value={f.a_tet || ""} onChange={(e) => updFaq(f.id, { a_tet: e.target.value })} data-testid={`faq-a-tet-${i}`} />
+                  <Textarea rows={2} placeholder="Answer (English)" value={f.a_en || ""} onChange={(e) => updFaq(f.id, { a_en: e.target.value })} data-testid={`faq-a-en-${i}`} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2" title={f.visible === false ? "Show" : "Hide"}
+                    onClick={() => updFaq(f.id, { visible: f.visible === false })} data-testid={`faq-toggle-${i}`}>
+                    {f.visible === false ? <EyeOff className="w-4 h-4 text-stone-400" /> : <Eye className="w-4 h-4 text-emerald-700" />}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-rose-700" onClick={() => setFaq(faqItems.filter((x) => x.id !== f.id))} data-testid={`faq-delete-${i}`}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

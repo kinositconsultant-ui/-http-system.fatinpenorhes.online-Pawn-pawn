@@ -17,7 +17,7 @@ from pydantic import BaseModel, EmailStr
 
 import storage as objstore
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
-from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS
+from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS, ITEM_KINDS
 from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
 
 router = APIRouter()
@@ -112,6 +112,35 @@ async def public_site():
     """Public website config: image URL per slot + contact details (no auth)."""
     s = await get_settings_doc()
     return public_site_config(s)
+
+
+@router.post("/public/site/preview")
+async def public_site_preview(draft: dict, _: dict = Depends(require_admin)):
+    """Resolve the public-site config for UNSAVED settings (Settings → Preview changes)."""
+    s = await get_settings_doc()
+    allowed = {"site_images", "services_text", "testimonials", "faq_items", "map_embed_url",
+               "next_auction_date", *[f"interest_rate_{k}" for k in ITEM_KINDS],
+               "contact_phone", "contact_whatsapp", "contact_email", "contact_address", "contact_hours"}
+    merged = {**s, **{k: v for k, v in draft.items() if k in allowed}}
+    return public_site_config(merged)
+
+
+@router.get("/public/auction-highlights")
+async def public_auction_highlights(limit: int = 3):
+    """Next auction teaser for the homepage. Item details only when the listing is not password-locked."""
+    s = await get_settings_doc()
+    locked = bool(s.get("warehouse_password_hash"))
+    total = await db.auctions.count_documents({"status": "listed"})
+    items = []
+    if not locked:
+        for a in await db.auctions.find({"status": "listed"}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(limit, 6))):
+            item = await _fetch_item(a["item_type"], a["item_id"]) or {}
+            items.append({
+                "id": a["id"], "item_type": a["item_type"], "starting_price": a.get("starting_price", 0),
+                "brand": item.get("brand", ""), "model": item.get("model", ""), "name": item.get("name", ""),
+                "photo_url": item.get("photo_url", ""), "manufacture_year": item.get("manufacture_year"),
+            })
+    return {"locked": locked, "total": total, "next_auction_date": s.get("next_auction_date") or "", "items": items}
 
 
 @router.get("/public/site-image/{slot}")

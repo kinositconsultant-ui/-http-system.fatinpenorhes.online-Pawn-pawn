@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLang } from "../../context/LangContext";
 import { ChevronDown } from "lucide-react";
+import { usePublicSite } from "../../lib/publicSite";
 
 const QA = [
   {
@@ -37,7 +38,11 @@ const QA = [
 
 export default function FAQ() {
   const { lang } = useLang();
+  const { faq } = usePublicSite();
   const [open, setOpen] = useState(0);
+  const list = faq && faq.length
+    ? faq.map((f) => ({ qEn: f.q_en, qTet: f.q_tet || f.q_en, aEn: f.a_en, aTet: f.a_tet || f.a_en }))
+    : QA;
   return (
     <section className="bg-white py-16">
       <div className="max-w-3xl mx-auto px-6 lg:px-10">
@@ -46,7 +51,7 @@ export default function FAQ() {
           <div className="w-20 h-1 bg-[#F0B435] mx-auto mt-4 rounded-full" />
         </header>
         <div className="space-y-3">
-          {QA.map((qa, i) => {
+          {list.map((qa, i) => {
             const isOpen = open === i;
             return (
               <div

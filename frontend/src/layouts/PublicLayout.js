@@ -13,12 +13,17 @@ const navItemClass = ({ isActive }) =>
 
 export default function PublicLayout() {
   const { t } = useLang();
-  const { contact } = usePublicSite();
+  const { contact, preview } = usePublicSite();
   const location = useLocation();
   const showWA = !location.pathname.startsWith("/login");
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF9]">
+      {preview && (
+        <div className="sticky top-0 z-[60] bg-[#B8860B] text-[#0F1B3A] text-xs font-semibold text-center py-1.5 px-4" data-testid="site-preview-ribbon">
+          PREVIEW — showing unsaved Settings changes. Close this tab and click Save in Settings to publish.
+        </div>
+      )}
       {/* Top navy bar */}
       <header
         className="sticky top-0 z-30 bg-[#1A2A52] shadow-md"

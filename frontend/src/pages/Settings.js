@@ -8,15 +8,31 @@ import { Textarea } from "../components/ui/textarea";
 import { Card } from "../components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
-import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload } from "lucide-react";
+import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload, Eye } from "lucide-react";
 import PublicSiteCard from "../components/PublicSiteCard";
 import PublicContentCard from "../components/PublicContentCard";
-import { loadPublicSite } from "../lib/publicSite";
+import { loadPublicSite, PREVIEW_KEY } from "../lib/publicSite";
 
 export default function Settings() {
   const { t } = useLang();
   const [s, setS] = useState(null);
   const [siteDefaults, setSiteDefaults] = useState({});
+  const [previewing, setPreviewing] = useState(false);
+
+  // Resolve the unsaved draft server-side, stash it, and open the homepage in preview mode.
+  const previewSite = async () => {
+    if (!s) return;
+    setPreviewing(true);
+    try {
+      const { data } = await api.post("/public/site/preview", s);
+      localStorage.setItem(PREVIEW_KEY, JSON.stringify(data));
+      window.open("/?preview=1", "_blank", "noopener");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not build preview");
+    } finally {
+      setPreviewing(false);
+    }
+  };
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [testPhone, setTestPhone] = useState("");
@@ -772,7 +788,17 @@ export default function Settings() {
         onConfirm={runRestore}
       />
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={previewSite}
+          disabled={previewing}
+          className="border-[#B8860B] text-[#7a5a08] hover:bg-[#B8860B]/10"
+          data-testid="settings-preview"
+          title="Open the public homepage with your unsaved changes"
+        >
+          <Eye className="w-4 h-4 mr-2" /> {previewing ? "…" : "Preview changes"}
+        </Button>
         <Button
           onClick={save}
           disabled={saving}

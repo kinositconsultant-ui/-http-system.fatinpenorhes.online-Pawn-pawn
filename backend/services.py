@@ -38,7 +38,7 @@ ITEM_KINDS = ("car", "motorcycle", "electronic", "pezadu")
 DEFAULT_SETTINGS = {
     "id": "singleton",
     "interest_rate_car": 10,
-    "interest_rate_motorcycle": 10,
+    "interest_rate_motorcycle": 15,
     "interest_rate_electronic": 15,
     "interest_rate_pezadu": 10,
     "terms_and_conditions_en": DEFAULT_TNC_EN,
@@ -64,7 +64,23 @@ DEFAULT_SETTINGS = {
     "services_text": {},
     "testimonials": [],
     "map_embed_url": "",
+    "faq_items": [],
 }
+
+FAQ_DEFAULTS = [
+    {"id": "f1", "visible": True, "q_en": "How much interest will I be charged on my collateral?", "q_tet": "Sei kona juros hira ba sasan garantidu?",
+     "a_en": "It depends on the amount, duration and type of collateral. Typically rates range from 10% to 15%.",
+     "a_tet": "Depende ba montante, durasaun no tipo garantia. Normalmente taxa husi 10% to 15%."},
+    {"id": "f2", "visible": True, "q_en": "How long does the process take?", "q_tet": "Prosesu dura tempu hira?",
+     "a_en": "Most loan applications complete between 1 and 24 hours.", "a_tet": "Normalmente prosesu bele remata entre oras 1 to 24 oras."},
+    {"id": "f3", "visible": True, "q_en": "Is my collateral kept secure?", "q_tet": "Garantia sei seguradu ka lae?",
+     "a_en": "Yes, we guarantee full security for items kept as collateral.", "a_tet": "Sim, ami garante seguransa total ba sasan garantia kliente nian."},
+    {"id": "f4", "visible": True, "q_en": "Can I pay before the due date?", "q_tet": "Bele selu antes tempu?",
+     "a_en": "Yes, with specific conditions defined in the contract.", "a_tet": "Bele, ho kondisaun espesifiku tuir kontratu."},
+    {"id": "f5", "visible": True, "q_en": "What documents do I need?", "q_tet": "Dokumentu saida mak presiza?",
+     "a_en": "A valid ID (BI / Electoral / Passport), your phone number, and ownership documents of the collateral.",
+     "a_tet": "BI / Eleitorál / Pasaporte válidu, númeru telemovel, no dokumentu sasan garantia nian."},
+]
 
 # Public-website image slots. Admins can override any slot from Settings → Public Website
 # (uploaded files are stored in object storage and served via /api/public/site-image/{slot}).
@@ -138,10 +154,15 @@ def public_site_config(settings: dict) -> dict:
     if not map_url:
         from urllib.parse import quote_plus
         map_url = f"https://www.google.com/maps?q={quote_plus(contact['contact_address'])}&output=embed"
+    faq = settings.get("faq_items")
+    if not isinstance(faq, list) or not faq:
+        faq = FAQ_DEFAULTS
     return {
         "images": images, "contact": contact, "rates": rates, "services": services,
         "testimonials": [x for x in testimonials if x.get("visible", True)],
+        "faq": [x for x in faq if x.get("visible", True)],
         "map_embed_url": map_url,
+        "next_auction_date": settings.get("next_auction_date") or "",
     }
 
 PICKUP_DEFAULT_TET = (

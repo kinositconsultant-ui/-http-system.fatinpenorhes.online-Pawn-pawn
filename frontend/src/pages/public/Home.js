@@ -6,6 +6,7 @@ import {
   UserPlus, Search, Banknote, KeyRound, Quote, MessageCircle, Calculator, MapPin, CheckCircle2,
 } from "lucide-react";
 import { usePublicSite } from "../../lib/publicSite";
+import AuctionHighlights from "../../components/public/AuctionHighlights";
 
 const FALLBACK = {
   hero: "https://static.prod-images.emergentagent.com/jobs/7e09fb06-54ad-4312-b74c-802a3b1278f0/images/2814e99c56332a78c1decdb6595a9ed90842ef98c7d1b806d0df3958c7e06646.jpeg",
@@ -78,6 +79,7 @@ export default function Home() {
       </section>
       <Categories t={t} img={img} rates={site.rates} />
       <Steps t={t} />
+      <AuctionHighlights nextDate={site.next_auction_date} />
       <Testimonials t={t} items={site.testimonials} lang={lang} />
       <FinalCta t={t} contact={site.contact} />
     </div>
