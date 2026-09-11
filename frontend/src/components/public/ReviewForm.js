@@ -20,7 +20,8 @@ const COPY = {
 export default function ReviewForm({ compact = false }) {
   const { lang } = useLang();
   const c = COPY[lang] || COPY.en;
-  const [f, setF] = useState({ name: "", role: "", text: "", contact: "" });
+  const [f, setF] = useState({ name: "", role: "", text: "", contact: "", rating: 5 });
+  const [hover, setHover] = useState(0);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
@@ -54,6 +55,15 @@ export default function ReviewForm({ compact = false }) {
         <h2 className="font-display text-xl md:text-2xl text-[#1B2D5C]">{c.title}</h2>
       </div>
       <p className="text-sm text-stone-600">{c.sub}</p>
+      <div className="flex items-center gap-1" data-testid="review-stars" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setF((p) => ({ ...p, rating: n }))} onMouseEnter={() => setHover(n)}
+            className="p-0.5 transition-transform hover:scale-110" aria-label={`${n} star`} data-testid={`review-star-${n}`}>
+            <Star className={`w-7 h-7 ${(hover || f.rating) >= n ? "fill-[#B8860B] text-[#B8860B]" : "text-stone-300"}`} />
+          </button>
+        ))}
+        <span className="ml-2 text-sm text-stone-500" data-testid="review-rating-value">{f.rating}/5</span>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Input required minLength={2} placeholder={c.name} value={f.name} onChange={set("name")} data-testid="review-name" />
         <Input placeholder={c.role} value={f.role} onChange={set("role")} data-testid="review-role" />

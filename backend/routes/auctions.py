@@ -36,6 +36,7 @@ from pdf_utils import (
     build_invoices_list_pdf,
 )
 from realtime import notify as rt_notify
+import subscribers as subs
 
 router = APIRouter(tags=["auctions"])
 
@@ -243,6 +244,11 @@ async def move_to_auction(payload: AuctionMoveIn, _: dict = Depends(get_current_
         {"$set": {"status": "auction"}},
     )
     doc.pop("_id", None)
+    item = await _fetch_item(contract["item_type"], contract["item_id"]) or {}
+    subs.fire_and_forget(subs.broadcast(
+        {"kinds": contract["item_type"]}, "item_alert",
+        subs.new_listing_body(contract["item_type"], item.get("manufacture_year"), float(payload.starting_price or 0)),
+    ))
     return doc
 
 

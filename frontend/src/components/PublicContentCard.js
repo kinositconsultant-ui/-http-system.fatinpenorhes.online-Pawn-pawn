@@ -52,7 +52,7 @@ function PendingReviews({ onApproved }) {
       {rows.map((r) => (
         <div key={r.id} className="rounded-md bg-white border border-amber-200 p-3 flex items-start gap-3" data-testid={`pending-review-${r.id}`}>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">{r.name} <span className="text-stone-400 font-normal">· {r.role || "—"} · {r.lang.toUpperCase()}</span></div>
+            <div className="text-sm font-medium">{r.name} <span className="text-[#B8860B]">{"★".repeat(r.rating || 0)}</span> <span className="text-stone-400 font-normal">· {r.role || "—"} · {r.lang.toUpperCase()}</span></div>
             <p className="text-sm text-stone-700 mt-1">“{r.text}”</p>
             {r.contact && <div className="text-[11px] text-stone-400 mt-1">Contact: {r.contact}</div>}
           </div>

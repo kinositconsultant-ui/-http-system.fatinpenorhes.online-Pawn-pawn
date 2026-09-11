@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Save, Send, Download, Database, RefreshCw, Bell, Play, CheckCircle2, XCircle, History, Upload, Eye } from "lucide-react";
 import PublicSiteCard from "../components/PublicSiteCard";
 import PublicContentCard from "../components/PublicContentCard";
+import SubscribersCard from "../components/SubscribersCard";
 import { loadPublicSite, PREVIEW_KEY } from "../lib/publicSite";
 
 export default function Settings() {
@@ -622,6 +623,7 @@ export default function Settings() {
       {/* Public website: contact details + Home / Services pictures */}
       <PublicSiteCard s={s} onChange={onChange} defaults={siteDefaults.images || {}} />
       <PublicContentCard s={s} onChange={onChange} defaults={siteDefaults} />
+      <SubscribersCard />
 
       {/* Backups & Migration */}
       <Card className="p-6 border border-stone-200 shadow-none rounded-lg bg-white space-y-4">

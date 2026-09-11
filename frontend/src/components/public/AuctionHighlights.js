@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import { useLang } from "../../context/LangContext";
 import { Button } from "../ui/button";
 import { Gavel, ArrowRight, Lock, Car, Bike, Truck, Laptop } from "lucide-react";
+import SubscribeForm from "./SubscribeForm";
 
 const KIND_ICON = { car: Car, motorcycle: Bike, pezadu: Truck, electronic: Laptop };
 const KIND_LABEL = {
@@ -94,6 +95,7 @@ export default function AuctionHighlights({ nextDate }) {
                   {c.cta} <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
+              <SubscribeForm />
             </div>
           </div>
           <div className="p-6 md:p-8">

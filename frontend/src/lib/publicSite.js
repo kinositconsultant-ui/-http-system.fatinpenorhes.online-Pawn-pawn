@@ -29,6 +29,7 @@ const resolve = (data, preview = false) => ({
   faq: data.faq || [],
   map_embed_url: data.map_embed_url || "",
   next_auction_date: data.next_auction_date || "",
+  rating: data.rating || { avg: 0, count: 0 },
   preview,
 });
 

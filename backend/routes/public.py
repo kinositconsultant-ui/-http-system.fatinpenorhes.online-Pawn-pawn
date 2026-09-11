@@ -16,6 +16,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr
 
 import storage as objstore
+import subscribers as subs
+from html import escape
 from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
 from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS, ITEM_KINDS, TESTIMONIAL_DEFAULTS
 from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
@@ -111,7 +113,13 @@ async def public_auction_status():
 async def public_site():
     """Public website config: image URL per slot + contact details (no auth)."""
     s = await get_settings_doc()
-    return public_site_config(s)
+    cfg = public_site_config(s)
+    agg = await db.reviews.aggregate([
+        {"$match": {"status": "approved", "rating": {"$gte": 1}}},
+        {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    cfg["rating"] = {"avg": round(agg[0]["avg"], 1), "count": agg[0]["count"]} if agg else {"avg": 0, "count": 0}
+    return cfg
 
 
 @router.post("/public/site/preview")
@@ -153,6 +161,7 @@ class ReviewIn(BaseModel):
     text: str
     lang: str = "tet"
     contact: str = ""
+    rating: int = 5
 
 
 @router.post("/public/reviews")
@@ -163,12 +172,58 @@ async def submit_review(payload: ReviewIn):
         raise HTTPException(status_code=422, detail="Please give your name and a review of at least 10 characters")
     if len(text) > 600:
         raise HTTPException(status_code=422, detail="Review is too long (max 600 characters)")
-    doc = {"id": new_id(), "name": name[:80], "role": payload.role.strip()[:80], "text": text,
+    rating = min(5, max(1, int(payload.rating or 5)))
+    doc = {"id": new_id(), "name": name[:80], "role": payload.role.strip()[:80], "text": text, "rating": rating,
            "lang": "tet" if payload.lang == "tet" else "en", "contact": payload.contact.strip()[:120],
            "status": "pending", "created_at": utcnow_iso()}
     await db.reviews.insert_one(doc)
     doc.pop("_id", None)
+    stars = "★" * rating + "☆" * (5 - rating)
+    subs.fire_and_forget(subs.notify_admins(
+        f"New website review awaiting approval — {name} {stars}",
+        f"Fatin Penhores: review foun husi {name} ({stars}) hein aprovasaun. \"{text[:160]}\" — Settings → Public Content.",
+        f"<p><b>{escape(name)}</b> {stars} · {escape(doc['role'] or '')}</p><blockquote>{escape(text)}</blockquote>"
+        f"<p>Approve or reject it in <b>Settings → Public Content → Homepage testimonials</b>.</p>",
+    ))
     return {"ok": True, "id": doc["id"]}
+
+
+class SubscribeIn(BaseModel):
+    phone: str
+    lang: str = "tet"
+    auction_reminder: bool = True
+    kinds: list[str] = []
+
+
+@router.post("/public/subscribe")
+async def public_subscribe(payload: SubscribeIn):
+    """Visitor opts in to WhatsApp alerts: auction date announcements and/or new listings per item kind."""
+    phone = subs.clean_phone(payload.phone)
+    if len(phone) < 10:
+        raise HTTPException(status_code=422, detail="Please enter a valid WhatsApp number (e.g. +670 7xxx xxxx)")
+    kinds = subs.kinds_valid(payload.kinds)
+    if not payload.auction_reminder and not kinds:
+        raise HTTPException(status_code=422, detail="Choose at least one alert")
+    now = utcnow_iso()
+    existing = await db.subscribers.find_one({"phone": phone}, {"_id": 0})
+    doc = {"id": existing["id"] if existing else new_id(), "phone": phone, "lang": payload.lang,
+           "auction_reminder": payload.auction_reminder, "kinds": kinds, "active": True,
+           "created_at": existing["created_at"] if existing else now, "updated_at": now}
+    await db.subscribers.update_one({"phone": phone}, {"$set": doc}, upsert=True)
+    return {"ok": True, "updated": bool(existing)}
+
+
+@router.get("/subscribers")
+async def list_subscribers(_: dict = Depends(require_admin)):
+    return await db.subscribers.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+
+
+@router.delete("/subscribers/{sid}")
+async def delete_subscriber(sid: str, _: dict = Depends(require_admin)):
+    r = await db.subscribers.delete_one({"id": sid})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Subscriber not found")
+    return {"ok": True}
 
 
 @router.get("/reviews")
@@ -190,7 +245,7 @@ async def moderate_review(rid: str, action: str, user: dict = Depends(require_ad
         current = s.get("testimonials") if isinstance(s.get("testimonials"), list) and s.get("testimonials") else [dict(x) for x in TESTIMONIAL_DEFAULTS]
         entry = {"id": f"r-{rid}", "name": r["name"], "role": r.get("role", ""), "role_tet": r.get("role", ""),
                  "text_en": r["text"] if r.get("lang") == "en" else "", "text_tet": r["text"] if r.get("lang") == "tet" else "",
-                 "visible": True, "source": "review"}
+                 "visible": True, "source": "review", "rating": r.get("rating", 5)}
         testimonials = [x for x in current if x.get("id") != entry["id"]] + [entry]
         await db.settings.update_one({"id": "singleton"}, {"$set": {"testimonials": testimonials}}, upsert=True)
     await db.reviews.update_one({"id": rid}, {"$set": {"status": "approved" if action == "approve" else "rejected",

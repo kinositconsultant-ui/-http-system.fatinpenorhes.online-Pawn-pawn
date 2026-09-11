@@ -62,7 +62,7 @@ export default function Home() {
   const img = (k) => site.images[SLOT[k]] || FALLBACK[k];
   return (
     <div className="pb-20 fp-tais-soft" data-testid="home-root">
-      <Hero t={t} img={img} contact={site.contact} rateRange={rateRange} />
+      <Hero t={t} img={img} contact={site.contact} rateRange={rateRange} rating={site.rating} />
       <section className="max-w-7xl mx-auto px-6 lg:px-10 -mt-12 md:-mt-16 relative z-10">
         <div className="grid md:grid-cols-3 gap-4 md:gap-6">
           {VALUES.map((v, i) => (
@@ -86,7 +86,7 @@ export default function Home() {
   );
 }
 
-function Hero({ t, img, contact, rateRange }) {
+function Hero({ t, img, contact, rateRange, rating }) {
   return (
     <section className="relative overflow-hidden" data-testid="home-hero">
       <div className="absolute inset-0">
@@ -100,6 +100,12 @@ function Hero({ t, img, contact, rateRange }) {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {t("tagline")}
           </div>
+          {rating?.count > 0 && (
+            <Link to="/review" className="fp-rise ml-2 inline-flex items-center gap-1.5 text-[11px] mb-6 px-3 py-1 rounded-full border border-[#B8860B]/50 bg-[#B8860B]/15 text-[#F0B435] hover:bg-[#B8860B]/25 transition-colors"
+              data-testid="home-rating-badge" title="Client reviews">
+              <Star className="w-3.5 h-3.5 fill-[#F0B435]" /> {rating.avg.toFixed(1)} · {rating.count} {rating.count === 1 ? "review" : "reviews"}
+            </Link>
+          )}
           <h1 className="fp-rise font-display text-4xl sm:text-5xl lg:text-6xl tracking-tight max-w-3xl leading-[1.05]" style={{ animationDelay: "0.08s" }}>
             {t("hero_title")}
           </h1>
@@ -227,6 +233,11 @@ function Testimonials({ t, items, lang }) {
         {(list || TESTIMONIALS).map((tm, i) => (
           <figure key={tm.id || i} className="relative rounded-2xl border border-stone-200 bg-white p-6 md:p-7 shadow-sm hover:shadow-md transition-shadow" data-testid={`home-testimonial-${i}`}>
             <Quote className="w-8 h-8 text-[#C17767]/30 absolute top-4 right-4" />
+            {tm.rating > 0 && (
+              <div className="flex gap-0.5 mb-3" data-testid={`home-testimonial-stars-${i}`}>
+                {[1, 2, 3, 4, 5].map((n) => <Star key={n} className={`w-3.5 h-3.5 ${n <= tm.rating ? "fill-[#B8860B] text-[#B8860B]" : "text-stone-200"}`} />)}
+              </div>
+            )}
             <blockquote className="text-stone-700 text-sm md:text-base leading-relaxed">
               &ldquo;{list ? (lang === "tet" ? tm.text_tet || tm.text_en : tm.text_en || tm.text_tet) : t(tm.textKey)}&rdquo;
             </blockquote>

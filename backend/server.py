@@ -317,11 +317,16 @@ async def settings_put(payload: SettingsIn, admin: dict = Depends(require_admin)
     new_pwd = (update.pop("warehouse_password", "") or "").strip()
     if new_pwd:
         update["warehouse_password_hash"] = hash_password(new_pwd)
+    prev = await db.settings.find_one({"id": "singleton"}, {"_id": 0, "next_auction_date": 1}) or {}
     await db.settings.update_one(
         {"id": "singleton"},
         {"$set": update},
         upsert=True,
     )
+    new_date = (update.get("next_auction_date") or "").strip()
+    if new_date and new_date != (prev.get("next_auction_date") or ""):
+        import subscribers as subs
+        subs.fire_and_forget(subs.broadcast({"auction_reminder": True}, "auction_date", subs.auction_date_body(new_date)))
     await write_audit(admin, "update", "settings", "singleton", {k: ("***" if k in ("whatsapp_token", "warehouse_password_hash") else v) for k, v in update.items()})
     return await settings_get(_=admin)
 
