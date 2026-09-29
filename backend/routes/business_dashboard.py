@@ -20,12 +20,16 @@ GET /api/business/dashboard  → keys:
 """
 from __future__ import annotations
 
+import csv
 from datetime import date, datetime, timedelta, timezone
+from io import BytesIO, StringIO
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response, StreamingResponse
 
 from deps import db, COLLECTION_MAP, require_module
+from pdf_utils import build_closed_contracts_pdf
 
 router = APIRouter(tags=["business-dashboard"])
 
@@ -44,9 +48,7 @@ def _month_bounds(today: date) -> tuple[str, str]:
     return first.isoformat(), nxt.isoformat()
 
 
-@router.get("/business/closed-contracts")
-async def closed_contracts(month: Optional[str] = None, _: dict = Depends(require_module("dashboard"))):
-    """Contracts fully paid (redeemed) in a month with the interest/penalty each one earned."""
+async def _closed_contracts_data(month: Optional[str]) -> dict:
     month = month or date.today().strftime("%Y-%m")
     redeemed = await db.contracts.find({"status": "redeemed"}, {"_id": 0}).to_list(5000)
     pays = await db.payments.find({}, {"_id": 0, "contract_id": 1, "date": 1, "amount": 1,
@@ -79,6 +81,37 @@ async def closed_contracts(month: Optional[str] = None, _: dict = Depends(requir
         "principal_total": round(sum(r["loan_amount"] for r in rows), 2),
         "rows": rows,
     }
+
+
+@router.get("/business/closed-contracts")
+async def closed_contracts(month: Optional[str] = None, _: dict = Depends(require_module("dashboard"))):
+    """Contracts fully paid (redeemed) in a month with the interest/penalty each one earned."""
+    return await _closed_contracts_data(month)
+
+
+@router.get("/business/closed-contracts/export/pdf")
+async def closed_contracts_pdf(month: Optional[str] = None, _: dict = Depends(require_module("dashboard"))):
+    data = await _closed_contracts_data(month)
+    return StreamingResponse(BytesIO(build_closed_contracts_pdf(data)), media_type="application/pdf",
+                             headers={"Content-Disposition": f'inline; filename="closed-contracts-{data["month"]}.pdf"'})
+
+
+@router.get("/business/closed-contracts/export/csv")
+async def closed_contracts_csv(month: Optional[str] = None, _: dict = Depends(require_module("dashboard"))):
+    data = await _closed_contracts_data(month)
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Contract", "Client", "Item type", "Contract date", "Closed on", "Loan amount",
+                "Interest earned", "Penalty earned", "Total received", "Item released"])
+    for r in data["rows"]:
+        w.writerow([r["contract_number"], r["client_name"] or "", r["item_type"], r["contract_date"], r["closed_on"],
+                    f'{r["loan_amount"]:.2f}', f'{r["interest_earned"]:.2f}', f'{r["penalty_earned"]:.2f}',
+                    f'{r["total_received"]:.2f}', "yes" if r["item_released"] else "no"])
+    w.writerow([])
+    w.writerow(["TOTAL", "", "", "", "", f'{data["principal_total"]:.2f}', f'{data["interest_total"]:.2f}',
+                f'{data["penalty_total"]:.2f}', "", ""])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="closed-contracts-{data["month"]}.csv"'})
 
 
 @router.get("/business/dashboard")

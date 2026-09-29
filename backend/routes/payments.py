@@ -201,13 +201,8 @@ async def mark_change_returned(pid: str, returned: bool = True, user: dict = Dep
     return {**p, **update}
 
 
-@router.get("/contracts/{cid}/redemption-quote")
-async def redemption_quote(cid: str, _: dict = Depends(require_module("payments"))):
-    """'Pay today' vs 'pay next month' comparison for the Payments page."""
-    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
-    if not c:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    live = await _recompute_contract_status(dict(c))
+def _redemption_quote(live: dict) -> dict:
+    """'Pay today' vs 'pay next month' from a recomputed contract. Shared by the API and the receipt PDF."""
     rate = float(live.get("interest_rate") or 0) / 100
     principal = float(live.get("principal_remaining") or 0)
     months = int(live.get("months_elapsed") or 0)
@@ -219,7 +214,6 @@ async def redemption_quote(cid: str, _: dict = Depends(require_module("payments"
     # Penalty (10 % of principal, once) kicks in 10 days after due — estimate if that lands within next month.
     extra_penalty = round(principal * rate, 2) if (penalty_now == 0 and due and (date.fromisoformat(due) + timedelta(days=10)).isoformat() <= in_30) else 0.0
     return {
-        "contract_id": cid,
         "today": {"total": round(today_total, 2), "interest": float(live.get("interest_remaining") or 0), "penalty": penalty_now,
                   "principal": principal, "months_billed": months},
         "next_month": {"total": round(today_total + extra_interest + extra_penalty, 2), "extra_interest": extra_interest,
@@ -227,6 +221,16 @@ async def redemption_quote(cid: str, _: dict = Depends(require_module("payments"
         "saving": round(extra_interest + extra_penalty, 2),
         "status": live.get("status"),
     }
+
+
+@router.get("/contracts/{cid}/redemption-quote")
+async def redemption_quote(cid: str, _: dict = Depends(require_module("payments"))):
+    """'Pay today' vs 'pay next month' comparison for the Payments page."""
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    live = await _recompute_contract_status(dict(c))
+    return {"contract_id": cid, **_redemption_quote(live)}
 
 
 @router.get("/payments/{pid}/pdf")
@@ -240,9 +244,10 @@ async def payment_pdf(pid: str, lang: str = "en", _: dict = Depends(get_current_
     item_doc = {}
     if c.get("item_type") and c.get("item_id"):
         item_doc = await _fetch_item(c["item_type"], c["item_id"]) or {}
+    quote = _redemption_quote(c) if (c and p.get("type") in ("interest_only", "partial") and c.get("status") != "redeemed") else None
     pdf_bytes = build_receipt_pdf(
         p, c, client_doc, c.get("remaining_balance", 0), item=item_doc,
-        language=(lang or "en").lower(),
+        language=(lang or "en").lower(), quote=quote,
     )
     return StreamingResponse(
         BytesIO(pdf_bytes),

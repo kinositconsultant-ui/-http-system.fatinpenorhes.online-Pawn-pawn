@@ -4,6 +4,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Bell, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import AuctionReminderPreview from "./AuctionReminderPreview";
 
 const KIND = { car: "Cars", motorcycle: "Motorcycles", electronic: "Electronics", pezadu: "Heavy eq." };
 
@@ -47,6 +48,7 @@ export default function SubscribersCard() {
       <p className="text-xs text-stone-500 -mt-2">
         Visitors sign up on the homepage auction card. They're messaged automatically when the auction date changes or a matching item is listed (WhatsApp must be configured; otherwise sends are logged as MOCKED).
       </p>
+      <AuctionReminderPreview />
       {rows.length === 0 ? (
         <div className="text-sm text-stone-400 py-4 text-center" data-testid="subscribers-empty">No subscribers yet.</div>
       ) : (

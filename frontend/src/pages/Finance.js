@@ -42,6 +42,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import PdfPreviewDialog from "../components/PdfPreviewDialog";
+import CashDrawerCard from "../components/CashDrawerCard";
 
 const fmt = (v) =>
   `$${Number(v ?? 0).toLocaleString("en-US", {
@@ -363,6 +364,13 @@ export default function Finance() {
           >
             <BookOpen className="w-4 h-4 mr-2" /> Ledger
           </TabsTrigger>
+          <TabsTrigger
+            value="drawer"
+            data-testid="finance-tab-drawer"
+            className="data-[state=active]:bg-[#B8860B] data-[state=active]:text-white data-[state=active]:shadow-md text-stone-600 hover:text-[#B8860B] px-4 py-2 rounded-md font-medium transition-colors"
+          >
+            <Wallet className="w-4 h-4 mr-2" /> Cash Drawer
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="capital">
           <CapitalSection sources={sources} reload={load} t={t} />
@@ -378,6 +386,9 @@ export default function Finance() {
         </TabsContent>
         <TabsContent value="ledger">
           <LedgerSection />
+        </TabsContent>
+        <TabsContent value="drawer">
+          <CashDrawerCard />
         </TabsContent>
       </Tabs>
     </div>

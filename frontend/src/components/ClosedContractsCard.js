@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, pdfUrl } from "../lib/api";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
-import { CheckCircle2, PackageCheck, Clock } from "lucide-react";
+import { Button } from "./ui/button";
+import { CheckCircle2, PackageCheck, Clock, FileText, FileSpreadsheet } from "lucide-react";
+import { toast } from "sonner";
+import PdfPreviewDialog from "./PdfPreviewDialog";
 
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -10,12 +13,25 @@ const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractio
 export default function ClosedContractsCard() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [data, setData] = useState(null);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     let alive = true;
     api.get(`/business/closed-contracts?month=${month}`).then((r) => alive && setData(r.data)).catch(() => alive && setData({ rows: [], count: 0 }));
     return () => { alive = false; };
   }, [month]);
+
+  const downloadCsv = async () => {
+    try {
+      const r = await api.get(`/business/closed-contracts/export/csv?month=${month}`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([r.data], { type: "text/csv" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `closed-contracts-${month}.csv` });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "CSV export failed");
+    }
+  };
 
   return (
     <Card className="p-4 border border-stone-200 shadow-none rounded-lg bg-white" data-testid="closed-contracts-card">
@@ -24,7 +40,15 @@ export default function ClosedContractsCard() {
           <CheckCircle2 className="w-4 h-4 text-emerald-700" />
           <div className="text-eyebrow">Closed this month</div>
         </div>
-        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-8 w-40 text-xs" data-testid="closed-month" />
+        <div className="flex items-center gap-1.5">
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-8 w-40 text-xs" data-testid="closed-month" />
+          <Button type="button" size="sm" className="h-8 px-2 bg-[#B91C1C] hover:bg-[#991B1B] text-white" onClick={() => setPreview(true)} title="PDF for accountant" data-testid="closed-pdf-btn">
+            <FileText className="w-4 h-4" />
+          </Button>
+          <Button type="button" size="sm" className="h-8 px-2 bg-emerald-700 hover:bg-emerald-800 text-white" onClick={downloadCsv} title="CSV export" data-testid="closed-csv-btn">
+            <FileSpreadsheet className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
       {data && (
         <div className="grid grid-cols-3 gap-2 mb-3">
@@ -55,6 +79,7 @@ export default function ClosedContractsCard() {
           </div>
         ))}
       </div>
+      <PdfPreviewDialog open={preview} onOpenChange={setPreview} url={pdfUrl(`/business/closed-contracts/export/pdf?month=${month}`)} title={`Closed contracts · ${month}`} downloadName={`closed-contracts-${month}.pdf`} />
     </Card>
   );
 }

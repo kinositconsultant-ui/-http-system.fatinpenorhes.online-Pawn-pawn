@@ -30,6 +30,7 @@ from pdf_utils import (
     build_capital_amortization_pdf,
     build_expenses_pdf,
     build_auction_report_pdf,
+    build_cash_drawer_pdf,
 )
 from services import _apply_date_filter
 
@@ -1171,3 +1172,49 @@ async def expenses_pdf(
         headers={"Content-Disposition": f'inline; filename="{fname}"'},
     )
 
+
+
+# ---------------------------------------------------------------------
+# Daily cash drawer (received / change returned / pending change)
+# ---------------------------------------------------------------------
+async def _cash_drawer_data(day: str) -> dict:
+    pays = await db.payments.find({"date": day}, {"_id": 0}).sort("created_at", 1).to_list(5000)
+    cids = {p.get("contract_id") for p in pays}
+    contracts = {c["id"]: c for c in await db.contracts.find({"id": {"$in": list(cids)}}, {"_id": 0, "id": 1, "contract_number": 1, "client_id": 1}).to_list(5000)}
+    clients = {c["id"]: c.get("full_name") for c in await db.clients.find({"id": {"$in": [c.get("client_id") for c in contracts.values()]}}, {"_id": 0, "id": 1, "full_name": 1}).to_list(5000)}
+    rows, cash_in, disbursed, owed, returned, pending_count = [], 0.0, 0.0, 0.0, 0.0, 0
+    for p in pays:
+        amt = float(p.get("amount") or 0)
+        if p.get("type") == "disbursement":
+            disbursed += amt
+            continue
+        over = float(p.get("overpaid") or 0)
+        cash_in += amt
+        owed += over
+        if over > 0:
+            if p.get("change_returned"):
+                returned += over
+            else:
+                pending_count += 1
+        c = contracts.get(p.get("contract_id"), {})
+        rows.append({"id": p["id"], "receipt_number": p.get("receipt_number"), "created_at": p.get("created_at"),
+                     "type": p.get("type"), "amount": amt, "overpaid": over, "change_returned": bool(p.get("change_returned")),
+                     "change_returned_by": p.get("change_returned_by"), "contract_id": p.get("contract_id"),
+                     "contract_number": c.get("contract_number"), "client_name": clients.get(c.get("client_id"))})
+    r2 = lambda v: round(v, 2)  # noqa: E731
+    return {"date": day, "rows": rows, "totals": {
+        "receipts": len(rows), "cash_in": r2(cash_in), "change_owed": r2(owed), "change_returned": r2(returned),
+        "change_pending": r2(owed - returned), "pending_count": pending_count, "disbursed_out": r2(disbursed),
+        "net_drawer": r2(cash_in - returned - disbursed)}}
+
+
+@router.get("/finance/cash-drawer")
+async def cash_drawer(date_: Optional[str] = Query(None, alias="date"), _: dict = Depends(require_module("finance"))):
+    return await _cash_drawer_data(date_ or date.today().isoformat())
+
+
+@router.get("/finance/cash-drawer/export/pdf")
+async def cash_drawer_pdf(date_: Optional[str] = Query(None, alias="date"), _: dict = Depends(require_module("finance"))):
+    data = await _cash_drawer_data(date_ or date.today().isoformat())
+    return StreamingResponse(BytesIO(build_cash_drawer_pdf(data)), media_type="application/pdf",
+                             headers={"Content-Disposition": f'inline; filename="cash-drawer-{data["date"]}.pdf"'})

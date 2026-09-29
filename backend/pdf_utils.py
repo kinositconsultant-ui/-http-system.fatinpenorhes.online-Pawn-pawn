@@ -506,7 +506,7 @@ def build_payment_history_pdf(
     return buf.getvalue()
 
 
-def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None, language: str = "en") -> bytes:
+def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: float, item: dict | None = None, language: str = "en", quote: dict | None = None) -> bytes:
     s = _styles()
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -713,6 +713,46 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
         except Exception:
             # Never let the explainer block break receipt generation
             pass
+
+    # Early-redemption nudge on interest-only / partial receipts: what it costs to wait a month.
+    if quote and not is_disbursement and float(quote.get("today", {}).get("total") or 0) > 0:
+        qt, qn = quote["today"], quote["next_month"]
+        quote_hdr = Paragraph(
+            "Selu Ohin vs Fulan Oin · Pay Today vs Next Month",
+            ParagraphStyle("QuoteHdr", parent=s["Sub"], fontSize=10, textColor=colors.HexColor("#065F46")),
+        )
+        next_detail = ("2-month cap reached — no extra interest" if qn.get("capped")
+                       else f"+ interest {_money(qn.get('extra_interest'))}") + \
+                      (f" + penalty {_money(qn.get('extra_penalty'))}" if float(qn.get("extra_penalty") or 0) > 0 else "")
+        quote_box = Table([
+            ["", "Selu Ohin · Pay Today", "Selu Fulan Oin · Pay Next Month"],
+            ["Total to close", _money(qt.get("total")), _money(qn.get("total"))],
+            ["Detail", f"principal {_money(qt.get('principal'))} · interest {_money(qt.get('interest'))}"
+                       + (f" · penalty {_money(qt.get('penalty'))}" if float(qt.get("penalty") or 0) > 0 else ""), next_detail],
+        ], colWidths=[3.5 * cm, 6.75 * cm, 6.75 * cm])
+        quote_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ECFDF5")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#065F46")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9),
+            ("FONT", (0, 1), (0, -1), "Helvetica-Bold", 9),
+            ("FONT", (1, 1), (1, 1), "Helvetica-Bold", 12),
+            ("FONT", (2, 1), (2, 1), "Helvetica-Bold", 12),
+            ("TEXTCOLOR", (1, 1), (1, 1), colors.HexColor("#065F46")),
+            ("TEXTCOLOR", (0, 1), (0, -1), MUTED),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#065F46")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#A7F3D0")),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        quote_parts = [Spacer(1, 0.4 * cm), quote_hdr, quote_box]
+        if float(quote.get("saving") or 0) > 0:
+            quote_parts += [Spacer(1, 0.15 * cm), Paragraph(
+                f"Se selu ohin, ita-boot poupa <b>{_money(quote['saving'])}</b>. · "
+                f"Paying today saves you <b>{_money(quote['saving'])}</b> compared with paying next month.",
+                ParagraphStyle("QuoteHint", parent=s["Body"], fontSize=8.5, textColor=colors.HexColor("#065F46"), alignment=0),
+            )]
+        story.append(KeepTogether(quote_parts))
 
     # Pawn item description — shown on every receipt so the client/officer can verify
     # what was pledged. Extra useful on the disbursement receipt (proof of what was handed over).
@@ -3027,4 +3067,65 @@ def build_auction_agreement_pdf(
     story.append(tbl)
 
     doc.build(story)
+    return buf.getvalue()
+
+
+def build_closed_contracts_pdf(data: dict) -> bytes:
+    """Accountant export: contracts closed in a month + interest/penalty each earned."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    rows = [[r.get("contract_number") or "", (r.get("client_name") or "—")[:32], str(r.get("item_type") or "").title(),
+             r.get("contract_date") or "", r.get("closed_on") or "", _money(r.get("loan_amount")),
+             _money(r.get("interest_earned")), _money(r.get("penalty_earned")), _money(r.get("total_received")),
+             "Released" if r.get("item_released") else "Awaiting pickup"] for r in data.get("rows", [])]
+    footer = ["TOTAL", "", "", "", str(data.get("count", 0)) + " contracts", _money(data.get("principal_total")),
+              _money(data.get("interest_total")), _money(data.get("penalty_total")), "", ""]
+    story = [
+        _branded_header(s),
+        Paragraph(f"Closed Contracts · Kontratu Taka — {data.get('month', '')}", s["DocTitle"]),
+        Paragraph(f"Contracts closed: <b>{data.get('count', 0)}</b> · Interest earned: <b>{_money(data.get('interest_total'))}</b> · "
+                  f"Penalties: <b>{_money(data.get('penalty_total'))}</b> · Principal recovered: <b>{_money(data.get('principal_total'))}</b>", s["Body"]),
+        Spacer(1, 0.3 * cm),
+        _data_table(["Contract", "Client", "Item", "Started", "Closed", "Loan", "Interest", "Penalty", "Received", "Item"], rows,
+                    col_widths=[2.8 * cm, 5 * cm, 2 * cm, 2.2 * cm, 2.2 * cm, 2.4 * cm, 2.4 * cm, 2.2 * cm, 2.6 * cm, 2.8 * cm],
+                    footer_row=footer),
+    ]
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def build_cash_drawer_pdf(data: dict) -> bytes:
+    """Daily cash-drawer reconciliation: receipts, change owed/returned/pending, disbursements out."""
+    s = _styles()
+    buf, doc = _new_doc(landscape_mode=True)
+    t = data.get("totals", {})
+    kv = [
+        ["Cash received (receipts)", _money(t.get("cash_in"))],
+        ["Change owed to clients", _money(t.get("change_owed"))],
+        ["Change returned", _money(t.get("change_returned"))],
+        ["Change still pending", _money(t.get("change_pending"))],
+        ["Loans disbursed (cash out)", _money(t.get("disbursed_out"))],
+        ["Expected net in drawer", _money(t.get("net_drawer"))],
+    ]
+    rows = [[r.get("receipt_number") or "", (r.get("created_at") or "")[11:16], (r.get("client_name") or "—")[:30],
+             r.get("contract_number") or "", str(r.get("type") or "").replace("_", " ").title(), _money(r.get("amount")),
+             _money(r.get("overpaid")) if float(r.get("overpaid") or 0) > 0 else "—",
+             ("[X] " + (r.get("change_returned_by") or "")) if r.get("change_returned") else ("[ ] Pending" if float(r.get("overpaid") or 0) > 0 else "")]
+            for r in data.get("rows", [])]
+    story = [
+        _branded_header(s),
+        Paragraph(f"Cash Drawer Report · Relatóriu Kaixa — {data.get('date', '')}", s["DocTitle"]),
+        Paragraph(f"Receipts: <b>{t.get('receipts', 0)}</b> · Pending change items: <b>{t.get('pending_count', 0)}</b>", s["Body"]),
+        Spacer(1, 0.3 * cm),
+        _kv_table(kv, col_widths=(7 * cm, 5 * cm)),
+        Spacer(1, 0.4 * cm),
+        _section_title(s, "Receipts"),
+        _data_table(["Receipt", "Time", "Client", "Contract", "Type", "Amount", "Change", "Returned"], rows,
+                    col_widths=[3 * cm, 1.6 * cm, 5.5 * cm, 3 * cm, 3.6 * cm, 2.8 * cm, 2.4 * cm, 4.4 * cm],
+                    footer_row=["TOTAL", "", "", "", "", _money(t.get("cash_in")), _money(t.get("change_owed")), ""]),
+        Spacer(1, 1 * cm),
+        Table([["_______________________", "_______________________"], ["Cashier · Kaixa", "Supervisor"]],
+              colWidths=[8 * cm, 8 * cm], style=TableStyle([("FONT", (0, 0), (-1, -1), "Helvetica", 9), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("TEXTCOLOR", (0, 1), (-1, 1), MUTED)])),
+    ]
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

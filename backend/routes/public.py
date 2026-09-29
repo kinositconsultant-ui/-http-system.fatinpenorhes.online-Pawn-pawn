@@ -18,7 +18,7 @@ from pydantic import BaseModel, EmailStr
 import storage as objstore
 import subscribers as subs
 from html import escape
-from deps import db, new_id, utcnow_iso, require_admin, COLLECTION_MAP
+from deps import db, new_id, utcnow_iso, require_admin, write_audit, COLLECTION_MAP
 from services import _fetch_item, get_settings_doc, public_site_config, SITE_IMAGE_SLOTS, ITEM_KINDS, TESTIMONIAL_DEFAULTS
 from pdf_utils import build_rules_card_pdf, build_auction_catalogue_pdf
 
@@ -222,6 +222,32 @@ async def list_subscribers(_: dict = Depends(require_admin)):
 async def run_auction_day_reminder_now(force: bool = False, _: dict = Depends(require_admin)):
     """Manual trigger (the scheduler runs it daily at 10:00 Timor). force=true sends regardless of date."""
     return await subs.run_auction_day_reminder(force=force)
+
+
+@router.get("/subscribers/auction-day-reminder/preview")
+async def auction_day_reminder_preview(_: dict = Depends(require_admin)):
+    """Exact text + recipient count the day-before auction reminder will use."""
+    return await subs.auction_day_reminder_preview()
+
+
+class ReminderTestIn(BaseModel):
+    phone: str = ""
+
+
+@router.post("/subscribers/auction-day-reminder/test")
+async def auction_day_reminder_test(payload: ReminderTestIn, user: dict = Depends(require_admin)):
+    """Send the reminder text to the admin's own phone (defaults to admin_alerts_phone)."""
+    phone = subs.clean_phone(payload.phone)
+    if not phone:
+        s = await get_settings_doc()
+        phone = subs.clean_phone(s.get("admin_alerts_phone") or "")
+    if len(phone) < 10:
+        raise HTTPException(status_code=422, detail="Enter a valid WhatsApp number or set the Owner alerts phone in Settings")
+    result = await subs.send_auction_day_reminder_test(phone)
+    if result.get("status") == "skipped":
+        raise HTTPException(status_code=400, detail="Set the next auction date first (Settings → Public Content)")
+    await write_audit(user, "auction_reminder_test", "settings", "singleton", {"to": phone, "result_status": result.get("status")})
+    return result
 
 
 @router.delete("/subscribers/{sid}")

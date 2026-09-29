@@ -98,10 +98,64 @@ def kinds_valid(kinds: list[str]) -> list[str]:
     return [k for k in dict.fromkeys(kinds or []) if k in ITEM_KINDS]
 
 
+def auction_day_reminder_body(s: dict, auction_date: str) -> str:
+    from services import DEFAULT_SETTINGS
+    address = s.get("contact_address") or DEFAULT_SETTINGS["contact_address"]
+    hours = s.get("contact_hours") or DEFAULT_SETTINGS["contact_hours"]
+    return (f"Fatin Penhores: LEMBRA — leilaun hala'o AVAN, {auction_date}, hahú tuku 09:00. "
+            f"Fatin: {address}. Loke: {hours}. Lori ita-boot nia ID. Haree lista: /auction\n\n"
+            f"Fatin Penhores: REMINDER — the auction is TOMORROW, {auction_date}, starting 09:00. "
+            f"Venue: {address}. Hours: {hours}. Bring your ID. Items: /auction")
+
+
+async def auction_day_reminder_preview() -> dict:
+    """What the scheduler would send: date, exact text, recipient count, last-sent status."""
+    from datetime import date, timedelta
+    from services import get_settings_doc
+    s = await get_settings_doc()
+    auction_date = (s.get("next_auction_date") or "").strip()
+    recipients = await db.subscribers.count_documents({"active": True, "auction_reminder": True})
+    last = await db.whatsapp_log.find({"template": "auction_day_reminder"}, {"_id": 0, "created_at": 1, "delivery_status": 1}) \
+        .sort("created_at", -1).limit(1).to_list(1)
+    last_sent = await db.whatsapp_log.count_documents({"template": "auction_day_reminder", "delivery_status": {"$in": ["sent", "mocked"]}})
+    send_on = (date.fromisoformat(auction_date) - timedelta(days=1)).isoformat() if auction_date else None
+    return {
+        "next_auction_date": auction_date or None,
+        "send_on": send_on,
+        "send_time_local": "10:00 Timor-Leste",
+        "body": auction_day_reminder_body(s, auction_date or "<date>") if auction_date else None,
+        "recipients": recipients,
+        "sent_for": s.get("auction_day_reminder_sent_for") or None,
+        "already_sent": bool(auction_date) and s.get("auction_day_reminder_sent_for") == auction_date,
+        "last_sent_at": last[0]["created_at"] if last else None,
+        "last_status": last[0].get("delivery_status") if last else None,
+        "total_sent": last_sent,
+        "whatsapp_configured": bool(s.get("whatsapp_token") and s.get("whatsapp_phone_id")),
+        "test_phone": clean_phone(s.get("admin_alerts_phone") or ""),
+    }
+
+
+async def send_auction_day_reminder_test(phone: str) -> dict:
+    """Send the exact reminder text to one admin phone (never touches the sent_for marker)."""
+    from services import get_settings_doc
+    settings = await _decrypted_settings()
+    s = await get_settings_doc()
+    auction_date = (s.get("next_auction_date") or "").strip()
+    if not auction_date:
+        return {"status": "skipped", "reason": "no next_auction_date"}
+    body = auction_day_reminder_body(s, auction_date)
+    try:
+        r = await wapp.send_text(phone, body, settings)
+    except Exception as exc:
+        r = {"status": "failed", "error": str(exc)}
+    await _log_wa(phone, "auction_day_reminder_test", body, r)
+    return {"status": r.get("status"), "to": phone, "body": body}
+
+
 async def run_auction_day_reminder(force: bool = False) -> dict:
     """Day-before reminder to auction-date subscribers (09:00 start, shop address). Idempotent per date."""
     from datetime import date, timedelta
-    from services import get_settings_doc, DEFAULT_SETTINGS
+    from services import get_settings_doc
     s = await get_settings_doc()
     auction_date = (s.get("next_auction_date") or "").strip()
     if not auction_date:
@@ -111,16 +165,8 @@ async def run_auction_day_reminder(force: bool = False) -> dict:
         return {"status": "skipped", "reason": f"auction {auction_date} is not tomorrow"}
     if s.get("auction_day_reminder_sent_for") == auction_date and not force:
         return {"status": "skipped", "reason": "already sent"}
-    address = s.get("contact_address") or DEFAULT_SETTINGS["contact_address"]
-    hours = s.get("contact_hours") or DEFAULT_SETTINGS["contact_hours"]
-
-    def _body(_sub):
-        return (f"Fatin Penhores: LEMBRA — leilaun hala'o AVAN, {auction_date}, hahú tuku 09:00. "
-                f"Fatin: {address}. Loke: {hours}. Lori ita-boot nia ID. Haree lista: /auction\n\n"
-                f"Fatin Penhores: REMINDER — the auction is TOMORROW, {auction_date}, starting 09:00. "
-                f"Venue: {address}. Hours: {hours}. Bring your ID. Items: /auction")
-
-    result = await broadcast({"auction_reminder": True}, "auction_day_reminder", _body)
+    body = auction_day_reminder_body(s, auction_date)
+    result = await broadcast({"auction_reminder": True}, "auction_day_reminder", lambda _sub: body)
     await db.settings.update_one({"id": "singleton"}, {"$set": {"auction_day_reminder_sent_for": auction_date}}, upsert=True)
     return {"status": "sent", "auction_date": auction_date, **result}
 
