@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 83 — 4 features tested end-to-end. Backend: 12/12 pytest passing in test_iter83_cash_drawer_features.py covering (1) auction-day reminder preview 401 unauth + admin ok + no-date state + with-date body containing '2026-10-15', '09:00', 'Caicoli'; POST /api/subscribers/auction-day-reminder/test 422 on '12' and 'mocked' status on valid '+670 7777 1234'; send_on = day before auction (2026-10-14). (2) /api/business/closed-contracts JSON + PDF (application/pdf, %PDF- header) + CSV (text/csv, header row, TOTAL row) for month=2026-09. (3) /api/finance/cash-drawer identity check net_drawer == cash_in − change_returned − disbursed_out; PDF export 200; full overpayment flow: created a $total_due+$5 partial payment on active CTR-2026-0920, overpaid > 0, row appears in cash-drawer with change_returned=false + pending_count incremented, POST /api/payments/{id}/change-returned?returned=true toggles + totals shift (pending↓, returned↑), toggled back to false, then DELETE cleaned up (contract reverted to grace_period). (4) Receipt PDF: quote block 'Pay Today vs Next Month' appears on partial/interest_only receipt for active contract; ABSENT on 'full'/'overdue_full' receipts of redeemed contracts. Regression: test_iter80_interest_only_allocation.py + test_iter81_warehouse_release.py 21/21 pass. Frontend E2E via Playwright: logged in as admin, /finance → finance-tab-drawer clickable, cash-drawer-card visible with all 6 KPIs (drawer-kpi-received/owed/returned/pending/disbursed/net rendered as $0.00 for today's empty drawer), drawer-date + drawer-table + drawer-pdf-btn all present. /business → closed-contracts-card mounted with closed-pdf-btn + closed-csv-btn + closed-month all visible. /settings → auction-reminder-preview visible; with next_auction_date cleared, reminder-no-date shows and reminder-send-test is disabled=True, pill reads 'Auction · not set'. Cleanup: next_auction_date restored to '' after tests (verified via GET /api/settings).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BusinessDashboard", "issues": ["Recharts container reports repeated width(-1)/height(-1) warnings on mount (charts still render). Pre-existing from iter 81; consider min-height on ResponsiveContainer."]},
+      {"screen": "Dashboard (initial load)", "issues": ["Two 401 errors on initial /login page load before auth cookie is set — likely /api/auth/me probe. Cosmetic, no user impact."]},
+      {"screen": "Business page", "issues": ["WebSocket wss://.../api/ws/dashboard fails to establish (closed before open) — real-time updates degraded. Not iter-83-related."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter83_cash_drawer_features.py",
+    "/app/test_reports/pytest/iter83_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "cash_drawer_data correctly excludes disbursement rows from cash_in and counts them into disbursed_out — identity net_drawer = cash_in − change_returned − disbursed_out holds.",
+    "mark_change_returned enforces overpaid > 0 (400 otherwise) and stamps change_returned_at + change_returned_by — good auditability.",
+    "_redemption_quote guard `p.get('type') in ('interest_only','partial') and c.get('status') != 'redeemed'` correctly gates the receipt quote block; verified quote block absent on 'full'/'overdue_full' receipts of redeemed contracts.",
+    "auction_day_reminder_test returns 400 (Set the next auction date first) when status='skipped'; considered making the frontend disable-button state (reminder-send-test) match this — currently disabled only if `!p.body` which happens to align when no auction date is set. Works correctly.",
+    "closed-contracts CSV writes an empty separator row before TOTAL — CSV parsers handle it fine but some strict Excel imports may render a blank line; non-blocking.",
+    "Business dashboard `capital_out` sums `funding_repayments.amount` (total including interest) while finance/summary uses only principal — mild double-count risk on Cash-on-Hand of the interest portion because interest is also in expenses_total. Pre-existing behaviour, unrelated to iter-83; flagging for future cleanup."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter83_cash_drawer_features.py"],
+  "success_rate": {"backend": "100% (12/12 iter83 + 21/21 regression)", "frontend": "100% of tested selectors"},
+  "test_credentials": "admin@fatinpenhores.tl / admin123",
+  "seed_data_creation": "One TEST partial payment ($total_due+$5) on active contract CTR-2026-0920 created and deleted within the pytest module (with cleanup in try/finally). next_auction_date temporarily set to '2026-10-15' and restored to '' by module-scoped fixture teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite: pytest /app/backend/tests/test_iter83_cash_drawer_features.py -v (needs REACT_APP_BACKEND_URL + MONGO_URL in env; source /app/backend/.env). All new frontend selectors verified: finance-tab-drawer, cash-drawer-card, drawer-kpi-{received,owed,returned,pending,disbursed,net}, drawer-date, drawer-table, drawer-pdf-btn, drawer-returned-{paymentId}, closed-contracts-card, closed-pdf-btn, closed-csv-btn, closed-month, closed-kpi-*, closed-row-{cid}, auction-reminder-preview, reminder-auction-date, reminder-send-on, reminder-recipients, reminder-status, reminder-body, reminder-no-date, reminder-test-phone, reminder-send-test. Preview endpoint returns key `next_auction_date` (not `auction_date`) — front and back agree. WhatsApp send returns status='mocked' as expected (not configured).",
+  "rca of the issue": "N/A — no failures."
+}

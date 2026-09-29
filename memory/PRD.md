@@ -1329,3 +1329,10 @@ Audit result: a fully paid contract closes correctly (redeemed, no interest/pena
 - **Closed this month**: `GET /api/business/closed-contracts?month=YYYY-MM` (redeemed contracts by redeemed_at/last payment; interest & penalty earned per contract, totals); `components/ClosedContractsCard.js` on Business Dashboard with month picker.
 - **Auction-day reminder**: `subscribers.run_auction_day_reminder()` — day-before WhatsApp to `auction_reminder` subscribers with 09:00 start, address & hours from Settings; idempotent via `auction_day_reminder_sent_for`; APScheduler job `auction_day_reminder` daily 01:00 UTC (10:00 Timor); manual `POST /api/subscribers/auction-day-reminder/run?force=`.
 - Verified live via API + browser. Test data cleaned; next_auction_date reset to blank.
+
+## 2026-06 — Cash drawer, receipt quote, closed-contracts export, reminder preview (iter 83)
+- Finance → new **Cash Drawer** tab (`CashDrawerCard.js`): date picker, KPIs (received / change owed / returned / pending / disbursed / net), per-receipt table with change-returned toggle, PDF export. API `GET /api/finance/cash-drawer?date=`, `/export/pdf`.
+- Receipt PDF (`build_receipt_pdf`, `quote=`) prints "Pay Today vs Next Month" + savings on `interest_only` and `partial` receipts of active contracts (absent on full/disbursement). Shared helper `_redemption_quote()` in `routes/payments.py`.
+- Closed-this-month card: PDF (`/api/business/closed-contracts/export/pdf?month=`) + CSV (`/export/csv`) buttons.
+- Settings → Subscribers: `AuctionReminderPreview.js` shows auction date, send-on date (day before, 10:00), recipient count, last-sent status, exact Tetum+English text; "Send test to my phone" → `POST /api/subscribers/auction-day-reminder/test` (defaults to admin_alerts_phone; MOCKED when WhatsApp unconfigured). `GET .../preview` admin-only.
+- Tests: `backend/tests/test_iter83_cash_drawer_features.py` (12 pass), regression 21/21, browser E2E pass — `/app/test_reports/iteration_83.json`.
