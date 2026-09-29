@@ -304,7 +304,12 @@ async def _recompute_contract_status(contract: dict) -> dict:
         contract_start = date.today()
         due = date.today()
     today_dt = date.today()
-    effective_end = max(due, today_dt)
+    # Bill interest anchors only up to TODAY (never for months that have not
+    # started yet). Before this fix the walk used max(due, today), so a brand-new
+    # 2-month contract already showed Month-2 interest on day 1 and an early
+    # redemption was quoted one month too high. Once the due date has passed the
+    # 2-month Article-4 cap below still applies.
+    effective_end = today_dt
     months_elapsed_uncapped = _months_billed(contract_start, effective_end)
     # ── Feb-2026 Article 4 cap ─────────────────────────────────────────────
     # Pawn contracts run for a maximum of 2 calendar months (Artigu 4º).

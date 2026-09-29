@@ -70,7 +70,7 @@ def context(admin, client_id, in_stock_car):
 
     pay = admin.post(
         f"{BASE_URL}/api/payments",
-        json={"contract_id": cid, "amount": 1100, "type": "full", "date": "2026-06-05"},
+        json={"contract_id": cid, "amount": 1300, "type": "full", "date": "2026-06-05"},
         timeout=30,
     )
     assert pay.status_code in (200, 201), f"payment: {pay.status_code} {pay.text}"
@@ -228,7 +228,7 @@ class TestRePawnAndRevert:
         if not cid2:
             pytest.skip("no cid2")
         pay = admin.post(f"{BASE_URL}/api/payments", json={
-            "contract_id": cid2, "amount": 600, "type": "full", "date": "2026-06-05",
+            "contract_id": cid2, "amount": 650, "type": "full", "date": "2026-06-05",
         }, timeout=30)
         assert pay.status_code in (200, 201), f"{pay.status_code} {pay.text}"
         # After redeem, item should be redeemed

@@ -116,7 +116,12 @@ export default function Payments() {
   const submit = async () => {
     try {
       const res = await api.post("/payments", { ...form, amount: Number(form.amount) });
-      toast.success("Payment recorded");
+      const over = Number(res.data?.payment?.overpaid || 0);
+      if (over > 0) {
+        toast.warning(`Payment recorded — client over-paid USD $${over.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Return the change (shown on the receipt).`, { duration: 8000 });
+      } else {
+        toast.success(res.data?.contract?.status === "redeemed" ? "Payment recorded — contract fully paid and closed" : "Payment recorded");
+      }
       setOpen(false);
       setForm(blank);
       setSearchQuery("");

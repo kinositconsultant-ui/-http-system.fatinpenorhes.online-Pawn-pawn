@@ -568,6 +568,7 @@ def build_receipt_pdf(payment: dict, contract: dict, client: dict, remaining: fl
             ["Interest Rate (per month)", f"{rate:.2f}%"],
             ["Months Billed So Far", str(int(contract.get("months_elapsed", 1)))],
             ["Amount Paid (this receipt)", money(amt)],
+            *([["Change / Over-payment (Troku)", money(payment.get("overpaid"))]] if float(payment.get("overpaid") or 0) > 0 else []),
             ["Principal Remaining", money(contract.get("principal_remaining", 0))],
             ["Interest Remaining", money(contract.get("interest_remaining", 0))],
             ["Penalty (if overdue)", money(contract.get("penalty", 0))],

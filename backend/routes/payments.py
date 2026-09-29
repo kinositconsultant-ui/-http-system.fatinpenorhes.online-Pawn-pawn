@@ -89,6 +89,17 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Contract not found")
     if payload.date and payload.date < contract.get("contract_date", payload.date):
         raise HTTPException(status_code=400, detail="Payment date is before contract start date")
+    # A "full" redemption must actually clear the balance — otherwise the contract
+    # silently stays active with a stub principal that keeps accruing interest.
+    if payload.type in ("full", "overdue_full"):
+        live = await _recompute_contract_status(dict(contract))
+        due_now = float(live.get("total_due") or 0)
+        if float(payload.amount) + 0.01 < due_now:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Full payment must be at least USD {due_now:,.2f} to close this contract "
+                       f"(received {float(payload.amount):,.2f}). Record it as a Partial payment instead.",
+            )
     receipt_number = await _generate_receipt_number()
     doc = payload.model_dump()
     doc["id"] = new_id()
@@ -98,6 +109,14 @@ async def create_payment(payload: PaymentIn, user: dict = Depends(get_current_us
     was_redeemed = contract.get("status") == "redeemed"
     updated = await _recompute_contract_status(contract)
     newly_redeemed = updated["status"] == "redeemed" and not was_redeemed
+    # Over-payment (change owed to the client) — recorded, never silently dropped.
+    stored = await db.payments.find_one({"id": doc["id"]}, {"_id": 0}) or {}
+    allocated = sum(float(stored.get(k) or 0) for k in ("principal_paid", "interest_paid", "penalty_paid"))
+    overpaid = round(max(0.0, float(doc["amount"]) - allocated), 2)
+    doc.update({k: stored.get(k, 0) for k in ("principal_paid", "interest_paid", "penalty_paid")})
+    doc["overpaid"] = overpaid
+    if overpaid:
+        await db.payments.update_one({"id": doc["id"]}, {"$set": {"overpaid": overpaid}})
     if updated["status"] == "redeemed":
         # Money is settled; the item now waits for physical hand-over (warehouse release).
         await db[COLLECTION_MAP[contract["item_type"]]].update_one(
