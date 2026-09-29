@@ -1322,3 +1322,10 @@ Audit result: a fully paid contract closes correctly (redeemed, no interest/pena
 2. **Short "full" payment silently left contract active** — `POST /api/payments` with type `full`/`overdue_full` now returns 400 unless `amount ≥ total_due` (message tells cashier the exact amount / use Partial).
 3. **Over-payment dropped** — payment doc now stores `overpaid`; receipt PDF prints "Change / Over-payment (Troku)"; Payments UI shows a warning toast with the change amount; POST response now includes the per-payment allocation.
 - Tests: `test_iter81` amounts updated to the true totals (1300 / 650); 43 finance+release tests pass. `test_iter4::test_overdue_applies_penalty` and `test_iter5_reports::test_overdue` fail identically before and after (pre-existing legacy).
+
+## Iteration 94 — Change returned, redemption quote, closed-this-month, auction-day reminder (2026-06) ✅
+- **Change returned**: `POST /api/payments/{pid}/change-returned?returned=` (payments module) sets `change_returned/_at/_by` + audit; checkbox under the amount in Payments rows (`change-returned-{id}`) for over-paid payments; receipt PDF prints "[X] Yes — user time" / "[ ] Pending".
+- **Redemption quote**: `GET /api/contracts/{cid}/redemption-quote` → today total vs next-month estimate (extra month interest if <2 months billed, penalty if due+10d within 30 days), `saving`. `components/RedemptionQuote.js` shown in New Payment dialog when a contract is selected.
+- **Closed this month**: `GET /api/business/closed-contracts?month=YYYY-MM` (redeemed contracts by redeemed_at/last payment; interest & penalty earned per contract, totals); `components/ClosedContractsCard.js` on Business Dashboard with month picker.
+- **Auction-day reminder**: `subscribers.run_auction_day_reminder()` — day-before WhatsApp to `auction_reminder` subscribers with 09:00 start, address & hours from Settings; idempotent via `auction_day_reminder_sent_for`; APScheduler job `auction_day_reminder` daily 01:00 UTC (10:00 Timor); manual `POST /api/subscribers/auction-day-reminder/run?force=`.
+- Verified live via API + browser. Test data cleaned; next_auction_date reset to blank.

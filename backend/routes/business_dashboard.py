@@ -44,6 +44,43 @@ def _month_bounds(today: date) -> tuple[str, str]:
     return first.isoformat(), nxt.isoformat()
 
 
+@router.get("/business/closed-contracts")
+async def closed_contracts(month: Optional[str] = None, _: dict = Depends(require_module("dashboard"))):
+    """Contracts fully paid (redeemed) in a month with the interest/penalty each one earned."""
+    month = month or date.today().strftime("%Y-%m")
+    redeemed = await db.contracts.find({"status": "redeemed"}, {"_id": 0}).to_list(5000)
+    pays = await db.payments.find({}, {"_id": 0, "contract_id": 1, "date": 1, "amount": 1,
+                                       "interest_paid": 1, "penalty_paid": 1, "principal_paid": 1}).to_list(50000)
+    by_c: dict[str, list] = {}
+    for p in pays:
+        by_c.setdefault(p.get("contract_id"), []).append(p)
+    clients = {c["id"]: c.get("full_name") for c in await db.clients.find({}, {"_id": 0, "id": 1, "full_name": 1}).to_list(10000)}
+    rows = []
+    for c in redeemed:
+        plist = by_c.get(c["id"], [])
+        closed_on = (c.get("redeemed_at") or "")[:10] or (max((p.get("date") or "" for p in plist), default="") or "")
+        if not closed_on.startswith(month):
+            continue
+        interest = sum(float(p.get("interest_paid") or 0) for p in plist)
+        penalty = sum(float(p.get("penalty_paid") or 0) for p in plist)
+        rows.append({
+            "id": c["id"], "contract_number": c.get("contract_number"), "client_name": clients.get(c.get("client_id")),
+            "item_type": c.get("item_type"), "loan_amount": float(c.get("loan_amount") or 0),
+            "contract_date": c.get("contract_date"), "closed_on": closed_on,
+            "interest_earned": round(interest, 2), "penalty_earned": round(penalty, 2),
+            "total_received": round(sum(float(p.get("amount") or 0) for p in plist), 2),
+            "item_released": bool(c.get("item_released")),
+        })
+    rows.sort(key=lambda r: r["closed_on"], reverse=True)
+    return {
+        "month": month, "count": len(rows),
+        "interest_total": round(sum(r["interest_earned"] for r in rows), 2),
+        "penalty_total": round(sum(r["penalty_earned"] for r in rows), 2),
+        "principal_total": round(sum(r["loan_amount"] for r in rows), 2),
+        "rows": rows,
+    }
+
+
 @router.get("/business/dashboard")
 async def business_dashboard(_: dict = Depends(require_module("dashboard"))):
     today = date.today()

@@ -205,6 +205,15 @@ def start_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    # Day-before auction reminder to WhatsApp subscribers — 10:00 Timor (UTC+9) → 01:00 UTC
+    from subscribers import run_auction_day_reminder_sync
+    _scheduler.add_job(
+        run_auction_day_reminder_sync,
+        CronTrigger(hour=1, minute=0),
+        id="auction_day_reminder",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
     # Month-end compliance bundle — 1st of every month at 02:30 UTC
     from routes.monthend import run_monthend_job_sync
     _scheduler.add_job(

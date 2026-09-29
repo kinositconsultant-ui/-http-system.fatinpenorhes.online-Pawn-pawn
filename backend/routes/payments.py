@@ -4,7 +4,7 @@ Extracted from server.py during the Phase-3 refactor (iter 76).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import Optional, Literal
 
@@ -182,6 +182,51 @@ async def _send_pickup_ready_whatsapp(contract: dict, actor: dict, *, force: boo
     await write_audit(actor, f"whatsapp_{template}", "contract", contract["id"],
                       {"contract_number": cnum, "to": phone, "result_status": result.get("status")})
     return {"status": result.get("status"), "to": phone}
+
+
+@router.post("/payments/{pid}/change-returned")
+async def mark_change_returned(pid: str, returned: bool = True, user: dict = Depends(require_module("payments"))):
+    """Cash-drawer reconciliation: tick when the over-payment change was handed back to the client."""
+    p = await db.payments.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if float(p.get("overpaid") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="This payment has no over-payment to return")
+    update = {"change_returned": returned,
+              "change_returned_at": utcnow_iso() if returned else None,
+              "change_returned_by": user.get("name") if returned else None}
+    await db.payments.update_one({"id": pid}, {"$set": update})
+    await write_audit(user, "change_returned" if returned else "change_unreturned", "payment", pid,
+                      {"receipt_number": p.get("receipt_number"), "overpaid": p.get("overpaid")})
+    return {**p, **update}
+
+
+@router.get("/contracts/{cid}/redemption-quote")
+async def redemption_quote(cid: str, _: dict = Depends(require_module("payments"))):
+    """'Pay today' vs 'pay next month' comparison for the Payments page."""
+    c = await db.contracts.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    live = await _recompute_contract_status(dict(c))
+    rate = float(live.get("interest_rate") or 0) / 100
+    principal = float(live.get("principal_remaining") or 0)
+    months = int(live.get("months_elapsed") or 0)
+    today_total = float(live.get("total_due") or 0)
+    extra_interest = round(principal * rate, 2) if months < 2 else 0.0
+    penalty_now = float(live.get("penalty") or 0)
+    due = str(live.get("due_date") or "")
+    in_30 = (date.today() + timedelta(days=30)).isoformat()
+    # Penalty (10 % of principal, once) kicks in 10 days after due — estimate if that lands within next month.
+    extra_penalty = round(principal * rate, 2) if (penalty_now == 0 and due and (date.fromisoformat(due) + timedelta(days=10)).isoformat() <= in_30) else 0.0
+    return {
+        "contract_id": cid,
+        "today": {"total": round(today_total, 2), "interest": float(live.get("interest_remaining") or 0), "penalty": penalty_now,
+                  "principal": principal, "months_billed": months},
+        "next_month": {"total": round(today_total + extra_interest + extra_penalty, 2), "extra_interest": extra_interest,
+                       "extra_penalty": extra_penalty, "capped": months >= 2, "date": in_30},
+        "saving": round(extra_interest + extra_penalty, 2),
+        "status": live.get("status"),
+    }
 
 
 @router.get("/payments/{pid}/pdf")

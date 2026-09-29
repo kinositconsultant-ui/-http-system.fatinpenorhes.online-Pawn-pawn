@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, API_BASE } from "../lib/api";
+import RedemptionQuote from "../components/RedemptionQuote";
 import { useAuth } from "../context/AuthContext";
 import { useLang } from "../context/LangContext";
 import { Button } from "../components/ui/button";
@@ -98,6 +99,16 @@ export default function Payments() {
   useEffect(() => {
     load();
   }, []);
+
+  const markChangeReturned = async (payment, returned) => {
+    try {
+      await api.post(`/payments/${payment.id}/change-returned?returned=${returned}`);
+      toast.success(returned ? "Change marked as returned" : "Change marked as pending");
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
 
   const deletePayment = async (payment) => {
     const label = payment.receipt_number || payment.id;
@@ -469,6 +480,7 @@ export default function Payments() {
                       data-testid="payment-date"
                     />
                   </Field>
+                  {selectedContract && <RedemptionQuote contractId={selectedContract.id} />}
                   {selectedContract && form.type === "full" && (
                     <button
                       type="button"
@@ -595,7 +607,7 @@ export default function Payments() {
         </TabsList>
 
         <TabsContent value="all">
-          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="payments-table" isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
+          <PaymentsTable rows={regularPayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="payments-table" onChangeReturned={markChangeReturned} isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="overdue">
           <div className="flex justify-end mb-2 gap-2 flex-wrap">
@@ -637,7 +649,7 @@ export default function Payments() {
               Email All Overdue Clients
             </button>
           </div>
-          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="overdue-payments-table" overdue isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
+          <PaymentsTable rows={overduePayments} contractLabel={contractLabel} contractById={contractById} t={t} testid="overdue-payments-table" onChangeReturned={markChangeReturned} overdue isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
         </TabsContent>
         <TabsContent value="disbursements">
           <PaymentsTable rows={disbursements} contractLabel={contractLabel} contractById={contractById} t={t} testid="disbursements-table" disbursement isAdmin={isAdmin} onDelete={deletePayment} onPreview={openPaymentPdf} />
@@ -769,7 +781,7 @@ export default function Payments() {
   );
 }
 
-function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete, onPreview }) {
+function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue = false, disbursement = false, isAdmin = false, onDelete, onPreview, onChangeReturned }) {
   const [expanded, setExpanded] = useState({});
   const typeBadge = (type) => {
     const map = {
@@ -938,7 +950,18 @@ function PaymentsTable({ rows, contractLabel, contractById, t, testid, overdue =
                                       {t(r.type) || r.type.replace(/_/g, " ")}
                                     </span>
                                   </SubTd>
-                                  <SubTd right className="font-medium">${Number(r.amount).toLocaleString()}</SubTd>
+                                  <SubTd right className="font-medium">
+                                    ${Number(r.amount).toLocaleString()}
+                                    {Number(r.overpaid) > 0 && (
+                                      <label className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] cursor-pointer ${r.change_returned ? "text-emerald-700" : "text-amber-700"}`}
+                                        title={r.change_returned ? `Change returned by ${r.change_returned_by || ""}` : "Tick when the change has been handed back"}
+                                        onClick={(ev) => ev.stopPropagation()}>
+                                        <input type="checkbox" checked={!!r.change_returned} className="accent-emerald-700"
+                                          onChange={(ev) => onChangeReturned?.(r, ev.target.checked)} data-testid={`change-returned-${r.id}`} />
+                                        change ${Number(r.overpaid).toFixed(2)} {r.change_returned ? "returned" : "pending"}
+                                      </label>
+                                    )}
+                                  </SubTd>
                                   {disbursement && (
                                     <SubTd right className="text-amber-800">
                                       ${perMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import ClosedContractsCard from "../components/ClosedContractsCard";
 import { api } from "../lib/api";
 import { useLang } from "../context/LangContext";
 import { Card } from "../components/ui/card";
@@ -340,6 +341,7 @@ export default function BusinessDashboard() {
         <UpcomingLoansPanel loans={data?.upcoming_loan_repayments || []} />
         <LiveActivityFeed events={events} live={live} />
       </div>
+      <ClosedContractsCard />
     </div>
   );
 }

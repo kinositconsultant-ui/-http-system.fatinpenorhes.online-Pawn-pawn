@@ -96,3 +96,42 @@ def new_listing_body(kind: str, year, price):
 
 def kinds_valid(kinds: list[str]) -> list[str]:
     return [k for k in dict.fromkeys(kinds or []) if k in ITEM_KINDS]
+
+
+async def run_auction_day_reminder(force: bool = False) -> dict:
+    """Day-before reminder to auction-date subscribers (09:00 start, shop address). Idempotent per date."""
+    from datetime import date, timedelta
+    from services import get_settings_doc, DEFAULT_SETTINGS
+    s = await get_settings_doc()
+    auction_date = (s.get("next_auction_date") or "").strip()
+    if not auction_date:
+        return {"status": "skipped", "reason": "no next_auction_date"}
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    if auction_date != tomorrow and not force:
+        return {"status": "skipped", "reason": f"auction {auction_date} is not tomorrow"}
+    if s.get("auction_day_reminder_sent_for") == auction_date and not force:
+        return {"status": "skipped", "reason": "already sent"}
+    address = s.get("contact_address") or DEFAULT_SETTINGS["contact_address"]
+    hours = s.get("contact_hours") or DEFAULT_SETTINGS["contact_hours"]
+
+    def _body(_sub):
+        return (f"Fatin Penhores: LEMBRA — leilaun hala'o AVAN, {auction_date}, hahú tuku 09:00. "
+                f"Fatin: {address}. Loke: {hours}. Lori ita-boot nia ID. Haree lista: /auction\n\n"
+                f"Fatin Penhores: REMINDER — the auction is TOMORROW, {auction_date}, starting 09:00. "
+                f"Venue: {address}. Hours: {hours}. Bring your ID. Items: /auction")
+
+    result = await broadcast({"auction_reminder": True}, "auction_day_reminder", _body)
+    await db.settings.update_one({"id": "singleton"}, {"$set": {"auction_day_reminder_sent_for": auction_date}}, upsert=True)
+    return {"status": "sent", "auction_date": auction_date, **result}
+
+
+def run_auction_day_reminder_sync() -> None:
+    import time
+    from scheduler import _record_job_run_sync
+    t0 = time.time()
+    try:
+        summary = asyncio.run(run_auction_day_reminder())
+        _record_job_run_sync("auction_day_reminder", "ok", int((time.time() - t0) * 1000), summary)
+    except Exception as exc:
+        log.exception("[auction reminder] failure")
+        _record_job_run_sync("auction_day_reminder", "failed", int((time.time() - t0) * 1000), {"error": str(exc)})

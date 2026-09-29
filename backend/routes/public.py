@@ -218,6 +218,12 @@ async def list_subscribers(_: dict = Depends(require_admin)):
     return await db.subscribers.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
 
 
+@router.post("/subscribers/auction-day-reminder/run")
+async def run_auction_day_reminder_now(force: bool = False, _: dict = Depends(require_admin)):
+    """Manual trigger (the scheduler runs it daily at 10:00 Timor). force=true sends regardless of date."""
+    return await subs.run_auction_day_reminder(force=force)
+
+
 @router.delete("/subscribers/{sid}")
 async def delete_subscriber(sid: str, _: dict = Depends(require_admin)):
     r = await db.subscribers.delete_one({"id": sid})
